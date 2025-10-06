@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-analytics" viewBox="0 0 24 24">
+    <path d="M3 3h2v18H3zM8 9h2v12H8zM13 5h2v16h-2zM18 12h2v9h-2z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-security" viewBox="0 0 24 24">
+    <path d="M12 2l7 4v6c0 5-3.5 9.7-7 10-3.5-.3-7-5-7-10V6l7-4z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-invoice" viewBox="0 0 24 24">
+    <path d="M6 2h9l5 5v15H6z" fill="currentColor"/>
+    <path d="M15 2v5h5" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M8 12h8M8 16h8M8 8h4" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+  <symbol id="ic-budget" viewBox="0 0 24 24">
+    <path d="M3 4h18v14H3z" fill="currentColor"/>
+    <path d="M3 10h18M9 4v14" stroke="#fff" stroke-width="2"/>
+  </symbol>
+  <symbol id="ic-collab" viewBox="0 0 24 24">
+    <circle cx="8" cy="8" r="3" fill="currentColor"/>
+    <circle cx="16" cy="8" r="3" fill="currentColor"/>
+    <path d="M4 20c0-2.2 2.7-4 6-4s6 1.8 6 4" fill="none" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+  <symbol id="ic-access" viewBox="0 0 24 24">
+    <path d="M4 4h16v16H4z" fill="currentColor"/>
+    <path d="M4 10h16M12 4v16" stroke="#fff" stroke-width="2"/>
+  </symbol>
+</svg>
+
+
