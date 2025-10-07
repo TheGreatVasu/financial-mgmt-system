@@ -136,10 +136,6 @@ MIT
 
 Screenshots or a short GIF can go here once available.
 
-### Changelog
-
-- Frontend: align pricing card CTAs and prevent CTA text/icon wrapping on Home, Pricing, Features, and Navbar buttons.
-
 ### Environment Variables
 Configure these in `backend/.env`.
 
