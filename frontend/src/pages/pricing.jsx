@@ -38,8 +38,8 @@ export default function PricingPage() {
     {
       name: 'Professional',
       tagline: 'Most popular for growing businesses',
-      monthly: 999,
-      yearly: 9990,
+      monthly: 9999,
+      yearly: 99990,
       cta: 'Start Free Trial',
       href: '/signup',
       popular: true,

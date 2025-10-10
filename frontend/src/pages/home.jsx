@@ -490,7 +490,7 @@ export default function HomePage() {
                 },
                 { 
                   name: 'Professional', 
-                  price: '₹999', 
+                  price: '₹9999', 
                   period: '/month', 
                   description: 'Most popular for growing businesses',
                   features: [
