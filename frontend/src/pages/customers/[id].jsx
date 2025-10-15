@@ -1,17 +1,20 @@
 import { useParams } from 'react-router-dom'
-import AppLayout from '../../components/layout/AppLayout.jsx'
+import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 
 export default function CustomerDetail() {
   const { id } = useParams()
   return (
-    <AppLayout title="Customer Detail">
-      <div className="text-sm text-secondary-500">ID: {id}</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card p-4">Customer info placeholder</div>
-        <div className="card p-4">Outstanding balance placeholder</div>
+    <DashboardLayout>
+      <div>
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Customer Detail</h1>
+        <div className="text-sm text-secondary-500 mt-1">ID: {id}</div>
       </div>
-      <div className="card p-4">Invoices History placeholder</div>
-    </AppLayout>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-secondary-200/70 bg-white p-4 shadow-sm">Customer info placeholder</div>
+        <div className="rounded-xl border border-secondary-200/70 bg-white p-4 shadow-sm">Outstanding balance placeholder</div>
+      </div>
+      <div className="rounded-xl border border-secondary-200/70 bg-white p-4 shadow-sm">Invoices History placeholder</div>
+    </DashboardLayout>
   )
 }
 

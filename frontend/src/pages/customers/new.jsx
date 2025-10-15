@@ -1,9 +1,13 @@
-import AppLayout from '../../components/layout/AppLayout.jsx'
+import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 
 export default function CustomerNew() {
   return (
-    <AppLayout title="Add New Customer">
-      <div className="card p-6">
+    <DashboardLayout>
+      <div>
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Add New Customer</h1>
+        <p className="text-sm text-secondary-600 mt-1">Create a customer profile</p>
+      </div>
+      <div className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm">
         <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm mb-1">Company Name</label>
@@ -26,7 +30,7 @@ export default function CustomerNew() {
           </div>
         </form>
       </div>
-    </AppLayout>
+    </DashboardLayout>
   )
 }
 

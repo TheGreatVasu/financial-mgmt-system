@@ -11,16 +11,17 @@
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "axios": "^1.6.2",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1",
-    "axios": "^1.6.2",
     "react-hook-form": "^7.48.2",
     "react-hot-toast": "^2.4.1",
-    "lucide-react": "^0.294.0",
-    "recharts": "^2.8.0",
-    "date-fns": "^2.30.0",
-    "clsx": "^2.0.0"
+    "react-router-dom": "^6.20.1",
+    "recharts": "^2.8.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
