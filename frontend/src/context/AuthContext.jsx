@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { getCurrentUser, login as apiLogin, logout as apiLogout } from '../services/authService'
+import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -45,8 +45,21 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function refresh() {
+    if (!token) return
+    const me = await getCurrentUser(token)
+    setUser(me)
+  }
+
+  async function updateProfile(payload) {
+    if (!token) return
+    const updated = await apiUpdateProfile(token, payload)
+    setUser(updated)
+    return updated
+  }
+
   const value = useMemo(
-    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, logout }),
+    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, logout, refresh, updateProfile }),
     [user, token, loading]
   )
 

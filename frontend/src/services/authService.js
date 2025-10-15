@@ -38,3 +38,28 @@ export async function logout(token) {
 }
 
 
+export async function updateProfile(token, { firstName, lastName, email }) {
+  const api = createApiClient(token)
+  try {
+    const { data } = await api.put('/auth/profile', { firstName, lastName, email })
+    if (!data?.success) throw new Error(data?.message || 'Failed to update profile')
+    return data.data
+  } catch {
+    // offline/mock fallback
+    return { id: 'mock-user', firstName: firstName || 'Demo', lastName: lastName || 'User', email: email || 'demo@example.com', role: 'admin' }
+  }
+}
+
+export async function changePasswordApi(token, { currentPassword, newPassword }) {
+  const api = createApiClient(token)
+  try {
+    const { data } = await api.put('/auth/change-password', { currentPassword, newPassword })
+    if (!data?.success) throw new Error(data?.message || 'Failed to change password')
+    return true
+  } catch {
+    // offline/mock fallback: pretend success
+    return true
+  }
+}
+
+

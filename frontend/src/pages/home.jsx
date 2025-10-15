@@ -3,6 +3,7 @@ import Navbar from '../components/layout/Navbar.jsx'
 import Footer from '../components/layout/Footer.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { submitContact } from '../services/publicService'
+import ProductVideo from '../components/sections/ProductVideo.jsx'
 
 export default function HomePage() {
   const toast = useToast()
@@ -122,6 +123,15 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* Product Video Section */}
+        <ProductVideo
+          title="See FinFlow in Action"
+          subtitle="Get a quick overview of how FinFlow helps you track finances, automate invoices, and make data-driven business decisions — all in one place."
+          videoSrc="/demo.mp4"
+          ctaHref="/signup"
+          ctaText="Start Free Trial"
+        />
 
         {/* Features Section */}
         <section id="features" className="py-20 bg-gray-50">

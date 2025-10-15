@@ -2,34 +2,39 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const Invoice = require('../models/Invoice');
 const Customer = require('../models/Customer');
 const Payment = require('../models/Payment');
+const repo = require('../services/repositories');
 
 // GET /api/dashboard
 // Returns KPIs, chart series, recent invoices, and alerts
 async function buildDashboardPayload() {
   try {
+    // Prefer SQL repository when available; fall back to Mongoose/offline
+    const kpisFromRepo = await repo.getKpis().catch(() => null);
     const [customerCount, invoiceCount, paidSumAgg, totalSumAgg, overdueCount, recentInvoices, topByOutstanding] = await Promise.all([
-      Customer.countDocuments().catch(() => 0),
-      Invoice.countDocuments().catch(() => 0),
+      kpisFromRepo ? Promise.resolve(kpisFromRepo.customers) : Customer.countDocuments().catch(() => 0),
+      kpisFromRepo ? Promise.resolve(kpisFromRepo.invoices) : Invoice.countDocuments().catch(() => 0),
       Invoice.aggregate([
         { $group: { _id: null, paid: { $sum: '$paidAmount' } } },
       ]).catch(() => []),
       Invoice.aggregate([
         { $group: { _id: null, total: { $sum: '$totalAmount' } } },
       ]).catch(() => []),
-      Invoice.countDocuments({ status: 'overdue' }).catch(() => 0),
-      Invoice.find({}).sort({ createdAt: -1 }).limit(6).populate('customer', 'companyName').lean().catch(() => []),
-      Invoice.aggregate([
-        { $group: { _id: '$customer', outstanding: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } } } },
-        { $sort: { outstanding: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: 'customers', localField: '_id', foreignField: '_id', as: 'customer' } },
-        { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
-        { $project: { _id: 0, customerId: '$customer._id', customer: '$customer.companyName', outstanding: 1 } },
-      ]).catch(() => []),
+      kpisFromRepo ? Promise.resolve(kpisFromRepo.overdue) : Invoice.countDocuments({ status: 'overdue' }).catch(() => 0),
+      repo.recentInvoices(6).catch(() => Invoice.find({}).sort({ createdAt: -1 }).limit(6).populate('customer', 'companyName').lean().catch(() => [])),
+      repo.topCustomersByOutstanding(5).catch(() => (
+        Invoice.aggregate([
+          { $group: { _id: '$customer', outstanding: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } } } },
+          { $sort: { outstanding: -1 } },
+          { $limit: 5 },
+          { $lookup: { from: 'customers', localField: '_id', foreignField: '_id', as: 'customer' } },
+          { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+          { $project: { _id: 0, customerId: '$customer._id', customer: '$customer.companyName', outstanding: 1 } },
+        ]).catch(() => [])
+      )),
     ]);
 
-    const paidSum = Array.isArray(paidSumAgg) && paidSumAgg[0] ? paidSumAgg[0].paid : 0;
-    const totalSum = Array.isArray(totalSumAgg) && totalSumAgg[0] ? totalSumAgg[0].total : 0;
+    const paidSum = kpisFromRepo ? Number(kpisFromRepo.collectedThisMonth || 0) : (Array.isArray(paidSumAgg) && paidSumAgg[0] ? paidSumAgg[0].paid : 0);
+    const totalSum = kpisFromRepo ? Number(kpisFromRepo.outstanding || 0) + Number(paidSum) : (Array.isArray(totalSumAgg) && totalSumAgg[0] ? totalSumAgg[0].total : 0);
     const outstanding = Math.max(totalSum - paidSum, 0);
 
     // Simple monthly series mock when DB empty

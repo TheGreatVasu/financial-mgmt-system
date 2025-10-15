@@ -13,6 +13,9 @@ const NotFoundPage = lazy(() => import('./pages/not-found'))
 import Profile from './pages/profile'
 import Reports from './pages/reports'
 import Subscription from './pages/subscription'
+import AlertsPage from './pages/alerts'
+import SettingsPage from './pages/settings'
+import LoadingScreen from './pages/loading'
 import CustomersList from './pages/customers/index'
 import CustomerNew from './pages/customers/new'
 import CustomerDetail from './pages/customers/[id]'
@@ -33,6 +36,8 @@ export default function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<HomePage />} />
+        {/* Loading screen route (used after login) */}
+        <Route path="/loading" element={<LoadingScreen />} />
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/contact" element={<ContactPage />} />
@@ -121,6 +126,24 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Subscription />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/alerts"
+          element={
+            <ProtectedRoute>
+              <AlertsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

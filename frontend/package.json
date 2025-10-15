@@ -15,11 +15,13 @@
     "axios": "^1.6.2",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
+    "framer-motion": "^10.18.0",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.48.2",
     "react-hot-toast": "^2.4.1",
+    "react-joyride": "^2.9.3",
     "react-router-dom": "^6.20.1",
     "recharts": "^2.8.0"
   },
