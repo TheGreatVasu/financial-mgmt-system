@@ -4,7 +4,8 @@
 
 @layer base {
   html { scroll-behavior: smooth; }
-  body { @apply bg-secondary-50 text-secondary-900; }
+  body { @apply bg-secondary-50 text-secondary-900 transition-colors duration-300; }
+  .dark body { @apply bg-[#0D1117] text-gray-100; }
   :root { --app-header-h: 64px; }
 }
 
@@ -16,12 +17,12 @@
   .btn-sm { @apply h-8 px-3 text-xs; }
   .btn-md { @apply h-10 px-4; }
 
-  .input { @apply flex h-10 w-full rounded-md border border-secondary-300 bg-white px-3 py-2 text-sm placeholder:text-secondary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500; }
+  .input { @apply flex h-10 w-full rounded-md border border-secondary-300 bg-white px-3 py-2 text-sm text-secondary-900 placeholder:text-secondary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-[#1E293B] dark:border-secondary-700 dark:placeholder-secondary-400 dark:text-gray-100; }
 
-  .card { @apply rounded-lg border border-secondary-200 bg-white shadow; }
-  .card-header { @apply p-6 border-b border-secondary-200; }
+  .card { @apply rounded-lg border border-secondary-200 bg-white shadow transition-colors duration-300 dark:border-secondary-700 dark:bg-[#1E293B]; }
+  .card-header { @apply p-6 border-b border-secondary-200 dark:border-secondary-700; }
   .card-content { @apply p-6; }
-  .card-footer { @apply p-6 border-t border-secondary-200; }
+  .card-footer { @apply p-6 border-t border-secondary-200 dark:border-secondary-700; }
 
   /* App container for consistent responsive paddings */
   .container-app { @apply w-full max-w-7xl mx-auto px-3 sm:px-5 md:px-8 lg:px-10; }
@@ -55,6 +56,11 @@
       radial-gradient(800px 400px at 120% 10%, rgba(99,102,241,0.18), transparent 60%),
       linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   }
+  .dark .bg-radial-vignette {
+    background-image: radial-gradient(1200px 600px at 20% -10%, rgba(59,130,246,0.12), transparent 60%),
+      radial-gradient(800px 400px at 120% 10%, rgba(99,102,241,0.10), transparent 60%),
+      linear-gradient(180deg, #0F172A 0%, #0D1117 100%);
+  }
 
   /* Subtle grid lines */
   .bg-grid {
@@ -69,6 +75,7 @@
     background-image: radial-gradient(circle at 1px 1px, rgba(100,116,139,0.35) 1px, transparent 1px);
     background-size: 18px 18px;
   }
+  .dark .bg-dots { background-image: radial-gradient(circle at 1px 1px, rgba(148,163,184,0.25) 1px, transparent 1px); }
 
   /* Diagonal mesh pattern */
   .bg-mesh {

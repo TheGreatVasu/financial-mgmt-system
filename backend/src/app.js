@@ -13,6 +13,7 @@ const customerRoutes = require('./routes/customerRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const momRoutes = require('./routes/momRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -72,6 +73,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/mom', momRoutes);
 
 // 404 handler
 app.use(notFound);

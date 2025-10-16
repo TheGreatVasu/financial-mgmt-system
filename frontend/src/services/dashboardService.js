@@ -1,9 +1,9 @@
 import { createApiClient } from './apiClient'
 
-export async function fetchDashboard(token) {
+export async function fetchDashboard(token, params = {}) {
   const api = createApiClient(token)
   try {
-    const { data } = await api.get('/dashboard')
+    const { data } = await api.get('/dashboard', { params })
     if (!data?.success) throw new Error(data?.message || 'Failed to load dashboard')
     return data.data
   } catch (e) {

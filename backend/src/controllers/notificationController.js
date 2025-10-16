@@ -1,22 +1,19 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const repo = require('../services/repositories');
-
-// Placeholder controllers - will be implemented later
+const { getDb } = require('../config/db');
 
 const getNotifications = asyncHandler(async (req, res) => {
-  const rows = await repo.listAlerts(20);
+  const rows = await repo.listAlerts(50);
   res.json({ success: true, data: rows });
 });
 
 const markAsRead = asyncHandler(async (req, res) => {
-  res.json({
-    success: true,
-    message: 'Mark notification as read - Coming soon',
-    data: req.body
-  });
+  const db = getDb();
+  const { ids = [] } = req.body || {};
+  if (db) {
+    await db('alerts').whereIn('id', ids).update({ read: 1 });
+  }
+  res.json({ success: true });
 });
 
-module.exports = {
-  getNotifications,
-  markAsRead
-};
+module.exports = { getNotifications, markAsRead };

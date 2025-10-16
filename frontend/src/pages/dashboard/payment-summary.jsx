@@ -1,32 +1,19 @@
-import DashboardLayout from '../components/layout/DashboardLayout'
+import DashboardLayout from '../../components/layout/DashboardLayout'
 import React from 'react'
-import Modal from '../components/ui/Modal.jsx'
-import { useAuthContext } from '../context/AuthContext.jsx'
-import { createMOMService } from '../services/momService'
+import Modal from '../../components/ui/Modal.jsx'
+import { useAuthContext } from '../../context/AuthContext.jsx'
+import { createMOMService } from '../../services/momService'
 
-export default function PaymentsPage() {
+export default function PaymentSummary() {
   const { token } = useAuthContext()
   const momApi = React.useMemo(() => createMOMService(token), [token])
   const [momOpen, setMomOpen] = React.useState(false)
-  const [loading, setLoading] = React.useState(false)
   const [moms, setMoms] = React.useState([])
   const [meta, setMeta] = React.useState({ page: 1, limit: 12, total: 0 })
+  const [loading, setLoading] = React.useState(false)
   const [filters, setFilters] = React.useState({ q: '', status: '', from: '', to: '' })
   const [form, setForm] = React.useState(defaultForm())
   const [editingId, setEditingId] = React.useState(null)
-
-  const smart = React.useMemo(() => {
-    const amount = Number(form.paymentAmount || 0)
-    const rate = Number(form.interestRate || 0)
-    const due = form.dueDate ? new Date(form.dueDate) : null
-    const today = new Date()
-    let computedInterest = 0
-    if (due && today > due && rate > 0) {
-      const daysLate = Math.floor((today - due) / (24*60*60*1000))
-      computedInterest = Math.round(((amount * (rate/100)) / 30) * daysLate * 100) / 100
-    }
-    return { totalPayable: amount + computedInterest, pendingDues: amount, computedInterest }
-  }, [form.paymentAmount, form.interestRate, form.dueDate])
 
   const debounced = useDebounce(filters, 400)
 
@@ -40,7 +27,6 @@ export default function PaymentsPage() {
       setLoading(false)
     }
   }
-
   React.useEffect(() => { if (token) load(1) }, [token, debounced.q, debounced.status, debounced.from, debounced.to])
 
   async function submitMOM(e) {
@@ -51,7 +37,6 @@ export default function PaymentsPage() {
       participants: form.participants.split(',').map(s => s.trim()).filter(Boolean),
       paymentAmount: Number(form.paymentAmount),
       interestRate: Number(form.interestRate),
-      aiSummary: undefined,
     }
     if (editingId) {
       await momApi.update(editingId, payload)
@@ -92,96 +77,25 @@ export default function PaymentsPage() {
     load()
   }
 
-  async function quickStatus(id, status) {
-    await momApi.update(id, { status })
-    load()
-  }
-  const rows = [
-    { id: 'PMT-0001', customer: 'Acme Corp', method: 'UPI', amount: '₹ 45,000', date: '2025-10-01', status: 'Settled' },
-    { id: 'PMT-0002', customer: 'Globex', method: 'Card', amount: '₹ 90,000', date: '2025-10-04', status: 'Failed' },
-    { id: 'PMT-0003', customer: 'Initech', method: 'NetBanking', amount: '₹ 60,000', date: '2025-10-06', status: 'Pending' },
-  ]
-  const [query, setQuery] = React.useState('')
-  const [sortBy, setSortBy] = React.useState('date')
-  const [page, setPage] = React.useState(1)
-  const pageSize = 5
-
-  const filtered = rows.filter((r) =>
-    [r.id, r.customer, r.method, r.amount, r.date, r.status].join(' ').toLowerCase().includes(query.toLowerCase())
-  )
-  const sorted = [...filtered].sort((a, b) => String(a[sortBy]).localeCompare(String(b[sortBy])))
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize)
-
   return (
     <DashboardLayout>
-      <section className="card p-6">
+      <div className="card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent Payments</h2>
-          <div className="flex items-center gap-2">
-            <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1) }} placeholder="Search payments" className="input" />
-            <select className="input w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="date">Date</option>
-              <option value="customer">Customer</option>
-              <option value="status">Status</option>
-            </select>
-            <button className="btn btn-outline btn-sm">Export</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setMomOpen(true)}>Create MOM</button>
-          </div>
+          <h2 className="text-lg font-semibold">Payment Summary</h2>
+          <button className="btn btn-primary btn-sm" onClick={() => setMomOpen(true)}>Create MOM</button>
         </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-secondary-600">
-                <th className="py-2 pr-4">Payment ID</th>
-                <th className="py-2 pr-4">Customer</th>
-                <th className="py-2 pr-4">Method</th>
-                <th className="py-2 pr-4">Amount</th>
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((r) => (
-                <tr key={r.id} className="border-t border-secondary-200">
-                  <td className="py-2 pr-4">{r.id}</td>
-                  <td className="py-2 pr-4">{r.customer}</td>
-                  <td className="py-2 pr-4">{r.method}</td>
-                  <td className="py-2 pr-4">{r.amount}</td>
-                  <td className="py-2 pr-4">{r.date}</td>
-                  <td className="py-2 pr-4">
-                    <span className={`px-2 py-1 rounded text-xs ${r.status === 'Settled' ? 'bg-success-100 text-success-700' : r.status === 'Failed' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'}`}>{r.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <div>Page {page} of {totalPages}</div>
-          <div className="flex items-center gap-2">
-            <button className="btn btn-outline btn-sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
-            <button className="btn btn-outline btn-sm" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-6 mt-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">Meeting MOMs</h3>
-          <div className="flex items-center gap-2">
-            <input className="input" placeholder="Search MOM" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
-            <select className="input" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-              <option value="">All Status</option>
-              <option value="planned">Planned</option>
-              <option value="due">Due</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-            </select>
-            <input type="date" className="input" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
-            <input type="date" className="input" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
-            <button className="btn btn-outline btn-sm" onClick={() => load(1)}>Apply</button>
-          </div>
+        <div className="mt-4 flex items-center gap-2">
+          <input className="input" placeholder="Search MOM" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
+          <select className="input" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+            <option value="">All Status</option>
+            <option value="planned">Planned</option>
+            <option value="due">Due</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+          </select>
+          <input type="date" className="input" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+          <input type="date" className="input" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          <button className="btn btn-outline btn-sm" onClick={() => load(1)}>Apply</button>
         </div>
         {loading ? (
           <div className="mt-6 text-sm text-secondary-600">Loading...</div>
@@ -202,11 +116,6 @@ export default function PaymentsPage() {
                 <div className="mt-4 flex items-center gap-2">
                   <button className="btn btn-outline btn-sm" onClick={() => onEdit(m)}>Edit</button>
                   <button className="btn btn-outline btn-sm" onClick={() => onDelete(m._id)}>Delete</button>
-                  <div className="ml-auto inline-flex gap-1">
-                    <button className="btn btn-ghost btn-sm" onClick={() => quickStatus(m._id, 'paid')}>Mark Paid</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => quickStatus(m._id, 'due')}>Mark Due</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => quickStatus(m._id, 'overdue')}>Overdue</button>
-                  </div>
                 </div>
               </div>
             ))}
@@ -219,12 +128,12 @@ export default function PaymentsPage() {
             <button className="btn btn-outline btn-sm" disabled={meta.page >= Math.ceil((meta.total || 0) / meta.limit)} onClick={() => load(meta.page + 1)}>Next</button>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="card p-6 mt-6">
+      <div className="card p-6 mt-6">
         <h3 className="text-base font-semibold">Calendar</h3>
         <Calendar events={moms} onSelect={(m) => onEdit(m)} />
-      </section>
+      </div>
 
       <Timeline moms={moms} />
 
@@ -290,17 +199,6 @@ export default function PaymentsPage() {
               <option value="overdue">Overdue</option>
             </select>
           </div>
-
-          <div className="md:col-span-2">
-            <div className="rounded-lg border border-secondary-200 p-4 bg-secondary-50">
-              <div className="text-sm font-semibold mb-2">Smart Calculation</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>Total Payable: <span className="font-medium">₹{smart.totalPayable.toLocaleString('en-IN')}</span></div>
-                <div>Pending Dues: <span className="font-medium">₹{smart.pendingDues.toLocaleString('en-IN')}</span></div>
-                <div>Interest: <span className="font-medium">₹{smart.computedInterest.toLocaleString('en-IN')}</span></div>
-              </div>
-            </div>
-          </div>
         </form>
       </Modal>
     </DashboardLayout>
@@ -325,7 +223,7 @@ function Calendar({ events, onSelect }) {
   const start = new Date(year, month, 1)
   const end = new Date(year, month + 1, 0)
   const daysInMonth = end.getDate()
-  const startWeekday = (start.getDay() + 6) % 7 // make Monday=0
+  const startWeekday = (start.getDay() + 6) % 7 // Monday=0
 
   const cells = []
   for (let i = 0; i < startWeekday; i++) cells.push(null)

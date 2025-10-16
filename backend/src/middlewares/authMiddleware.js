@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const config = require('../config/env');
+const { findById } = require('../services/userRepo');
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -14,7 +14,7 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await findById(decoded.id);
     
     if (!user) {
       return res.status(401).json({ 
@@ -23,7 +23,7 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    if (!user.isActive) {
+    if (user && user.isActive === false) {
       return res.status(401).json({ 
         success: false, 
         message: 'Account is deactivated.' 
@@ -55,7 +55,7 @@ const authMiddleware = async (req, res, next) => {
 };
 
 const adminMiddleware = (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ 
       success: false, 
       message: 'Access denied. Admin privileges required.' 
@@ -70,9 +70,9 @@ const optionalAuth = async (req, res, next) => {
     
     if (token) {
       const decoded = jwt.verify(token, config.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('-password');
+      const user = await findById(decoded.id);
       
-      if (user && user.isActive) {
+      if (user && (user.isActive === undefined || user.isActive)) {
         req.user = user;
       }
     }

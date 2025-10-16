@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, CheckCircle2, AlertTriangle } from "lucide-react";
 import EcommerceMetrics from "./ecommerce/EcommerceMetrics";
 import MonthlySalesChart from "./ecommerce/MonthlySalesChart";
@@ -9,12 +9,24 @@ import RecentOrders from "./ecommerce/RecentOrders";
 import DemographicCard from "./ecommerce/DemographicCard";
 import { useAuthContext } from "../../context/AuthContext.jsx";
 import { fetchDashboard } from "../../services/dashboardService.js";
+import Modal from "../ui/Modal.jsx";
+import { createInvoiceService } from "../../services/invoiceService.js";
+import { createPaymentService } from "../../services/paymentService.js";
+import { createCustomerService } from "../../services/customerService.js";
+import { listAlerts, markRead } from "../../services/alertsService.js";
 
 export default function TailAdminDashboard() {
   const { token } = useAuthContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [modal, setModal] = useState(null) // 'Create Invoice'|'Record Payment'|'Add Customer'|'Filter'|'Alerts'|null
+  const [form, setForm] = useState({})
+  const [filters, setFilters] = useState({})
+  const [alerts, setAlerts] = useState([])
+  const invApi = useMemo(() => createInvoiceService(token), [token])
+  const payApi = useMemo(() => createPaymentService(token), [token])
+  const custApi = useMemo(() => createCustomerService(token), [token])
 
   useEffect(() => {
     let mounted = true
@@ -53,6 +65,81 @@ export default function TailAdminDashboard() {
     return () => { mounted = false }
   }, [token])
 
+  async function refresh() {
+    const d = await fetchDashboard(token, filters)
+    setData(d)
+  }
+
+  function normalizeInvoice(v) {
+    return {
+      invoiceNumber: v.invoiceNumber,
+      customerId: v.customerId,
+      poRef: v.poRef,
+      items: v.items || [],
+      taxRate: Number(v.taxRate || 0),
+      paymentTerms: v.paymentTerms,
+      dueDate: v.dueDate,
+    }
+  }
+  function normalizePayment(v) {
+    return {
+      invoiceNumber: v.invoiceNumber,
+      amount: Number(v.amount || 0),
+      paymentDate: v.paymentDate || new Date(),
+      method: v.method || 'upi',
+      reference: v.reference || 'dash',
+    }
+  }
+  function normalizeCustomer(v) {
+    return {
+      name: v.name,
+      companyName: v.companyName,
+      email: v.email,
+      phone: v.phone,
+      gstNumber: v.gstNumber,
+    }
+  }
+
+  async function handleQuickAction(label) {
+    if (label === 'Alerts') {
+      await loadAlerts()
+    }
+    setForm({})
+    setModal(label)
+  }
+
+  async function loadAlerts() {
+    const list = await listAlerts(token)
+    setAlerts(list)
+  }
+
+  async function exportCsv() {
+    const base = import.meta?.env?.VITE_API_BASE_URL?.trim() || '/api'
+    const api = base.replace(/\/$/,'')
+    const endpoints = ['/invoices', '/payments', '/customers']
+    const rows = []
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(`${api}${ep}`)
+        const json = await res.json().catch(() => ({}))
+        const data = json?.data || []
+        rows.push(...data.map((d) => ({ endpoint: ep.slice(1), ...d })))
+      } catch {}
+    }
+    if (rows.length === 0) return
+    const headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))))
+    const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `finance-export-${Date.now()}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
       {/* Quick Actions row */}
@@ -65,7 +152,7 @@ export default function TailAdminDashboard() {
           { label: 'Filter', icon: Filter, grad: 'from-amber-500 to-amber-600' },
           { label: 'Alerts', icon: Bell, grad: 'from-rose-500 to-rose-600' },
         ].map((qa, i) => (
-          <button key={i} className="group rounded-xl border border-primary-200/60 bg-white/90 backdrop-blur-sm px-3 py-3 text-left shadow-soft hover:shadow-theme-lg hover:-translate-y-0.5 transition will-change-transform hover-tilt">
+          <button key={i} onClick={() => handleQuickAction(qa.label)} className="group rounded-xl border border-primary-200/60 bg-white/90 backdrop-blur-sm px-3 py-3 text-left shadow-soft hover:shadow-theme-lg hover:-translate-y-0.5 transition will-change-transform hover-tilt">
             <div className="flex items-center gap-3">
               <span className={`h-9 w-9 grid place-items-center rounded-lg bg-gradient-to-br ${qa.grad} text-white shadow-sm animate-float`}>
                 <qa.icon className="h-4 w-4 blink-soft" />
@@ -90,7 +177,7 @@ export default function TailAdminDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15">
+            <button onClick={() => handleQuickAction('Filter')} className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15">
               <Filter className="h-4 w-4" />
               Filters
             </button>
@@ -98,7 +185,7 @@ export default function TailAdminDashboard() {
               <CalendarRange className="h-4 w-4" />
               Last 30 days
             </button>
-            <button className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white text-primary-700 text-xs sm:text-sm hover:bg-secondary-50 shadow-soft">
+            <button onClick={exportCsv} className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white text-primary-700 text-xs sm:text-sm hover:bg-secondary-50 shadow-soft">
               <Download className="h-4 w-4" />
               Export
             </button>
@@ -116,6 +203,51 @@ export default function TailAdminDashboard() {
           </span>
         </div>
       </div>
+
+      <Modal open={modal === 'Create Invoice'} onClose={() => setModal(null)} title="Create Invoice" variant="dialog" size="lg" footer={(
+        <>
+          <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={async () => { await invApi.create(normalizeInvoice(form)); setModal(null); refresh(); }}>Save</button>
+        </>
+      )}>
+        <InvoiceForm form={form} setForm={setForm} />
+      </Modal>
+
+      <Modal open={modal === 'Record Payment'} onClose={() => setModal(null)} title="Record Payment" variant="dialog" size="md" footer={(
+        <>
+          <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={async () => { await payApi.create(normalizePayment(form)); setModal(null); refresh(); }}>Save</button>
+        </>
+      )}>
+        <PaymentForm form={form} setForm={setForm} />
+      </Modal>
+
+      <Modal open={modal === 'Add Customer'} onClose={() => setModal(null)} title="Add Customer" variant="dialog" size="md" footer={(
+        <>
+          <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={async () => { await custApi.create(normalizeCustomer(form)); setModal(null); refresh(); }}>Save</button>
+        </>
+      )}>
+        <CustomerForm form={form} setForm={setForm} />
+      </Modal>
+
+      <Modal open={modal === 'Filter'} onClose={() => setModal(null)} title="Filters" variant="dialog" size="md" footer={(
+        <>
+          <button className="btn btn-outline" onClick={() => { setFilters({}); setModal(null); refresh(); }}>Reset</button>
+          <button className="btn btn-primary" onClick={() => { setModal(null); refresh(); }}>Apply</button>
+        </>
+      )}>
+        <FilterForm filters={filters} setFilters={setFilters} />
+      </Modal>
+
+      <Modal open={modal === 'Alerts'} onClose={() => setModal(null)} title="Alerts" variant="dialog" size="md" footer={(
+        <>
+          <button className="btn btn-outline" onClick={() => setModal(null)}>Close</button>
+          <button className="btn btn-primary" onClick={async () => { await markRead(token, alerts.map(a => a.id)); setModal(null); }}>Mark all read</button>
+        </>
+      )}>
+        <AlertsPanel alerts={alerts} reload={loadAlerts} />
+      </Modal>
 
       {/* States */}
       {error ? (
@@ -353,4 +485,81 @@ export default function TailAdminDashboard() {
       </div>
     </div>
   );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function FilterForm({ filters, setFilters }) {
+  const on = (k) => (e) => setFilters({ ...filters, [k]: e.target.value })
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Field label="Date From"><input type="date" className="input" value={filters.from||''} onChange={on('from')} /></Field>
+      <Field label="Date To"><input type="date" className="input" value={filters.to||''} onChange={on('to')} /></Field>
+      <Field label="Customer"><input className="input" value={filters.customer||''} onChange={on('customer')} /></Field>
+      <Field label="Status"><select className="input" value={filters.status||''} onChange={on('status')}><option value="">Any</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="overdue">Overdue</option></select></Field>
+      <Field label="Payment Type"><select className="input" value={filters.paymentType||''} onChange={on('paymentType')}><option value="">Any</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option></select></Field>
+    </div>
+  )
+}
+
+function AlertsPanel({ alerts, reload }) {
+  return (
+    <div className="space-y-2">
+      {(alerts||[]).length === 0 ? <div className="text-sm text-secondary-600">No alerts</div> : null}
+      {alerts.map(a => (
+        <div key={a.id} className={`rounded-md px-3 py-2 border text-sm ${a.type==='danger'?'border-danger-200 bg-danger-50':a.type==='warning'?'border-warning-200 bg-warning-50':a.type==='success'?'border-success-200 bg-success-50':'border-secondary-200 bg-secondary-50'}`}> 
+          <div className="font-medium">{a.title || a.message}</div>
+          {a.detail ? <div className="text-secondary-600 text-xs">{a.detail}</div> : null}
+        </div>
+      ))}
+      <button className="btn btn-outline btn-sm" onClick={reload}>Refresh Alerts</button>
+    </div>
+  )
+}
+
+function InvoiceForm({ form, setForm }) {
+  const on = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Field label="Invoice Number"><input className="input" value={form.invoiceNumber||''} onChange={on('invoiceNumber')} /></Field>
+      <Field label="Customer ID"><input className="input" value={form.customerId||''} onChange={on('customerId')} /></Field>
+      <Field label="PO Reference"><input className="input" value={form.poRef||''} onChange={on('poRef')} /></Field>
+      <Field label="Tax Rate %"><input type="number" className="input" value={form.taxRate||0} onChange={on('taxRate')} /></Field>
+      <Field label="Payment Terms"><input className="input" value={form.paymentTerms||''} onChange={on('paymentTerms')} /></Field>
+      <Field label="Due Date"><input type="date" className="input" value={form.dueDate||''} onChange={on('dueDate')} /></Field>
+    </div>
+  )
+}
+
+function PaymentForm({ form, setForm }) {
+  const on = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Field label="Invoice Number"><input className="input" value={form.invoiceNumber||''} onChange={on('invoiceNumber')} /></Field>
+      <Field label="Amount Received"><input type="number" className="input" value={form.amount||0} onChange={on('amount')} /></Field>
+      <Field label="Payment Date"><input type="date" className="input" value={form.paymentDate||''} onChange={on('paymentDate')} /></Field>
+      <Field label="Payment Mode"><select className="input" value={form.method||'upi'} onChange={on('method')}><option value="upi">UPI</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option></select></Field>
+      <Field label="Reference"><input className="input" value={form.reference||''} onChange={on('reference')} /></Field>
+    </div>
+  )
+}
+
+function CustomerForm({ form, setForm }) {
+  const on = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Field label="Name"><input className="input" value={form.name||''} onChange={on('name')} /></Field>
+      <Field label="Company Name"><input className="input" value={form.companyName||''} onChange={on('companyName')} /></Field>
+      <Field label="Email"><input className="input" value={form.email||''} onChange={on('email')} /></Field>
+      <Field label="Phone"><input className="input" value={form.phone||''} onChange={on('phone')} /></Field>
+      <Field label="GST Number"><input className="input" value={form.gstNumber||''} onChange={on('gstNumber')} /></Field>
+    </div>
+  )
 }

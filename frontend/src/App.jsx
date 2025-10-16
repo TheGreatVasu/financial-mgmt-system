@@ -21,6 +21,10 @@ import CustomerNew from './pages/customers/new'
 import CustomerDetail from './pages/customers/[id]'
 import InvoicesList from './pages/invoices/index'
 import InvoiceDetail from './pages/invoices/[id]'
+import NewPOPage from './pages/dashboard/new-po'
+import BoqEntry from './pages/dashboard/boq-entry'
+import InvItems from './pages/dashboard/inv-items'
+import PaymentSummary from './pages/dashboard/payment-summary'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuthContext()
@@ -49,6 +53,38 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/new-po"
+          element={
+            <ProtectedRoute>
+              <NewPOPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/boq-entry"
+          element={
+            <ProtectedRoute>
+              <BoqEntry />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/inv-items"
+          element={
+            <ProtectedRoute>
+              <InvItems />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/payment-summary"
+          element={
+            <ProtectedRoute>
+              <PaymentSummary />
             </ProtectedRoute>
           }
         />
