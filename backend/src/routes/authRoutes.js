@@ -6,7 +6,8 @@ const {
   getMe,
   updateProfile,
   changePassword,
-  logout
+  logout,
+  googleLogin
 } = require('../controllers/authController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
@@ -76,6 +77,7 @@ const changePasswordValidation = [
 // Routes
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
+router.post('/google-login', googleLogin);
 router.get('/me', authMiddleware, getMe);
 router.put('/profile', authMiddleware, updateProfileValidation, updateProfile);
 router.put('/change-password', authMiddleware, changePasswordValidation, changePassword);

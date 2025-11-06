@@ -87,9 +87,9 @@ export default function AlertsPage() {
             <option value="info">Information</option>
             <option value="success">Success</option>
           </select>
-          <button className="btn btn-outline" onClick={doSnooze} disabled={busy || selectedIds.length===0}>Snooze 1h</button>
-          <button className="btn btn-secondary" onClick={doMarkRead} disabled={busy || selectedIds.length===0}>Mark read</button>
-          <button className="btn btn-primary" onClick={doDismiss} disabled={busy || selectedIds.length===0}>Dismiss</button>
+          <button className="btn btn-outline btn-md" onClick={doSnooze} disabled={busy || selectedIds.length===0}>Snooze 1h</button>
+          <button className="btn btn-secondary btn-md" onClick={doMarkRead} disabled={busy || selectedIds.length===0}>Mark read</button>
+          <button className="btn btn-primary btn-md" onClick={doDismiss} disabled={busy || selectedIds.length===0}>Dismiss</button>
         </div>
       </div>
 

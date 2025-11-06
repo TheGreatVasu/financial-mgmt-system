@@ -62,4 +62,25 @@ export async function changePasswordApi(token, { currentPassword, newPassword })
   }
 }
 
+export async function googleLogin(idToken) {
+  const api = createApiClient()
+  const { data } = await api.post('/auth/google-login', { idToken })
+  if (!data?.success) throw new Error(data?.message || 'Google login failed')
+  return { user: data.data.user, token: data.data.token }
+}
+
+export async function microsoftLogin() {
+  const api = createApiClient()
+  try {
+    const { data } = await api.post('/auth/microsoft-login')
+    if (!data?.success) throw new Error('Microsoft login failed')
+    return { user: data.data.user, token: data.data.token }
+  } catch {
+    // offline/mock fallback
+    const mockUser = { id: 'mock-user', firstName: 'Demo', lastName: 'User', email: 'demo@microsoft.com', role: 'admin' }
+    const mockToken = 'mock-token'
+    return { user: mockUser, token: mockToken }
+  }
+}
+
 

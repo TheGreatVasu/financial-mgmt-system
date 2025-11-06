@@ -126,7 +126,7 @@ export default function PaymentsPage() {
               <option value="status">Status</option>
             </select>
             <button className="btn btn-outline btn-sm">Export</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setMomOpen(true)}>Create MOM</button>
+            <button className="btn btn-primary btn-md" onClick={() => setMomOpen(true)}>Create MOM</button>
           </div>
         </div>
         <div className="mt-4 overflow-x-auto">

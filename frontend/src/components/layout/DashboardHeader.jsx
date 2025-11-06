@@ -14,7 +14,41 @@ export default function DashboardHeader({ onToggleSidebar }) {
   const notifRef = useRef(null)
   const createRef = useRef(null)
   const navigate = useNavigate()
-  const { logout } = useAuthContext()
+  const { logout, user } = useAuthContext()
+  
+  // Calculate display name
+  const getDisplayName = () => {
+    if (!user) return 'User'
+    if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`
+    if (user.firstName) return user.firstName
+    if (user.username) return user.username
+    if (user.email) return user.email.split('@')[0]
+    return 'User'
+  }
+  
+  // Calculate initials (always 2 characters)
+  const getInitials = () => {
+    if (!user) return 'DU'
+    if (user.firstName && user.lastName) {
+      return (user.firstName[0] + user.lastName[0]).toUpperCase()
+    }
+    if (user.firstName) {
+      const name = user.firstName.trim()
+      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
+    }
+    if (user.username) {
+      const name = user.username.trim()
+      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
+    }
+    if (user.email) {
+      const name = user.email.split('@')[0]
+      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
+    }
+    return 'DU'
+  }
+  
+  const displayName = getDisplayName()
+  const initials = getInitials()
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -50,20 +84,24 @@ export default function DashboardHeader({ onToggleSidebar }) {
 
   return (
     <header className="app-header sticky top-0 z-50 bg-white/95 dark:bg-[#111827]/95 backdrop-blur border-b border-gray-200 dark:border-secondary-800 transition-colors" data-tour="topbar">
-      <div className="container-app flex items-center justify-between h-full">
+      <div className="container-app flex items-center justify-between h-full px-3 sm:px-4">
         {/* Left Side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Mobile sidebar toggle */}
+          <button aria-label="Toggle sidebar" onClick={onToggleSidebar} className="inline-flex md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#1E293B]">
+            <Menu className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+          </button>
           {/* Search Bar */}
-          <div className="relative flex-1 max-w-md" data-tour="search">
+          <div className="relative flex-1 min-w-[140px] max-w-md" data-tour="search">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-300" />
               <input
                 type="text"
                 placeholder="Search..."
                 ref={searchRef}
-                className="w-full pl-10 pr-20 py-2.5 border border-gray-300 dark:border-secondary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white dark:bg-[#1E293B] text-secondary-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-300 transition-colors"
+                className="w-full pl-10 pr-16 sm:pr-20 py-2.5 border border-gray-300 dark:border-secondary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white dark:bg-[#1E293B] text-secondary-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-300 transition-colors"
               />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 hidden sm:flex items-center gap-1">
                 <span className="text-xs text-gray-500 dark:text-gray-300 bg-gray-100 dark:bg-[#243045] px-1.5 py-0.5 rounded text-[10px]">
                   {navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl+K'}
                 </span>
@@ -127,9 +165,9 @@ export default function DashboardHeader({ onToggleSidebar }) {
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#1E293B] transition-colors"
             >
               <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                <span className="text-white text-sm font-medium">T</span>
+                <span className="text-white text-sm font-medium">{initials}</span>
               </div>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-100">Test User</span>
+              <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-100">{displayName}</span>
               <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-300" />
             </button>
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile } from '../services/authService'
+import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, googleLogin as apiGoogleLogin, microsoftLogin as apiMicrosoftLogin } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -35,6 +35,22 @@ export function AuthProvider({ children }) {
     return u
   }
 
+  async function loginWithGoogle(idToken) {
+    const { user: u, token: t } = await apiGoogleLogin(idToken)
+    setUser(u)
+    setToken(t)
+    localStorage.setItem('fms_token', t)
+    return u
+  }
+
+  async function loginWithMicrosoft() {
+    const { user: u, token: t } = await apiMicrosoftLogin()
+    setUser(u)
+    setToken(t)
+    localStorage.setItem('fms_token', t)
+    return u
+  }
+
   async function logout() {
     try {
       if (token) await apiLogout(token)
@@ -59,7 +75,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, logout, refresh, updateProfile }),
+    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithGoogle, loginWithMicrosoft, logout, refresh, updateProfile }),
     [user, token, loading]
   )
 

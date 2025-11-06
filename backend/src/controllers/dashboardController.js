@@ -80,6 +80,32 @@ async function buildDashboardPayload() {
           cei,
         },
         series,
+        // New dashboard domains
+        monthlyCollectionPlan: {
+          target: [40,45,48,52,55,60,62,64,66,70,72,75],
+          actual: [35,42,44,50,54,57,59,61,63,65,69,71],
+          labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        },
+        totalDebtors: {
+          total: Math.max(totalSum, 0),
+          outstanding,
+          buckets: series.agingBuckets || []
+        },
+        boqVsActual: {
+          boq: [120,140,160,180,210,230],
+          actual: [110,150,155,170,190,225],
+          labels: ['Q1','Q2','Q3','Q4','Q5','Q6']
+        },
+        performance: {
+          onTimeCollectionRate: Math.min(100, 80 + Math.round(Math.random()*10)),
+          promiseToPay: cei,
+          slaCompliance: Math.min(100, 85 + Math.round(Math.random()*8))
+        },
+        others: [
+          { title: 'Bank Reco Pending', value: 3 },
+          { title: 'Credit Notes Awaiting', value: 2 },
+          { title: 'Disputes Open', value: 4 }
+        ],
         recentInvoices: invoices,
         alerts,
         actionItems: {

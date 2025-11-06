@@ -82,7 +82,7 @@ export default function PaymentSummary() {
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Payment Summary</h2>
-          <button className="btn btn-primary btn-sm" onClick={() => setMomOpen(true)}>Create MOM</button>
+          <button className="btn btn-primary btn-md" onClick={() => setMomOpen(true)}>Create MOM</button>
         </div>
         <div className="mt-4 flex items-center gap-2">
           <input className="input" placeholder="Search MOM" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />

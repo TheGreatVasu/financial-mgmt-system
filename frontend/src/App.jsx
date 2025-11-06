@@ -3,11 +3,8 @@ import { AuthProvider, useAuthContext } from './context/AuthContext.jsx'
 import { Suspense, lazy } from 'react'
 import Dashboard from './pages/dashboard'
 import LoginPage from './pages/index'
-const HomePage = lazy(() => import('./pages/home'))
-const FeaturesPage = lazy(() => import('./pages/features'))
-const PricingPage = lazy(() => import('./pages/pricing'))
-const ContactPage = lazy(() => import('./pages/contact'))
-const SignupPage = lazy(() => import('./pages/signup'))
+import SignupPage from './pages/signup'
+// Removed public marketing pages to ensure only login is visible before auth
 const PaymentsPage = lazy(() => import('./pages/payments'))
 const NotFoundPage = lazy(() => import('./pages/not-found'))
 import Profile from './pages/profile'
@@ -25,6 +22,12 @@ import NewPOPage from './pages/dashboard/new-po'
 import BoqEntry from './pages/dashboard/boq-entry'
 import InvItems from './pages/dashboard/inv-items'
 import PaymentSummary from './pages/dashboard/payment-summary'
+import MonthlyPlanPage from './pages/dashboard/monthly-plan'
+import DebtorsSummaryPage from './pages/dashboard/debtors-summary'
+import BoqActualPage from './pages/dashboard/boq-actual'
+import PerformancePage from './pages/dashboard/performance'
+import OthersPage from './pages/dashboard/others'
+import DatabaseManagementPage from './pages/admin/database'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuthContext()
@@ -33,18 +36,21 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function RootGate() {
+  const { isAuthenticated, loading } = useAuthContext()
+  if (loading) return <div style={{ padding: 24 }}>Loading...</div>
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<HomePage />} />
+        {/* Gate root based on auth */}
+        <Route path="/" element={<RootGate />} />
         {/* Loading screen route (used after login) */}
         <Route path="/loading" element={<LoadingScreen />} />
-        <Route path="/features" element={<FeaturesPage />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/contact" element={<ContactPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
 
@@ -61,6 +67,46 @@ export default function App() {
           element={
             <ProtectedRoute>
               <NewPOPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/monthly-plan"
+          element={
+            <ProtectedRoute>
+              <MonthlyPlanPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/debtors-summary"
+          element={
+            <ProtectedRoute>
+              <DebtorsSummaryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/boq-actual"
+          element={
+            <ProtectedRoute>
+              <BoqActualPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/performance"
+          element={
+            <ProtectedRoute>
+              <PerformancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/others"
+          element={
+            <ProtectedRoute>
+              <OthersPage />
             </ProtectedRoute>
           }
         />
@@ -184,7 +230,16 @@ export default function App() {
           }
         />
 
-        <Route path="*" element={<NotFoundPage />} />
+        <Route
+          path="/admin/database"
+          element={
+            <ProtectedRoute>
+              <DatabaseManagementPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
     </AuthProvider>

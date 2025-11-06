@@ -17,6 +17,8 @@ const momRoutes = require('./routes/momRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const actionItemRoutes = require('./routes/actionItemRoutes');
+const databaseRoutes = require('./routes/databaseRoutes');
 
 // Connect to database
 connectDB();
@@ -74,6 +76,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/mom', momRoutes);
+app.use('/api/action-items', actionItemRoutes);
+app.use('/api/admin/database', databaseRoutes);
 
 // 404 handler
 app.use(notFound);

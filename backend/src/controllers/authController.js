@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const config = require('../config/env');
 const { asyncHandler } = require('../middlewares/errorHandler');
+const { OAuth2Client } = require('google-auth-library');
 const {
   createUser,
   findByEmailWithPassword,
@@ -20,6 +21,10 @@ const generateToken = (id) => {
     expiresIn: config.JWT_EXPIRE,
   });
 };
+
+// Google OAuth client (ID from env)
+const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -235,3 +240,36 @@ module.exports = {
   changePassword,
   logout
 };
+
+// @desc    Login or register with Google ID token
+// @route   POST /api/auth/google-login
+// @access  Public
+module.exports.googleLogin = asyncHandler(async (req, res) => {
+  const idToken = req.body?.idToken;
+  if (!googleClient || !googleClientId) {
+    return res.status(500).json({ success: false, message: 'Google login not configured' });
+  }
+  if (!idToken) {
+    return res.status(400).json({ success: false, message: 'Missing idToken' });
+  }
+  // Verify token
+  const ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientId });
+  const payload = ticket.getPayload();
+  const email = payload?.email;
+  if (!email) return res.status(400).json({ success: false, message: 'Google token invalid: no email' });
+  const names = (payload?.name || '').split(' ');
+  const firstName = payload?.given_name || names[0] || '';
+  const lastName = payload?.family_name || names.slice(1).join(' ') || '';
+
+  // Upsert user
+  const user = await require('../services/userRepo').createOrGetGoogleUser({ email, firstName, lastName });
+  if (!user) return res.status(500).json({ success: false, message: 'User store not available' });
+
+  // Issue JWT
+  const token = generateToken(user.id);
+
+  // Audit
+  await audit({ action: 'login', entity: 'user', entityId: user.id, performedBy: user.id, ipAddress: req.ip, userAgent: req.get('User-Agent'), changes: { provider: 'google' } });
+
+  res.json({ success: true, message: 'Login successful', data: { user, token } });
+});

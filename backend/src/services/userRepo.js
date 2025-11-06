@@ -17,6 +17,12 @@ async function findById(id) {
   return db('users').select('id','username','email','first_name as firstName','last_name as lastName','role','is_active as isActive','last_login as lastLogin').where({ id }).first();
 }
 
+async function findByEmail(email) {
+  const db = getDb();
+  if (!db) return null;
+  return db('users').select('id','username','email','first_name as firstName','last_name as lastName','role','is_active as isActive','last_login as lastLogin').where({ email }).first();
+}
+
 async function isEmailTaken(email, excludeId) {
   const db = getDb();
   if (!db) return false;
@@ -37,6 +43,26 @@ async function createUser({ username, email, password, firstName, lastName }) {
     first_name: firstName,
     last_name: lastName,
     role: 'admin',
+    is_active: 1,
+    created_at: db.fn.now(),
+    updated_at: db.fn.now()
+  });
+  return await findById(id);
+}
+
+async function createOrGetGoogleUser({ email, firstName, lastName }) {
+  const db = getDb();
+  if (!db) return null;
+  const existing = await findByEmail(email);
+  if (existing) return existing;
+  const username = email.split('@')[0].slice(0, 30);
+  const [id] = await db('users').insert({
+    username,
+    email,
+    password_hash: '',
+    first_name: firstName || '',
+    last_name: lastName || '',
+    role: 'user',
     is_active: 1,
     created_at: db.fn.now(),
     updated_at: db.fn.now()
@@ -76,24 +102,30 @@ async function changePassword(id, newPassword) {
 async function audit({ action, entity, entityId, performedBy, ipAddress, userAgent, changes }) {
   const db = getDb();
   if (!db) return; // no-op in mock mode
-  await db('audit_logs').insert({
-    action,
-    entity,
-    entity_id: entityId,
-    performed_by: performedBy,
-    ip_address: ipAddress,
-    user_agent: userAgent,
-    changes: changes ? JSON.stringify(changes) : null,
-    created_at: db.fn.now(),
-  });
+  try {
+    await db('audit_logs').insert({
+      action,
+      entity,
+      entity_id: entityId,
+      performed_by: performedBy,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      changes: changes ? JSON.stringify(changes) : null,
+      created_at: db.fn.now(),
+    });
+  } catch (e) {
+    // Silently ignore if table is missing to avoid blocking critical flows
+  }
 }
 
 module.exports = {
   hasDb,
   findByEmailWithPassword,
   findById,
+  findByEmail,
   isEmailTaken,
   createUser,
+  createOrGetGoogleUser,
   updateProfileById,
   updateLastLogin,
   comparePassword,

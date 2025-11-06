@@ -140,6 +140,13 @@ export default function TailAdminDashboard() {
     URL.revokeObjectURL(url)
   }
 
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
+  useEffect(() => {
+    function onResize(){ setVw(window.innerWidth) }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   return (
     <div className="space-y-6">
       {/* Quick Actions row */}
@@ -284,34 +291,31 @@ export default function TailAdminDashboard() {
       )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 sm:gap-4 md:gap-6" data-tour="charts" data-tour-title="Insights & Trends" data-tour-content="Explore collections vs invoices, receivables breakdown, DSO trend, and CEI gauge for a complete AR picture.">
-        <div className="xl:col-span-7 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 sm:gap-4 md:gap-6" data-tour="charts" data-tour-title="Insights & Trends" data-tour-content="Explore collections plans, debtors summary, BOQ vs Actual, and performance.">
+        {/* Monthly Collection Plan */}
+        <div id="monthly-plan" className="xl:col-span-7 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium text-secondary-700">Collections vs Invoices</div>
-            <div className="flex items-center gap-1 text-xs">
-              <button className="px-2 py-1 rounded-md border border-secondary-200 text-secondary-700">30d</button>
-              <button className="px-2 py-1 rounded-md border border-secondary-200 text-secondary-700">QTD</button>
-              <button className="px-2 py-1 rounded-md bg-secondary-100 text-secondary-800">YTD</button>
-            </div>
+            <div className="text-sm font-medium text-secondary-700">Monthly Collection Plan</div>
           </div>
           <MonthlySalesChart 
-            labels={data?.series?.labels || []}
-            collections={(data?.series?.collections || []).map(Number)}
-            invoices={(data?.series?.invoices || []).map(Number)}
+            labels={data?.monthlyCollectionPlan?.labels || []}
+            collections={(data?.monthlyCollectionPlan?.actual || []).map(Number)}
+            invoices={(data?.monthlyCollectionPlan?.target || []).map(Number)}
           />
         </div>
-        <div className="xl:col-span-5 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
-          <div className="text-sm font-medium text-secondary-700 mb-3">Receivables Breakdown</div>
+        {/* Total Debtors Summary */}
+        <div id="debtors-summary" className="xl:col-span-5 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
+          <div className="text-sm font-medium text-secondary-700 mb-3">Total Debtors Summary</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
             <PieChart
-              data={(data?.series?.agingBuckets || []).map((b, i) => ({
+              data={(data?.totalDebtors?.buckets || []).map((b, i) => ({
                 label: b.label || b?.name || `Bucket ${i + 1}`,
                 value: Number(b.value || b?.amount || 0),
               }))}
-              size={220}
+              size={vw < 400 ? 160 : vw < 640 ? 180 : 220}
             />
             <div className="space-y-2">
-              {(data?.series?.agingBuckets || []).map((b, i) => (
+              {(data?.totalDebtors?.buckets || []).map((b, i) => (
                 <div key={i} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full`} style={{ backgroundColor: ['#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8'][i % 5] }} />
@@ -320,55 +324,39 @@ export default function TailAdminDashboard() {
                   <span className="font-medium text-primary-700">₹{Number(b.value || b?.amount || 0).toLocaleString('en-IN')}</span>
                 </div>
               ))}
+              <div className="mt-3 text-xs text-secondary-600">Outstanding: <span className="font-semibold text-secondary-900">₹{Number(data?.totalDebtors?.outstanding||0).toLocaleString('en-IN')}</span></div>
             </div>
           </div>
         </div>
 
-        {/* New: DSO Trend */}
-        <div className="xl:col-span-7 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
+        {/* BOQ Vs Actual Supplies */}
+        <div id="boq-actual" className="xl:col-span-7 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium text-secondary-700">DSO Trend (12m)</div>
-            <div className="text-xs text-secondary-500">days outstanding</div>
+            <div className="text-sm font-medium text-secondary-700">BOQ Vs Actual Supplies</div>
           </div>
-          <LineChart
-            points={(data?.series?.invoices || []).map((v, i, arr) => {
-              const max = Math.max(1, ...arr.map(Number))
-              const min = Math.min(0, ...arr.map(Number))
-              const norm = (Number(v) - min) / (max - min || 1)
-              return Math.round(12 + norm * 24) // 12-36 days
-            })}
-          />
+          <LineChart points={(data?.boqVsActual?.boq || []).map(Number)} />
+          <div className="mt-3"><LineChart points={(data?.boqVsActual?.actual || []).map(Number)} /></div>
         </div>
-        {/* New: CEI Gauge + Aging bars */}
-        <div className="xl:col-span-5 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
+        {/* Performance + Others */}
+        <div id="performance" className="xl:col-span-5 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div className="text-sm font-medium text-secondary-700 mb-2">CEI</div>
+              <div className="text-sm font-medium text-secondary-700 mb-2">Performance</div>
               <div className="relative h-40 w-40 mx-auto">
-                <div
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: `conic-gradient(#10b981 ${Math.min(100, Number(data?.kpis?.cei||0))}%, #e5e7eb 0)` }}
-                />
-                <div className="absolute inset-3 rounded-full bg-white grid place-items-center text-xl font-semibold text-secondary-900">
-                  {Math.min(100, Number(data?.kpis?.cei||0))}%
-                </div>
+                <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(#10b981 ${Math.min(100, Number(data?.performance?.onTimeCollectionRate||0))}%, #e5e7eb 0)` }} />
+                <div className="absolute inset-3 rounded-full bg-white grid place-items-center text-xl font-semibold text-secondary-900">{Math.min(100, Number(data?.performance?.onTimeCollectionRate||0))}%</div>
               </div>
             </div>
             <div>
-              <div className="text-sm font-medium text-secondary-700 mb-2">Aging Buckets</div>
-              <div className="space-y-2">
-                {(data?.series?.agingBuckets || []).map((b, i) => (
-                  <div key={i} className="text-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-secondary-700">{b.label}</span>
-                      <span className="font-medium text-secondary-900">₹{Number(b.value||0).toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className="h-2 w-full bg-secondary-100 rounded">
-                      <div className="h-2 rounded bg-primary-500" style={{ width: `${Math.min(100, Number(b.value||0))}%` }} />
-                    </div>
-                  </div>
+              <div className="text-sm font-medium text-secondary-700 mb-2">Others</div>
+              <ul id="others" className="space-y-2 text-sm">
+                {(data?.others || []).map((o, i) => (
+                  <li key={i} className="flex items-center justify-between">
+                    <span className="text-secondary-700 truncate pr-2">{o.title}</span>
+                    <span className="font-medium text-primary-700">{o.value}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
         </div>

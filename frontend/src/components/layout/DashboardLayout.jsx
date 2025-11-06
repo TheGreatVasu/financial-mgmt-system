@@ -1,12 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
 
 import { useEffect, useRef, useState } from 'react'
 
 export default function DashboardLayout({ children }) {
-  const { logout } = useAuthContext()
+  const { logout, user } = useAuthContext()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1')
@@ -15,6 +15,7 @@ export default function DashboardLayout({ children }) {
     return Number.isFinite(stored) && stored >= 200 && stored <= 420 ? stored : 288 // default 72*4 = 288 (~w-72)
   })
   const isDraggingRef = useRef(false)
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
 
   function handleLogout() {
     logout()
@@ -29,8 +30,19 @@ export default function DashboardLayout({ children }) {
     localStorage.setItem('sidebar_width', String(sidebarWidth))
   }, [sidebarWidth])
 
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    const isMobile = viewportWidth < 768
+    if (isMobile && sidebarOpen) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [sidebarOpen, viewportWidth])
+
   function onDragStart(e) {
     if (collapsed) return
+    if (viewportWidth < 768) return
     isDraggingRef.current = true
     document.body.style.userSelect = 'none'
   }
@@ -49,14 +61,19 @@ export default function DashboardLayout({ children }) {
   useEffect(() => {
     window.addEventListener('mousemove', onDragMove)
     window.addEventListener('mouseup', onDragEnd)
+    function onResize() {
+      setViewportWidth(window.innerWidth)
+    }
+    window.addEventListener('resize', onResize)
     return () => {
       window.removeEventListener('mousemove', onDragMove)
       window.removeEventListener('mouseup', onDragEnd)
+      window.removeEventListener('resize', onResize)
     }
   }, [])
 
   const computedSidebarWidth = collapsed ? 72 : sidebarWidth
-  const mainPaddingLeft = computedSidebarWidth
+  const mainPaddingLeft = viewportWidth < 768 ? 0 : computedSidebarWidth
 
   function handleGlobalSidebarToggle() {
     const width = typeof window !== 'undefined' ? window.innerWidth : 1024
@@ -68,8 +85,10 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-radial-vignette bg-dots bg-noise bg-aurora transition-colors duration-300">{/* App shell */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200`} style={{ width: computedSidebarWidth }} data-tour="sidebar">{/* Sidebar */}
+    <div className="min-h-screen w-full overflow-x-hidden bg-radial-vignette bg-dots bg-noise bg-aurora transition-colors duration-300">{/* App shell */}
+      {/* Mobile backdrop */}
+      <div onClick={() => setSidebarOpen(false)} className={`${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} fixed inset-0 bg-black/30 md:hidden z-40 transition-opacity duration-200`} />
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-50 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200`} style={{ width: computedSidebarWidth }} data-tour="sidebar">{/* Sidebar */}
         <div className="brand flex items-center px-3 border-b border-secondary-200/70">
           <div className="flex items-center gap-2" style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : 'auto', transition: 'opacity 200ms ease' }}>
             <div className="h-8 w-8 rounded-md bg-gradient-to-br from-primary-500 to-primary-600 shadow-sm" />
@@ -77,7 +96,7 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
 
-        <nav className="px-3 space-y-5 overflow-y-auto h-screen pb-6">
+        <nav className="px-3 space-y-5 overflow-y-auto h-full pb-6">
           <div>
             <div className="px-2 text-[11px] uppercase tracking-wider text-secondary-500 mb-2" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Overview</div>
             <DashboardMenu collapsed={collapsed} />
@@ -95,6 +114,9 @@ export default function DashboardLayout({ children }) {
             <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
             <SideLink to="/alerts" icon={AlertCircle} label="Alerts" />
             <SideLink to="/settings" icon={Settings} label="Settings" />
+            {user?.role === 'admin' && (
+              <SideLink to="/admin/database" icon={Database} label="Database" />
+            )}
           </div>
 
           <div className="mt-4 p-3 rounded-lg border border-primary-200/60 bg-primary-50 dark:border-secondary-700 dark:bg-[#1E293B]" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>
@@ -111,10 +133,10 @@ export default function DashboardLayout({ children }) {
           </button>
         </nav>
         {/* Resize handle */}
-        <div onMouseDown={onDragStart} className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize group"><div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-primary-300/70 transition-colors"/></div>
+        <div onMouseDown={onDragStart} className="hidden md:block absolute top-0 right-0 h-full w-1.5 cursor-col-resize group"><div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-primary-300/70 transition-colors"/></div>
       </div>
 
-      <main className="transition-colors duration-300" style={{ paddingLeft: mainPaddingLeft }}>{/* Content area shifted by sidebar width */}
+      <main className="relative z-0 transition-colors duration-300" style={{ paddingLeft: mainPaddingLeft }}>{/* Content area shifted by sidebar width */}
         {/* Header */}
         <DashboardHeader onToggleSidebar={handleGlobalSidebarToggle} />
         
@@ -175,13 +197,15 @@ function DashboardMenu({ collapsed = false }) {
         className={`overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-out ${open ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1'}`}
       >
         <div className="mt-1 ml-0 mr-0 py-1 space-y-1" style={{ display: collapsed ? 'none' : undefined }}>
-          <SubLink to="/dashboard/new-po" label="New PO" icon={PlusCircle} />
+          <SubLink to={'/dashboard/monthly-plan'} label="Monthly Collection Plan" icon={FileText} />
           <Divider />
-          <SubLink to="/dashboard/boq-entry" label="BOQ Entry" icon={FileText} />
+          <SubLink to={'/dashboard/debtors-summary'} label="Total Debtors Summary" icon={CreditCard} />
           <Divider />
-          <SubLink to="/dashboard/inv-items" label="INV Items" icon={FileText} />
+          <SubLink to={'/dashboard/boq-actual'} label="BOQ vs Actual Supplies" icon={FileText} />
           <Divider />
-          <SubLink to="/dashboard/payment-summary" label="Payment Summary" icon={CreditCard} />
+          <SubLink to={'/dashboard/performance'} label="Performance" icon={Star} />
+          <Divider />
+          <SubLink to={'/dashboard/others'} label="Others" icon={Users} />
         </div>
       </div>
     </div>
@@ -189,13 +213,9 @@ function DashboardMenu({ collapsed = false }) {
 }
 
 function SubLink({ to, label, icon: Icon }) {
+  // Use plain Link to avoid automatic active (blue) styling when hash matches
   return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `group flex items-center gap-2 px-3 py-2 text-sm ${isActive ? 'text-primary-700 font-medium' : 'text-secondary-700 hover:text-secondary-900'}`
-      }
-    >
+    <NavLink to={to} className={() => `group flex items-center gap-2 px-3 py-2 text-sm text-secondary-700 hover:text-secondary-900`} end>
       <Icon className="h-3.5 w-3.5 opacity-80 group-hover:text-secondary-900 transition-colors" />
       <span>{label}</span>
     </NavLink>
