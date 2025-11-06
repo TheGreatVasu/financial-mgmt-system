@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuthContext } from '../../context/AuthContext';
+import { useAuthContext } from '../../context/AuthContext.jsx';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import {
   getDatabaseStatus,
@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Play,
   RotateCcw,
-  Seedling,
+  Sprout,
   Table,
   AlertCircle,
   CheckCircle2,
@@ -22,7 +22,8 @@ import {
   Info,
   Server,
   HardDrive,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 
 export default function DatabaseManagementPage() {
@@ -36,48 +37,147 @@ export default function DatabaseManagementPage() {
   const [showTableDetails, setShowTableDetails] = useState(false);
 
   useEffect(() => {
-    if (token) {
+    // Check if token exists in localStorage (might be stale in context)
+    const storedToken = localStorage.getItem('fms_token');
+    
+    if (storedToken && user) {
+      // Use stored token if context token is missing
+      if (!token) {
+        // Token exists in storage but not in context - reload page to refresh context
+        window.location.reload();
+        return;
+      }
       loadStatus();
+    } else if (!storedToken && !token) {
+      setError('Please login to access this page');
+      setLoading(false);
+    } else if (storedToken && !user) {
+      // Token exists but user not loaded - wait a bit for auth context to load
+      const timer = setTimeout(() => {
+        if (!user) {
+          setError('Authentication failed. Please login again.');
+          setLoading(false);
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-  }, [token]);
+  }, [token, user]);
 
   const loadStatus = async () => {
+    // Get token from localStorage as fallback
+    const storedToken = localStorage.getItem('fms_token');
+    const tokenToUse = token || storedToken;
+    
+    if (!tokenToUse) {
+      setError('Authentication token not found. Please login again.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-      const response = await getDatabaseStatus(token);
-      setStatus(response.data);
+      const response = await getDatabaseStatus(tokenToUse);
+      if (response && response.data) {
+        setStatus(response.data);
+      } else {
+        setError('Invalid response from server');
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load database status');
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to load database status';
+      const statusCode = err.response?.status;
+      
+      // Only redirect if it's definitely an auth error (401/403)
+      if (statusCode === 401 || statusCode === 403) {
+        setError(`${errorMsg}. Please login again.`);
+        // Don't auto-redirect, let user decide
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleAction = async (action, actionFn) => {
+    const storedToken = localStorage.getItem('fms_token');
+    const tokenToUse = token || storedToken;
+    
+    if (!tokenToUse) {
+      setError('Please login to perform this action');
+      return;
+    }
     try {
       setActionLoading(action);
       setError(null);
-      await actionFn(token);
+      await actionFn(tokenToUse);
       await loadStatus();
       // Show success message
       setTimeout(() => setActionLoading(null), 1000);
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${action}`);
+      const errorMsg = err.response?.data?.message || err.message || `Failed to ${action}`;
+      const statusCode = err.response?.status;
+      
+      if (statusCode === 401 || statusCode === 403) {
+        setError(`${errorMsg}. Please login again.`);
+      } else {
+        setError(errorMsg);
+      }
       setActionLoading(null);
     }
   };
 
   const handleViewTable = async (tableName) => {
+    const storedToken = localStorage.getItem('fms_token');
+    const tokenToUse = token || storedToken;
+    
+    if (!tokenToUse) {
+      setError('Please login to view table structure');
+      return;
+    }
     try {
       setActionLoading(`table-${tableName}`);
-      const response = await getTableStructure(token, tableName);
+      const response = await getTableStructure(tokenToUse, tableName);
       setTableStructure(response.data);
       setSelectedTable(tableName);
       setShowTableDetails(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load table structure');
     } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleExportData = async () => {
+    const storedToken = localStorage.getItem('fms_token');
+    const tokenToUse = token || storedToken;
+    
+    if (!tokenToUse) {
+      setError('Please login to export data');
+      return;
+    }
+    try {
+      setActionLoading('export');
+      setError(null);
+      
+      const { createApiClient } = await import('../../services/apiClient');
+      const api = createApiClient(tokenToUse);
+      const response = await api.get('/admin/database/export', {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `financial_data_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      setActionLoading(null);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to export data');
       setActionLoading(null);
     }
   };
@@ -118,22 +218,49 @@ export default function DatabaseManagementPage() {
               Manage database migrations, seeds, and monitor database health
             </p>
           </div>
-          <button
-            onClick={loadStatus}
-            disabled={loading || actionLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportData}
+              disabled={loading || actionLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'export' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Export All Data
+            </button>
+            <button
+              onClick={loadStatus}
+              disabled={loading || actionLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Error Message */}
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+              {(error.includes('token') || error.includes('Invalid') || error.includes('login')) && (
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('fms_token');
+                    window.location.href = '/login';
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                >
+                  Go to Login
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -238,7 +365,7 @@ export default function DatabaseManagementPage() {
                   {actionLoading === 'seed' ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
-                    <Seedling className="h-5 w-5" />
+                    <Sprout className="h-5 w-5" />
                   )}
                   <span>Run Seeds</span>
                 </button>

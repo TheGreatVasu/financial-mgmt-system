@@ -4,6 +4,7 @@ const knexfile = require('../../knexfile');
 const knexLib = require('knex');
 const fs = require('fs');
 const path = require('path');
+const ExcelJS = require('exceljs');
 
 // Get database status
 const getDatabaseStatus = asyncHandler(async (req, res) => {
@@ -249,11 +250,154 @@ const getTableStructure = asyncHandler(async (req, res) => {
   }
 });
 
+// Export all database data to Excel
+const exportAllData = asyncHandler(async (req, res) => {
+  const db = getDb();
+  
+  if (!db) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not available'
+    });
+  }
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Financial Management System';
+    workbook.created = new Date();
+
+    // Export Users
+    const users = await db('users').select('*');
+    const usersSheet = workbook.addWorksheet('Users');
+    usersSheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Username', key: 'username', width: 20 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'First Name', key: 'first_name', width: 15 },
+      { header: 'Last Name', key: 'last_name', width: 15 },
+      { header: 'Role', key: 'role', width: 10 },
+      { header: 'Active', key: 'is_active', width: 10 },
+      { header: 'Last Login', key: 'last_login', width: 20 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+    users.forEach(user => usersSheet.addRow(user));
+
+    // Export Customers
+    const customers = await db('customers').select('*');
+    const customersSheet = workbook.addWorksheet('Customers');
+    customersSheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Customer Code', key: 'customer_code', width: 15 },
+      { header: 'Company Name', key: 'company_name', width: 30 },
+      { header: 'Contact Email', key: 'contact_email', width: 30 },
+      { header: 'Contact Phone', key: 'contact_phone', width: 15 },
+      { header: 'Status', key: 'status', width: 10 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+    customers.forEach(customer => customersSheet.addRow(customer));
+
+    // Export Invoices
+    const invoices = await db('invoices').select('*');
+    const invoicesSheet = workbook.addWorksheet('Invoices');
+    invoicesSheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Invoice Number', key: 'invoice_number', width: 20 },
+      { header: 'Customer ID', key: 'customer_id', width: 12 },
+      { header: 'Issue Date', key: 'issue_date', width: 15 },
+      { header: 'Due Date', key: 'due_date', width: 15 },
+      { header: 'Subtotal', key: 'subtotal', width: 15 },
+      { header: 'Tax Rate', key: 'tax_rate', width: 12 },
+      { header: 'Tax Amount', key: 'tax_amount', width: 15 },
+      { header: 'Total Amount', key: 'total_amount', width: 15 },
+      { header: 'Paid Amount', key: 'paid_amount', width: 15 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+    invoices.forEach(invoice => invoicesSheet.addRow(invoice));
+
+    // Export Payments
+    const payments = await db('payments').select('*');
+    const paymentsSheet = workbook.addWorksheet('Payments');
+    paymentsSheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Invoice ID', key: 'invoice_id', width: 12 },
+      { header: 'Payment Date', key: 'payment_date', width: 15 },
+      { header: 'Amount', key: 'amount', width: 15 },
+      { header: 'Payment Method', key: 'payment_method', width: 15 },
+      { header: 'Reference Number', key: 'reference_number', width: 20 },
+      { header: 'Notes', key: 'notes', width: 30 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+    payments.forEach(payment => paymentsSheet.addRow(payment));
+
+    // Export Action Items
+    const actionItems = await db('action_items').select('*');
+    if (actionItems.length > 0) {
+      const actionItemsSheet = workbook.addWorksheet('Action Items');
+      actionItemsSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Title', key: 'title', width: 30 },
+        { header: 'Description', key: 'description', width: 40 },
+        { header: 'Status', key: 'status', width: 12 },
+        { header: 'Priority', key: 'priority', width: 12 },
+        { header: 'Due Date', key: 'due_date', width: 15 },
+        { header: 'Created At', key: 'created_at', width: 20 }
+      ];
+      actionItems.forEach(item => actionItemsSheet.addRow(item));
+    }
+
+    // Export Alerts
+    const alerts = await db('alerts').select('*');
+    if (alerts.length > 0) {
+      const alertsSheet = workbook.addWorksheet('Alerts');
+      alertsSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Type', key: 'type', width: 12 },
+        { header: 'Message', key: 'message', width: 50 },
+        { header: 'Read', key: 'is_read', width: 10 },
+        { header: 'Created At', key: 'created_at', width: 20 }
+      ];
+      alerts.forEach(alert => alertsSheet.addRow(alert));
+    }
+
+    // Export Audit Logs
+    const auditLogs = await db('audit_logs').select('*');
+    if (auditLogs.length > 0) {
+      const auditLogsSheet = workbook.addWorksheet('Audit Logs');
+      auditLogsSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Action', key: 'action', width: 15 },
+        { header: 'Entity', key: 'entity', width: 15 },
+        { header: 'Entity ID', key: 'entity_id', width: 12 },
+        { header: 'Performed By', key: 'performed_by', width: 15 },
+        { header: 'IP Address', key: 'ip_address', width: 15 },
+        { header: 'Created At', key: 'created_at', width: 20 }
+      ];
+      auditLogs.forEach(log => auditLogsSheet.addRow(log));
+    }
+
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=financial_data_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    // Write workbook to response
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export data',
+      error: error.message
+    });
+  }
+});
+
 module.exports = {
   getDatabaseStatus,
   runMigrations,
   rollbackMigrations,
   runSeeds,
-  getTableStructure
+  getTableStructure,
+  exportAllData
 };
 

@@ -16,10 +16,24 @@ export function AuthProvider({ children }) {
       }
       try {
         const me = await getCurrentUser(token)
-        setUser(me)
+        if (me) {
+          setUser(me)
+        } else {
+          // If getCurrentUser returns null/undefined, don't clear token immediately
+          // Might be a temporary network issue
+          console.warn('getCurrentUser returned no data, but keeping token')
+        }
       } catch (e) {
-        setToken(null)
-        localStorage.removeItem('fms_token')
+        // Only clear token if it's definitely invalid (401/403)
+        const isAuthError = e?.response?.status === 401 || e?.response?.status === 403
+        if (isAuthError) {
+          console.warn('Token invalid, clearing:', e.message)
+          setToken(null)
+          localStorage.removeItem('fms_token')
+        } else {
+          // Network or other errors - keep token, might be temporary
+          console.warn('Error fetching user, but keeping token:', e.message)
+        }
       } finally {
         setLoading(false)
       }

@@ -5,7 +5,8 @@ const {
   runMigrations,
   rollbackMigrations,
   runSeeds,
-  getTableStructure
+  getTableStructure,
+  exportAllData
 } = require('../controllers/databaseController');
 const { authMiddleware, adminMiddleware } = require('../middlewares/authMiddleware');
 
@@ -25,6 +26,9 @@ router.post('/seeds/run', runSeeds);
 
 // Table structure
 router.get('/tables/:tableName/structure', getTableStructure);
+
+// Export all data to Excel
+router.get('/export', exportAllData);
 
 module.exports = router;
 
