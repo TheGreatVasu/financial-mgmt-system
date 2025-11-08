@@ -1,0 +1,15 @@
+{
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": ["src/**/*.test.js", "node_modules", "*.log"],
+  "exec": "node --no-deprecation src/server.js",
+  "signal": "SIGTERM",
+  "restartable": "rs",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": false,
+  "delay": 1000,
+  "killTimeout": 5000,
+  "wait": true
+}

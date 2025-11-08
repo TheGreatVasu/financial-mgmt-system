@@ -1,5 +1,6 @@
 const config = require('./env');
 const knexLib = require('knex');
+const logger = require('../utils/logger');
 
 let knex = null;
 
@@ -29,9 +30,11 @@ async function connectDB() {
   // Simple connection test
   try {
     await knex.raw('SELECT 1');
-    console.log('✅ Connected to MySQL');
+    console.log('💡 Database connected successfully');
+    logger.info('Database connection established');
   } catch (e) {
     console.log('⚠️  Failed to connect to MySQL. Falling back to offline/mock mode. Error:', e.message);
+    logger.warn(`Database connection failed: ${e.message}`);
     knex = null;
   }
 

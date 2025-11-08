@@ -16,19 +16,65 @@ export default function DashboardHeader({ onToggleSidebar }) {
   const navigate = useNavigate()
   const { logout, user } = useAuthContext()
   
+  // Debug: Log user data to help diagnose issues
+  useEffect(() => {
+    if (user) {
+      console.log('DashboardHeader - Current user data:', {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        fullUser: user
+      })
+    } else {
+      console.log('DashboardHeader - No user data available')
+    }
+  }, [user])
+  
   // Calculate display name
   const getDisplayName = () => {
     if (!user) return 'User'
-    if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`
+    // Check for mock user
+    if (user.id === 'mock-user' || user.email === 'demo@example.com') {
+      console.warn('DashboardHeader - Mock user detected, showing fallback')
+      return 'User'
+    }
+    // Prioritize firstName + lastName for full name display
+    if (user.firstName && user.lastName) {
+      // Don't show "Account" as last name - it's a placeholder
+      if (user.lastName.toLowerCase() === 'account' && user.firstName) {
+        return user.firstName
+      }
+      return `${user.firstName} ${user.lastName}`
+    }
     if (user.firstName) return user.firstName
-    if (user.username) return user.username
-    if (user.email) return user.email.split('@')[0]
+    if (user.username) {
+      // Try to extract a better name from username
+      const username = user.username.replace(/\d+/g, '').replace(/[._-]/g, ' ')
+      if (username.length > 0) {
+        return username.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      }
+      return user.username
+    }
+    if (user.email) {
+      // Extract name from email (before @)
+      const emailName = user.email.split('@')[0].replace(/\d+/g, '').replace(/[._-]/g, ' ')
+      if (emailName.length > 0) {
+        return emailName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      }
+      return user.email.split('@')[0]
+    }
     return 'User'
   }
   
   // Calculate initials (always 2 characters)
   const getInitials = () => {
-    if (!user) return 'DU'
+    if (!user) return 'U'
+    // Check for mock user
+    if (user.id === 'mock-user' || user.email === 'demo@example.com') {
+      return 'U'
+    }
     if (user.firstName && user.lastName) {
       return (user.firstName[0] + user.lastName[0]).toUpperCase()
     }
@@ -44,7 +90,7 @@ export default function DashboardHeader({ onToggleSidebar }) {
       const name = user.email.split('@')[0]
       return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
     }
-    return 'DU'
+    return 'U'
   }
   
   const displayName = getDisplayName()

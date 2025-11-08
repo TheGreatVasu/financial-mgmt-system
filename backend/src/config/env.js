@@ -10,8 +10,8 @@ module.exports = {
   EMAIL_PORT: process.env.EMAIL_PORT || 587,
   EMAIL_USER: process.env.EMAIL_USER || '',
   EMAIL_PASS: process.env.EMAIL_PASS || '',
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3001',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3001',
   // MySQL configuration (optional). If not provided, the app runs in offline/mock mode.
   MYSQL_HOST: process.env.MYSQL_HOST || '',
   MYSQL_PORT: parseInt(process.env.MYSQL_PORT || '3306', 10),

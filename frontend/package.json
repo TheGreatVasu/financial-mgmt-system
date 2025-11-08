@@ -22,8 +22,10 @@
     "react-hook-form": "^7.48.2",
     "react-hot-toast": "^2.4.1",
     "react-joyride": "^2.9.3",
+    "react-phone-input-2": "^2.15.1",
     "react-router-dom": "^6.20.1",
-    "recharts": "^2.8.0"
+    "recharts": "^2.8.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

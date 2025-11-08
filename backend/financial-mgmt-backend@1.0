@@ -1,0 +1,57 @@
+> financial-mgmt-backend@1.0.0 dev
+> nodemon src/server.js
+
+[nodemon] 3.1.10
+[nodemon] to restart at any 
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): 
+[nodemon] watching path(s): *.*
+[nodemon] watching extension
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `node src
+[nodemon] starting `node src/server.js`
+/Users/somilshivhare/financi
+/Users/somilshivhare/financial-mgmt-system/backend/src/c
+/Users/somilshivhare/financial-mgmt-system/backend/src/controllers/dashboardControll
+/Users/somilshivhare/financial-mgmt-system/backend/src/controllers/dashboardController.js:203
+¸
+
+
+SyntaxError: Invalid or unex
+SyntaxError: Invalid or unexpected token
+    at wrapSafe (node:intern
+    at wrapSafe (node:internal/modules/cjs/loader:1512:1
+    at wrapSafe (node:internal/modules/cjs/loader:1512:18)
+    at Module._compile (node
+    at Module._compile (node:internal/modules/cjs/loader
+    at Module._compile (node:internal/modules/cjs/loader:1534:20)
+    at Object..js (node:inte
+    at Object..js (node:internal/modules/cjs/loader:1699
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:int
+    at Module.load (node:internal/modules/cjs/loader:131
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:
+    at Function._load (node:internal/modules/cjs/loader:
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceS
+    at TracingChannel.traceSync (node:diagnostics_channe
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:
+    at wrapModuleLoad (node:internal/modules/cjs/loader:
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:
+    at Module.require (node:internal/modules/cjs/loader:
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:interna
+    at require (node:internal/modules/helpers:136:16)
+    at Object.<anonymous> (/
+    at Object.<anonymous> (/Users/somilshivhare/financia
+    at Object.<anonymous> (/Users/somilshivhare/financial-mgmt-system/backend/src/ro
+    at Object.<anonymous> (/Users/somilshivhare/financial-mgmt-system/backend/src/routes/dashboardRoutes.js:4:43
+    at Object.<anonymous> (/Users/somilshivhare/financial-mgmt-system/backend/src/routes/dashboardRoutes.js:4:43)
+
+Node.js v22.13.1
+[nodemon] app crashed - wait
+[nodemon] app crashed - waiting for file changes before 
+[nodemon] app crashed - waiting for file changes before starting...

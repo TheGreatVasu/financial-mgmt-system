@@ -28,6 +28,7 @@ import BoqActualPage from './pages/dashboard/boq-actual'
 import PerformancePage from './pages/dashboard/performance'
 import OthersPage from './pages/dashboard/others'
 import DatabaseManagementPage from './pages/admin/database'
+import UsersManagementPage from './pages/admin/users'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuthContext()
@@ -235,6 +236,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DatabaseManagementPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute>
+              <UsersManagementPage />
             </ProtectedRoute>
           }
         />

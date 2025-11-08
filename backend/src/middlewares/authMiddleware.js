@@ -13,43 +13,86 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    const user = await findById(decoded.id);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.JWT_SECRET);
+    } catch (jwtError) {
+      if (jwtError.name === 'JsonWebTokenError') {
+        console.error('Invalid JWT token:', jwtError.message);
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid token. Please log in again.' 
+        });
+      }
+      
+      if (jwtError.name === 'TokenExpiredError') {
+        console.error('Expired JWT token');
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Token expired. Please log in again.' 
+        });
+      }
+      
+      console.error('JWT verification error:', jwtError);
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Token verification failed. Please log in again.' 
+      });
+    }
+
+    if (!decoded || !decoded.id) {
+      console.error('Invalid token payload:', decoded);
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token format.' 
+      });
+    }
+
+    // Check database connection
+    const { hasDb } = require('../services/userRepo');
+    if (!hasDb()) {
+      console.error('Database not connected in authMiddleware');
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Database connection unavailable. Please try again later.' 
+      });
+    }
+
+    let user;
+    try {
+      user = await findById(decoded.id);
+    } catch (dbError) {
+      console.error('Database error in authMiddleware:', dbError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error retrieving user data. Please try again.' 
+      });
+    }
     
     if (!user) {
+      console.error(`User not found for ID: ${decoded.id}`);
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid token. User not found.' 
       });
     }
 
-    if (user && user.isActive === false) {
+    // Check if user is active (handle both 0/1 and boolean values)
+    const isActive = user.isActive === 1 || user.isActive === true || user.isActive !== false;
+    if (!isActive) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Account is deactivated.' 
+        message: 'Account is deactivated. Please contact support.' 
       });
     }
 
     req.user = user;
     next();
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid token.' 
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Token expired.' 
-      });
-    }
-    
+    console.error('Unexpected error in authMiddleware:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during authentication.' 
+      message: 'Server error during authentication. Please try again.' 
     });
   }
 };

@@ -114,8 +114,12 @@ export default function DashboardLayout({ children }) {
             <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
             <SideLink to="/alerts" icon={AlertCircle} label="Alerts" />
             <SideLink to="/settings" icon={Settings} label="Settings" />
+            {/* Only show Database and Users options for admin role */}
             {user?.role === 'admin' && (
-              <SideLink to="/admin/database" icon={Database} label="Database" />
+              <>
+                <SideLink to="/admin/database" icon={Database} label="Database" />
+                <SideLink to="/admin/users" icon={Users} label="Users" />
+              </>
             )}
           </div>
 

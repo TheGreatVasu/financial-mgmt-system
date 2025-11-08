@@ -19,9 +19,14 @@ const contactRoutes = require('./routes/contactRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const actionItemRoutes = require('./routes/actionItemRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
+const userRoutes = require('./routes/userRoutes');
 
-// Connect to database
-connectDB();
+// Connect to database (async, but don't block server startup)
+connectDB().then(() => {
+  // Connection handled in db.js with console logs
+}).catch((err) => {
+  console.error('⚠️  Database connection error:', err.message);
+});
 
 const app = express();
 
@@ -39,15 +44,37 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// CORS configuration
+// CORS configuration - Allow both localhost:3000 and localhost:3001
 app.use(cors({
-  origin: config.CORS_ORIGIN,
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      config.CORS_ORIGIN,
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all origins in development
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files for uploads (avatars)
+app.use('/uploads', express.static('uploads'));
 
 // Request logging
 if (config.NODE_ENV === 'development') {
@@ -78,6 +105,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/mom', momRoutes);
 app.use('/api/action-items', actionItemRoutes);
 app.use('/api/admin/database', databaseRoutes);
+app.use('/api/admin/users', userRoutes);
 
 // 404 handler
 app.use(notFound);
