@@ -2,53 +2,139 @@
 node_modules/
 /.pnp
 .pnp.js
+package-lock.json
+yarn.lock
 
 # Testing
 /coverage
+.nyc_output
 
 # Production
 /build
 /dist
+*.tsbuildinfo
 
-# Misc
-.DS_Store
+# Environment Variables - NEVER COMMIT THESE
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
 
-# Logs
-logs
+# Logs - NEVER COMMIT LOGS
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
-
-# Backend specific
-backend/.env
+pnpm-debug.log*
 backend/logs/
-backend/node_modules/
+backend/*.log
+frontend/logs/
+frontend/*.log
 
-# Frontend specific
-frontend/.env
-frontend/.env.local
-frontend/dist/
-frontend/node_modules/
-
-# Database
-*.sql
+# Database Files - NEVER COMMIT DATABASE FILES
 *.db
 *.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sql
+!migrations/*.sql
+!seeds/*.sql
+database/
+*.dump
+*.backup
 
-# IDE
+# Uploads & User Content - NEVER COMMIT USER UPLOADED FILES
+uploads/
+backend/uploads/
+frontend/uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+!public/**/*.jpg
+!public/**/*.png
+!public/**/*.gif
+!public/**/*.pdf
+
+# Backend specific
+backend/node_modules/
+backend/logs/
+backend/uploads/
+backend/.env
+backend/.env.*
+backend/*.log
+backend/dist/
+backend/build/
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.*
+frontend/.vite/
+
+# IDE & Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+.cache/
+tmp/
+temp/
+*.bak
+*.backup
+
+# Build artifacts
+*.map
+*.min.js
+*.min.css
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.stylelintcache
+
+# Optional: Keep these if you want to track them
+# But typically should be ignored:
+# .vscode/settings.json (if contains personal settings)
+# .idea/workspace.xml (if contains personal settings)

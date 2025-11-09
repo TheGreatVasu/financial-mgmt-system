@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
@@ -89,27 +89,55 @@ export default function DashboardLayout({ children }) {
       {/* Mobile backdrop */}
       <div onClick={() => setSidebarOpen(false)} className={`${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} fixed inset-0 bg-black/30 md:hidden z-40 transition-opacity duration-200`} />
       <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-50 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200`} style={{ width: computedSidebarWidth }} data-tour="sidebar">{/* Sidebar */}
-        <div className="brand flex items-center px-3 border-b border-secondary-200/70">
-          <div className="flex items-center gap-2" style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : 'auto', transition: 'opacity 200ms ease' }}>
-            <div className="h-8 w-8 rounded-md bg-gradient-to-br from-primary-500 to-primary-600 shadow-sm" />
-            <span className="text-sm font-semibold tracking-wide">Finance Admin</span>
-          </div>
+        <div className="brand flex items-center px-3 py-3 border-b border-secondary-200/70">
+          <Link 
+            to="/dashboard" 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+            style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : 'auto', transition: 'opacity 200ms ease' }}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <div className="h-8 w-8 rounded-md overflow-hidden shadow-sm flex items-center justify-center bg-white">
+              {/* 
+                TO USE YOUR OWN LOGO FROM GOOGLE:
+                1. Go to Google Images and find your logo
+                2. Right-click the image → "Copy image address"
+                3. Replace the URL below with your copied URL
+              */}
+              <img 
+                src="https://i.pinimg.com/736x/50/53/83/5053833f7cf2709dcc5dabe3249a3fd9.jpg" 
+                alt="Startup Project Logo" 
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  // Fallback: Show "SP" initials if logo fails to load
+                  e.target.style.display = 'none';
+                  const parent = e.target.parentElement;
+                  if (!parent.querySelector('.fallback-logo')) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'fallback-logo h-full w-full flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-600 text-white font-bold text-xs';
+                    fallback.textContent = 'SP';
+                    parent.appendChild(fallback);
+                  }
+                }}
+              />
+            </div>
+            <span className="text-sm font-semibold tracking-wide">Startup Project</span>
+          </Link>
         </div>
 
-        <nav className="px-3 space-y-5 overflow-y-auto h-full pb-6">
+        <nav className="px-3 pt-4 space-y-6 overflow-y-auto h-full pb-6">
           <div>
-            <div className="px-2 text-[11px] uppercase tracking-wider text-secondary-500 mb-2" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Overview</div>
+            <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Overview</div>
             <DashboardMenu collapsed={collapsed} />
             <SideLink to="/reports" icon={BarChart3} label="Reports" />
           </div>
           <div>
-            <div className="px-2 text-[11px] uppercase tracking-wider text-secondary-500 mb-2" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Manage</div>
+            <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Manage</div>
             <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
             <SideLink to="/payments" icon={CreditCard} label="Payments" actionIcon={Download} />
             <SideLink to="/customers" icon={Users} label="Customers" actionIcon={Star} />
           </div>
           <div>
-            <div className="px-2 text-[11px] uppercase tracking-wider text-secondary-500 mb-2" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>System</div>
+            <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>System</div>
             <SideLink to="/subscription" icon={FileText} label="Subscription" />
             <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
             <SideLink to="/contact" icon={Mail} label="Contact" />
@@ -159,20 +187,20 @@ function SideLink({ to, icon: Icon, label, badge, actionIcon: ActionIcon }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm ${
+        `group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
           isActive
-            ? 'text-primary-700'
-            : 'text-secondary-700 hover:text-secondary-900'
+            ? 'text-primary-700 bg-primary-50'
+            : 'text-secondary-700 hover:text-secondary-900 hover:bg-secondary-100'
         }`
       }
     >
-      <Icon className="h-4 w-4 opacity-90 group-hover:text-secondary-900 transition-colors" />
-      <span className="flex-1" style={{ opacity: label ? undefined : 0 }}>
+      <Icon className="h-4 w-4 opacity-90 group-hover:text-secondary-900 transition-colors shrink-0" />
+      <span className="flex-1 text-left min-w-0" style={{ opacity: label ? undefined : 0 }}>
         {label}
       </span>
-      {badge ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">{badge}</span> : null}
+      {badge ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-100 text-primary-700 shrink-0">{badge}</span> : null}
       {ActionIcon ? (
-        <span>
+        <span className="shrink-0">
           <ActionIcon className="h-3.5 w-3.5 text-secondary-400" />
         </span>
       ) : null}
@@ -184,16 +212,16 @@ function DashboardMenu({ collapsed = false }) {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   return (
-    <div className="px-1">
+    <div>
       <button
         onClick={() => { setOpen((v) => !v); navigate('/dashboard'); }}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900`}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
         aria-expanded={open}
         aria-controls="dashboard-submenu"
       >
-        <span className="inline-flex items-center gap-3">
-          <LayoutDashboard className="h-4 w-4 opacity-90 transition-colors" />
-          <span style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Dashboard</span>
+        <span className="inline-flex items-center gap-3 flex-1 min-w-0">
+          <LayoutDashboard className="h-4 w-4 opacity-90 transition-colors shrink-0" />
+          <span className="flex-1 text-left" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Dashboard</span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
