@@ -1,33 +1,67 @@
-﻿# Dependencies
+﻿# ============================================
+# Dependencies
+# ============================================
 node_modules/
 /.pnp
 .pnp.js
-package-lock.json
-yarn.lock
+package-lock.json.backup
+yarn.lock.backup
 
-# Testing
-/coverage
-.nyc_output
-
-# Production
-/build
-/dist
-*.tsbuildinfo
-
-# Environment Variables - NEVER COMMIT THESE
+# ============================================
+# Environment Variables & Secrets
+# ============================================
+# Never commit these - contains passwords and API keys
 .env
 .env.*
 !.env.example
+!.env.template
+*.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.staging
+
+# Backend environment files
 backend/.env
 backend/.env.*
+backend/.env.local
+backend/.env.development
+backend/.env.production
+
+# Frontend environment files
 frontend/.env
 frontend/.env.*
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
 
-# Logs - NEVER COMMIT LOGS
+# ============================================
+# Database Files & Dumps
+# ============================================
+# Database files (SQLite, etc.)
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Database dumps and backups
+*.sql.backup
+*.sql.bak
+*.dump
+database_backup/
+db_backup/
+*.dump.sql
+
+# MySQL specific
+mysql_data/
+mysqldump_*.sql
+*.mysql
+
+# ============================================
+# Logs
+# ============================================
 logs/
 *.log
 npm-debug.log*
@@ -35,61 +69,50 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 pnpm-debug.log*
+.pnpm-debug.log*
+
+# Backend logs
 backend/logs/
 backend/*.log
+
+# Frontend logs
 frontend/logs/
 frontend/*.log
 
-# Database Files - NEVER COMMIT DATABASE FILES
-*.db
-*.sqlite
-*.sqlite3
-*.db-shm
-*.db-wal
-*.sql
-!migrations/*.sql
-!seeds/*.sql
-database/
-*.dump
-*.backup
+# ============================================
+# Build & Production
+# ============================================
+/build
+/dist
+/.next
+/out
+/.vite
 
-# Uploads & User Content - NEVER COMMIT USER UPLOADED FILES
-uploads/
-backend/uploads/
-frontend/uploads/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.pdf
-*.doc
-*.docx
-*.xls
-*.xlsx
-!public/**/*.jpg
-!public/**/*.png
-!public/**/*.gif
-!public/**/*.pdf
-
-# Backend specific
-backend/node_modules/
-backend/logs/
-backend/uploads/
-backend/.env
-backend/.env.*
-backend/*.log
-backend/dist/
-backend/build/
-
-# Frontend specific
-frontend/node_modules/
+# Frontend build
 frontend/dist/
 frontend/build/
-frontend/.env
-frontend/.env.*
-frontend/.vite/
+frontend/.next/
+frontend/out/
 
-# IDE & Editor files
+# Backend build
+backend/build/
+backend/dist/
+
+# ============================================
+# Testing
+# ============================================
+/coverage
+.nyc_output
+*.lcov
+.coverage
+coverage/
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================
+# IDE & Editor
+# ============================================
 .vscode/
 .idea/
 *.swp
@@ -101,7 +124,9 @@ frontend/.vite/
 *.sublime-project
 *.sublime-workspace
 
-# OS files
+# ============================================
+# OS Files
+# ============================================
 .DS_Store
 .DS_Store?
 ._*
@@ -111,30 +136,55 @@ ehthumbs.db
 Thumbs.db
 Desktop.ini
 
-# Temporary files
+# ============================================
+# Temporary Files
+# ============================================
 *.tmp
 *.temp
 *.cache
 .cache/
+.temp/
 tmp/
 temp/
-*.bak
-*.backup
 
-# Build artifacts
-*.map
-*.min.js
-*.min.css
+# ============================================
+# Uploads & User Content
+# ============================================
+uploads/
+public/uploads/
+storage/
+public/storage/
 
-# Misc
-*.pid
-*.seed
-*.pid.lock
-.npm
-.eslintcache
-.stylelintcache
+# ============================================
+# SSL Certificates & Keys
+# ============================================
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+ssl/
+certs/
 
-# Optional: Keep these if you want to track them
-# But typically should be ignored:
-# .vscode/settings.json (if contains personal settings)
-# .idea/workspace.xml (if contains personal settings)
+# ============================================
+# Session & Cache
+# ============================================
+sessions/
+*.session
+.cache/
+.parcel-cache/
+
+# ============================================
+# Package Manager Locks (Optional - uncomment if you want to ignore)
+# ============================================
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ============================================
+# Migration & Seed Files (Keep these - they're code)
+# ============================================
+# Note: Migration and seed SQL files in migrations/ and seeds/ folders
+# are intentionally NOT ignored - they are version-controlled code
+# Only ignore actual database files and dumps, not migration scripts

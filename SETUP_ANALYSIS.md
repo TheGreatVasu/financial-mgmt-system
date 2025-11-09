@@ -79,7 +79,7 @@ This repository is **fully portable** and can be cloned and run on any computer 
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_USER=root
-MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
+MYSQL_PASSWORD=YOUR
 MYSQL_DATABASE=financial_mgmt_db
 
 # JWT Configuration
