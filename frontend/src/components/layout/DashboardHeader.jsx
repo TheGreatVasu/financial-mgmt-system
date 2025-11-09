@@ -16,6 +16,28 @@ export default function DashboardHeader({ onToggleSidebar }) {
   const navigate = useNavigate()
   const { logout, user } = useAuthContext()
   
+  // Listen for theme changes from settings page
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      const { actualTheme } = e.detail
+      setTheme(actualTheme)
+    }
+    
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        setTheme(e.newValue || 'light')
+      }
+    }
+    
+    window.addEventListener('themechange', handleThemeChange)
+    window.addEventListener('storage', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('themechange', handleThemeChange)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
+  
   // Debug: Log user data to help diagnose issues
   useEffect(() => {
     if (user) {

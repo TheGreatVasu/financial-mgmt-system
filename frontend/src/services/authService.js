@@ -72,7 +72,9 @@ export async function login({ email, password }) {
     
     let errorMessage = 'Login failed. Please check your credentials.'
     
-    if (status === 401) {
+    if (status === 429) {
+      errorMessage = errorData?.message || 'Too many requests. Please wait a moment and try again.'
+    } else if (status === 401) {
       errorMessage = errorData?.message || 'Invalid email or password. Please check your credentials.'
     } else if (status === 400) {
       errorMessage = errorData?.message || 'Invalid request. Please check your input.'
@@ -90,6 +92,11 @@ export async function login({ email, password }) {
   }
 }
 
+// Cache for getCurrentUser to prevent rapid duplicate calls
+let userCache = null
+let cacheTimestamp = 0
+const CACHE_DURATION = 5000 // 5 seconds cache
+
 export async function getCurrentUser(token) {
   if (token === 'mock-token') {
     return { id: 'mock-user', firstName: 'Demo', lastName: 'User', email: 'demo@example.com', role: 'admin' }
@@ -98,6 +105,13 @@ export async function getCurrentUser(token) {
   if (!token) {
     console.warn('getCurrentUser called without token')
     return null
+  }
+  
+  // Return cached user if available and not expired
+  const now = Date.now()
+  if (userCache && (now - cacheTimestamp) < CACHE_DURATION) {
+    console.log('📦 Returning cached user data')
+    return userCache
   }
   
   try {
@@ -119,6 +133,10 @@ export async function getCurrentUser(token) {
     }
     
     const user = data.data
+    // Update cache
+    userCache = user
+    cacheTimestamp = now
+    
     console.log('✅ getCurrentUser success:', { userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName })
     
     return user
@@ -132,14 +150,29 @@ export async function getCurrentUser(token) {
       response: errorData
     })
     
+    // Handle rate limiting (429)
+    if (status === 429) {
+      const errorMsg = errorData?.message || 'Too many requests. Please wait a moment and try again.'
+      // Clear cache on rate limit
+      userCache = null
+      cacheTimestamp = 0
+      const rateLimitError = new Error(errorMsg)
+      rateLimitError.status = 429
+      throw rateLimitError
+    }
+    
     // Handle specific error cases
     if (status === 401) {
       const errorMsg = errorData?.message || 'Session expired. Please log in again.'
+      userCache = null
+      cacheTimestamp = 0
       throw new Error(errorMsg)
     }
     
     if (status === 404) {
       const errorMsg = errorData?.message || 'User not found. Please log in again.'
+      userCache = null
+      cacheTimestamp = 0
       throw new Error(errorMsg)
     }
     
@@ -165,6 +198,12 @@ export async function getCurrentUser(token) {
     const errorMsg = errorData?.message || err.message || 'Failed to retrieve user data'
     throw new Error(errorMsg)
   }
+}
+
+// Function to clear user cache (useful after logout or profile update)
+export function clearUserCache() {
+  userCache = null
+  cacheTimestamp = 0
 }
 
 export async function register({ firstName, lastName, email, phoneNumber, role, password }) {

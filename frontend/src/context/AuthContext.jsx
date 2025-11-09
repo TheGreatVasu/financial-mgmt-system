@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, googleLogin as apiGoogleLogin, microsoftLogin as apiMicrosoftLogin } from '../services/authService'
+import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, googleLogin as apiGoogleLogin, microsoftLogin as apiMicrosoftLogin, clearUserCache } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -43,6 +43,14 @@ export function AuthProvider({ children }) {
           console.warn('getCurrentUser returned no data, but keeping token')
         }
       } catch (e) {
+        // Handle rate limiting (429) - don't clear token, just show error
+        if (e?.response?.status === 429 || e?.status === 429) {
+          console.warn('Rate limit exceeded, keeping token but not updating user:', e.message)
+          // Don't clear token on rate limit, just keep existing state
+          setLoading(false)
+          return
+        }
+        
         // Check error message to determine if token is invalid
         const errorMessage = e?.message || ''
         const isAuthError = 
@@ -113,6 +121,7 @@ export function AuthProvider({ children }) {
       setUser(null)
       setToken(null)
       localStorage.removeItem('fms_token')
+      clearUserCache() // Clear user cache on logout
     }
   }
 
@@ -125,6 +134,12 @@ export function AuthProvider({ children }) {
       }
       // If me is null, keep existing user state (might be temporary network issue)
     } catch (e) {
+      // Handle rate limiting - don't clear user on rate limit
+      if (e?.response?.status === 429 || e?.status === 429) {
+        console.warn('Rate limit exceeded during refresh, keeping existing user state')
+        return
+      }
+      
       // Only clear user if it's definitely an auth error
       const isAuthError = e?.response?.status === 401 || e?.response?.status === 403
       if (isAuthError) {

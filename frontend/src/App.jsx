@@ -10,6 +10,7 @@ const NotFoundPage = lazy(() => import('./pages/not-found'))
 import Profile from './pages/profile'
 import Reports from './pages/reports'
 import Subscription from './pages/subscription'
+import ContactPage from './pages/contact-dashboard'
 import AlertsPage from './pages/alerts'
 import SettingsPage from './pages/settings'
 import LoadingScreen from './pages/loading'
@@ -209,6 +210,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Subscription />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/contact"
+          element={
+            <ProtectedRoute>
+              <ContactPage />
             </ProtectedRoute>
           }
         />

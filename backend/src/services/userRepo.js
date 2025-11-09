@@ -32,6 +32,44 @@ async function findById(id) {
       return null;
     }
     
+    // Try to get subscription/billing fields if they exist
+    try {
+      const subscriptionFields = await db('users')
+        .select(
+          'plan_id as planId',
+          'plan_name as planName',
+          'plan_price as planPrice',
+          'plan_interval as planInterval',
+          'storage_used as storageUsed',
+          'storage_limit as storageLimit',
+          'invoices_this_month as invoicesThisMonth',
+          'invoice_limit as invoiceLimit',
+          'billing_status as billingStatus',
+          'billing_renews_at as billingRenewsAt',
+          'payment_method as paymentMethod'
+        )
+        .where({ id })
+        .first();
+      
+      if (subscriptionFields) {
+        Object.assign(user, subscriptionFields);
+      }
+    } catch (columnError) {
+      // Subscription columns don't exist yet, set defaults
+      console.warn('Subscription columns not found, using defaults:', columnError.message);
+      user.planId = 'free';
+      user.planName = 'Free';
+      user.planPrice = 0;
+      user.planInterval = 'mo';
+      user.storageUsed = 0;
+      user.storageLimit = 15;
+      user.invoicesThisMonth = 0;
+      user.invoiceLimit = 50;
+      user.billingStatus = 'active';
+      user.billingRenewsAt = null;
+      user.paymentMethod = null;
+    }
+    
     // Try to get additional fields if they exist (for backward compatibility)
     try {
       const extendedUser = await db('users')

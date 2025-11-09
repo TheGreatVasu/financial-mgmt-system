@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database } from 'lucide-react'
+import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
 
 import { useEffect, useRef, useState } from 'react'
@@ -112,6 +112,7 @@ export default function DashboardLayout({ children }) {
             <div className="px-2 text-[11px] uppercase tracking-wider text-secondary-500 mb-2" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>System</div>
             <SideLink to="/subscription" icon={FileText} label="Subscription" />
             <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
+            <SideLink to="/contact" icon={Mail} label="Contact" />
             <SideLink to="/alerts" icon={AlertCircle} label="Alerts" />
             <SideLink to="/settings" icon={Settings} label="Settings" />
             {/* Only show Database and Users options for admin role */}

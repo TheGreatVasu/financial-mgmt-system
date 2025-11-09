@@ -41,6 +41,13 @@ export default function LoginPage() {
         navigate('/dashboard')
       }, 1500)
     } catch (err) {
+      // Handle rate limiting (429)
+      if (err?.response?.status === 429 || err?.message?.includes('Too many requests')) {
+        setError('Too many login attempts. Please wait a moment and try again.')
+        setLoading(false)
+        return
+      }
+      
       // Check if error indicates user needs to register first
       const errorMsg = err?.message || 'Login failed'
       if (errorMsg.toLowerCase().includes('not found') || 
