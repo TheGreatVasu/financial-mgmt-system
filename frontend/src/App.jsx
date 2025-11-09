@@ -17,6 +17,7 @@ import LoadingScreen from './pages/loading'
 import CustomersList from './pages/customers/index'
 import CustomerNew from './pages/customers/new'
 import CustomerDetail from './pages/customers/[id]'
+import POEntry from './pages/po-entry/index'
 import InvoicesList from './pages/invoices/index'
 import InvoiceDetail from './pages/invoices/[id]'
 import NewPOPage from './pages/dashboard/new-po'
@@ -175,6 +176,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CustomerDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/po-entry"
+          element={
+            <ProtectedRoute>
+              <POEntry />
             </ProtectedRoute>
           }
         />

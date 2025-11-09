@@ -2,6 +2,9 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
 const Customer = require('../models/Customer');
 const { broadcastDashboardUpdate } = require('../services/socketService');
+const excelService = require('../services/excelService');
+const path = require('path');
+const fs = require('fs');
 
 const getCustomers = asyncHandler(async (req, res) => {
   const db = getDb();
@@ -89,4 +92,55 @@ const deleteCustomer = asyncHandler(async (req, res) => {
   res.json({ success: true });
 });
 
-module.exports = { getCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer };
+// @desc    Export PO Entry to Excel
+// @route   POST /api/customers/po-entry/export
+// @access  Private
+const exportPOEntry = asyncHandler(async (req, res) => {
+  const poData = req.body;
+  
+  // Generate Excel workbook with PO entry data
+  const workbook = excelService.createPOEntryExcel(poData);
+  
+  // Generate filename with PO number and date
+  const poNumber = poData.poNo || 'PO-Entry';
+  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const filename = `Customer_PO_Entry_${poNumber}_${dateStr}.xlsx`;
+  
+  // Set response headers
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  
+  // Write workbook to response
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+// @desc    Download PO Entry Template
+// @route   GET /api/customers/po-entry/template
+// @access  Private
+const downloadPOEntryTemplate = asyncHandler(async (req, res) => {
+  const templatePath = path.join(__dirname, '../../templates/Customer_PO_Entry_Template.xlsx');
+  
+  // Check if template exists
+  if (!fs.existsSync(templatePath)) {
+    return res.status(404).json({
+      success: false,
+      message: 'Template file not found. Please generate it first using: npm run create-po-template'
+    });
+  }
+  
+  // Send template file
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="Customer_PO_Entry_Template.xlsx"');
+  res.sendFile(templatePath);
+});
+
+module.exports = { 
+  getCustomers, 
+  getCustomer, 
+  createCustomer, 
+  updateCustomer, 
+  deleteCustomer,
+  exportPOEntry,
+  downloadPOEntryTemplate
+};

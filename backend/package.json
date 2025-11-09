@@ -11,7 +11,8 @@
     "test": "jest",
     "db:migrate": "knex --knexfile knexfile.js migrate:latest",
     "db:seed": "knex --knexfile knexfile.js seed:run",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "create-po-template": "node scripts/create-po-entry-template.js"
   },
   "keywords": [
     "financial",
@@ -44,7 +45,8 @@
     "punycode": "^2.3.1",
     "socket.io": "^4.8.1",
     "winston": "^3.10.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "jest": "^29.7.0",

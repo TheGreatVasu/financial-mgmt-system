@@ -1,6 +1,6 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail } from 'lucide-react'
+import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail, FileSpreadsheet } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
 
 import { useEffect, useRef, useState } from 'react'
@@ -135,6 +135,7 @@ export default function DashboardLayout({ children }) {
             <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
             <SideLink to="/payments" icon={CreditCard} label="Payments" actionIcon={Download} />
             <SideLink to="/customers" icon={Users} label="Customers" actionIcon={Star} />
+            <SideLink to="/po-entry" icon={FileSpreadsheet} label="PO Entry" />
           </div>
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>System</div>
