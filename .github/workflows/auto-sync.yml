@@ -1,0 +1,162 @@
+name: Auto Sync from Upstream
+
+on:
+  # Schedule: Run daily at midnight UTC
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # Allow manual triggering from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      force_push:
+        description: 'Force push after sync (use with caution)'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  sync-upstream:
+    name: Sync from Upstream Repository
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git config --global pull.rebase false
+          git config --global merge.ours.driver true
+
+      - name: Add upstream remote
+        run: |
+          git remote -v
+          if ! git remote | grep -q "^upstream$"; then
+            echo "Adding upstream remote..."
+            git remote add upstream https://github.com/TheGreatVasu/financial-mgmt-system.git
+          else
+            echo "Upstream remote already exists, updating URL..."
+            git remote set-url upstream https://github.com/TheGreatVasu/financial-mgmt-system.git
+          fi
+          git remote -v
+
+      - name: Fetch upstream changes
+        run: |
+          echo "Fetching latest changes from upstream repository..."
+          git fetch upstream main
+          echo "✅ Successfully fetched upstream changes"
+
+      - name: Check for updates
+        id: check-updates
+        run: |
+          UPSTREAM_COMMITS=$(git rev-list --count HEAD..upstream/main 2>/dev/null || echo "0")
+          echo "commits_behind=$UPSTREAM_COMMITS" >> $GITHUB_OUTPUT
+          echo "📊 Current branch is $UPSTREAM_COMMITS commits behind upstream/main"
+          
+          if [ "$UPSTREAM_COMMITS" -eq "0" ]; then
+            echo "✅ Repository is already up to date with upstream"
+            echo "up_to_date=true" >> $GITHUB_OUTPUT
+          else
+            echo "🔄 Found $UPSTREAM_COMMITS new commits to merge"
+            echo "up_to_date=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge upstream changes
+        if: steps.check-updates.outputs.up_to_date == 'false'
+        run: |
+          echo "🔄 Merging upstream/main into main branch..."
+          
+          # Get current branch name
+          CURRENT_BRANCH=$(git branch --show-current)
+          echo "Current branch: $CURRENT_BRANCH"
+          
+          # Show what will be merged
+          echo "📋 Commits to be merged:"
+          git log HEAD..upstream/main --oneline --decorate || true
+          
+          # Attempt merge with no-edit to use default merge message
+          echo "Attempting merge..."
+          if git merge upstream/main --no-edit -m "Auto-sync: Merge upstream changes from TheGreatVasu/financial-mgmt-system [$(date -u +%Y-%m-%d)]"; then
+            echo "✅ Successfully merged upstream changes without conflicts"
+          else
+            echo "⚠️  Merge conflict detected, attempting to resolve..."
+            
+            # Check merge status
+            if git status | grep -q "Unmerged paths"; then
+              echo "Resolving conflicts by preferring upstream changes..."
+              
+              # List conflicted files
+              echo "Conflicted files:"
+              git diff --name-only --diff-filter=U || true
+              
+              # For each conflicted file, prefer upstream version
+              for file in $(git diff --name-only --diff-filter=U); do
+                echo "Resolving conflict in: $file"
+                git checkout --theirs "$file" || true
+                git add "$file" || true
+              done
+              
+              # Complete the merge
+              if git commit --no-edit -m "Auto-sync: Merge upstream changes (resolved conflicts) [$(date -u +%Y-%m-%d)]"; then
+                echo "✅ Successfully resolved conflicts and merged"
+              else
+                echo "❌ Failed to complete merge after conflict resolution"
+                echo "Merge state:"
+                git status
+                exit 1
+              fi
+            else
+              echo "❌ Merge failed for unknown reason"
+              echo "Git status:"
+              git status
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Merge completed successfully"
+
+      - name: Push changes to fork
+        if: steps.check-updates.outputs.up_to_date == 'false'
+        run: |
+          echo "📤 Pushing merged changes to fork repository..."
+          
+          if [ "${{ github.event.inputs.force_push }}" == "true" ]; then
+            echo "⚠️  Force push requested (use with caution)"
+            git push origin main --force
+          else
+            git push origin main
+          fi
+          
+          echo "✅ Successfully pushed changes to https://github.com/somilshivhare/financial-mgmt-system"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Auto-Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check-updates.outputs.up_to_date }}" == "true" ]; then
+            echo "✅ **Status:** Repository is up to date" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No changes were needed. Your fork is synchronized with the upstream repository." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔄 **Status:** Successfully synchronized" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Commits merged:** ${{ steps.check-updates.outputs.commits_behind }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Your fork has been updated with the latest changes from [TheGreatVasu/financial-mgmt-system](https://github.com/TheGreatVasu/financial-mgmt-system)." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Sync Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+

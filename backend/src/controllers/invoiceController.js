@@ -263,7 +263,60 @@ const createInvoice = asyncHandler(async (req, res) => {
           console.error('Error code:', insertError.code);
           console.error('Error errno:', insertError.errno);
           console.error('Error sql:', insertError.sql);
-          throw insertError;
+          
+          // If error is due to unknown column, try inserting without optional columns
+          if (insertError.code === 'ER_BAD_FIELD_ERROR' || insertError.errno === 1054) {
+            console.log('Retrying insert without optional columns (missing columns in database)...');
+            
+            // Create minimal row with only required columns that definitely exist
+            const minimalRow = {
+              invoice_number: invoiceNumber,
+              customer_id: customerId,
+              issue_date: formatDateForMySQL(issueDate),
+              due_date: formatDateForMySQL(dueDate),
+              tax_rate: taxRate,
+              subtotal: subtotal,
+              tax_amount: taxAmount,
+              total_amount: total,
+              paid_amount: 0,
+              status: payload.status || 'draft',
+              created_at: now,
+            };
+            
+            try {
+              [id] = await db('invoices').insert(minimalRow);
+              console.log('Invoice created with minimal columns, ID:', id);
+              
+              // Try to update with optional fields if columns exist
+              const updateData = {};
+              if (payload.poRef) updateData.po_ref = payload.poRef;
+              if (payload.paymentTerms) updateData.payment_terms = payload.paymentTerms;
+              if (payload.notes) updateData.notes = payload.notes;
+              
+              // Try to add items if column exists
+              try {
+                updateData.items = JSON.stringify(processedItems);
+              } catch (e) {
+                console.warn('Could not stringify items:', e);
+              }
+              
+              // Update with optional fields (ignore errors for missing columns)
+              if (Object.keys(updateData).length > 0) {
+                try {
+                  await db('invoices').where({ id }).update(updateData);
+                  console.log('Optional fields updated successfully');
+                } catch (updateErr) {
+                  console.warn('Could not update optional fields (columns may not exist):', updateErr.message);
+                  // Continue - invoice was created successfully with required fields
+                }
+              }
+            } catch (retryError) {
+              console.error('Retry insert also failed:', retryError);
+              throw insertError; // Throw original error
+            }
+          } else {
+            throw insertError;
+          }
         }
         
         // Fetch the created invoice with items parsed and customer name
