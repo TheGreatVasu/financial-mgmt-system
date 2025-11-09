@@ -1,17 +1,458 @@
-import { useParams } from 'react-router-dom'
-import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Edit, Trash2, Download, ArrowLeft, FileText, Calendar, User, DollarSign, AlertCircle } from 'lucide-react';
+import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import { useAuthContext } from '../../context/AuthContext.jsx';
+import { createInvoiceService } from '../../services/invoiceService.js';
+import InvoiceForm from '../../components/invoices/InvoiceForm.jsx';
+import Modal from '../../components/ui/Modal.jsx';
+import { motion } from 'framer-motion';
 
 export default function InvoiceDetail() {
-  const { id } = useParams()
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { token } = useAuthContext();
+  const [invoice, setInvoice] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  const invoiceService = createInvoiceService(token);
+
+  useEffect(() => {
+    loadInvoice();
+  }, [id, token]);
+
+  async function loadInvoice() {
+    if (!token || !id) return;
+    
+    setLoading(true);
+    setError('');
+    try {
+      const response = await invoiceService.get(id);
+      setInvoice(response?.data || response);
+    } catch (err) {
+      setError(err?.message || 'Failed to load invoice');
+      console.error('Failed to load invoice:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUpdate(payload) {
+    try {
+      const response = await invoiceService.update(id, payload);
+      // Reload to get updated data with all fields
+      await loadInvoice();
+      setIsEditing(false);
+    } catch (err) {
+      setError(err?.message || 'Failed to update invoice');
+      throw err;
+    }
+  }
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await invoiceService.remove(id);
+      navigate('/invoices');
+    } catch (err) {
+      setError(err?.message || 'Failed to delete invoice');
+      setIsDeleting(false);
+    }
+  }
+
+  async function handleExportPDF() {
+    try {
+      const { createApiClient } = await import('../../services/apiClient');
+      const api = createApiClient(token);
+      const response = await api.get(`/invoices/${id}/pdf`, {
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${invoice?.invoiceNumber || id}-${Date.now()}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      alert('PDF export is not available. Please try again later.');
+    }
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-4">
+          <div className="h-8 bg-secondary-100 rounded animate-pulse" />
+          <div className="h-64 bg-secondary-100 rounded animate-pulse" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error && !invoice) {
+    return (
+      <DashboardLayout>
+        <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3">
+          {error}
+        </div>
+        <Link to="/invoices" className="inline-flex items-center gap-2 text-primary-700 hover:underline mt-4">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Invoices
+        </Link>
+      </DashboardLayout>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Edit Invoice</h1>
+              <p className="text-sm text-secondary-600 mt-1">Update invoice details</p>
+            </div>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-secondary-200 text-sm text-secondary-700 hover:bg-secondary-100/80"
+            >
+              Cancel
+            </button>
+          </div>
+          
+          <div className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm">
+            <InvoiceForm
+              invoice={invoice}
+              onSubmit={handleUpdate}
+              onCancel={() => setIsEditing(false)}
+            />
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const invoiceData = invoice || {};
+  
+  // Parse items if they come as a JSON string from the database
+  let items = [];
+  if (invoiceData.items) {
+    if (typeof invoiceData.items === 'string') {
+      try {
+        items = JSON.parse(invoiceData.items);
+      } catch (e) {
+        console.error('Failed to parse items:', e);
+        items = [];
+      }
+    } else if (Array.isArray(invoiceData.items)) {
+      items = invoiceData.items;
+    }
+  }
+  
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.total) || Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
+  const taxRate = Number(invoiceData.taxRate || invoiceData.tax_rate || 0);
+  const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount || (subtotal * taxRate) / 100;
+  const totalAmount = invoiceData.totalAmount || invoiceData.total_amount || (subtotal + taxAmount);
+  const paidAmount = Number(invoiceData.paidAmount || invoiceData.paid_amount || 0);
+  const outstandingAmount = totalAmount - paidAmount;
+
   return (
     <DashboardLayout>
-      <div>
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Invoice Detail</h1>
-        <div className="text-sm text-secondary-500 mt-1">ID: {id}</div>
-      </div>
-      <div className="rounded-xl border border-secondary-200/70 bg-white p-4 shadow-sm">Invoice info placeholder</div>
-      <div className="rounded-xl border border-secondary-200/70 bg-white p-4 shadow-sm">Payment history placeholder</div>
-    </DashboardLayout>
-  )
-}
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              to="/invoices"
+              className="inline-flex items-center gap-2 text-secondary-600 hover:text-secondary-900 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
+                Invoice {invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A'}
+              </h1>
+              <p className="text-sm text-secondary-600 mt-1">Invoice details and payment history</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPDF}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-secondary-200 text-sm text-secondary-700 hover:bg-secondary-100/80 transition-colors"
+              title="Export as PDF"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">PDF</span>
+            </button>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary-600 text-white text-sm hover:bg-primary-700 transition-colors"
+            >
+              <Edit className="h-4 w-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-danger-200 text-sm text-danger-700 hover:bg-danger-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          </div>
+        </div>
 
+        {error && (
+          <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Invoice Information */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm"
+        >
+          <h2 className="text-lg font-semibold text-secondary-900 mb-4">Invoice Information</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-primary-50 rounded-lg">
+                <FileText className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Invoice Number</p>
+                <p className="text-sm font-semibold text-secondary-900">{invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A'}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-emerald-50 rounded-lg">
+                <Calendar className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Issue Date</p>
+                <p className="text-sm font-semibold text-secondary-900">
+                  {invoiceData.issueDate ? new Date(invoiceData.issueDate).toLocaleDateString('en-IN') : 
+                   invoiceData.issue_date ? new Date(invoiceData.issue_date).toLocaleDateString('en-IN') : 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-50 rounded-lg">
+                <Calendar className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Due Date</p>
+                <p className="text-sm font-semibold text-secondary-900">
+                  {invoiceData.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString('en-IN') : 
+                   invoiceData.due_date ? new Date(invoiceData.due_date).toLocaleDateString('en-IN') : 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-violet-50 rounded-lg">
+                <User className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Customer</p>
+                <p className="text-sm font-semibold text-secondary-900">
+                  {invoiceData.customer_name || invoiceData.customer?.companyName || 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-sky-50 rounded-lg">
+                <DollarSign className="h-5 w-5 text-sky-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Status</p>
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                  invoiceData.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+                  invoiceData.status === 'overdue' ? 'bg-rose-100 text-rose-700' :
+                  invoiceData.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                  'bg-secondary-100 text-secondary-700'
+                }`}>
+                  {invoiceData.status || 'draft'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <DollarSign className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary-500">Payment Terms</p>
+                <p className="text-sm font-semibold text-secondary-900">
+                  {invoiceData.paymentTerms || invoiceData.payment_terms || 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Invoice Items */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm"
+        >
+          <h2 className="text-lg font-semibold text-secondary-900 mb-4">Invoice Items</h2>
+          
+          {items.length === 0 ? (
+            <p className="text-sm text-secondary-500">No items found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-secondary-200 text-left text-secondary-600">
+                    <th className="py-3 px-4 font-medium">Description</th>
+                    <th className="py-3 px-4 font-medium text-right">Quantity</th>
+                    <th className="py-3 px-4 font-medium text-right">Unit Price</th>
+                    <th className="py-3 px-4 font-medium text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index} className="border-b border-secondary-100 hover:bg-secondary-50/50 transition-colors">
+                      <td className="py-3 px-4 text-secondary-900">{item.description || 'N/A'}</td>
+                      <td className="py-3 px-4 text-right text-secondary-700">{item.quantity || 0}</td>
+                      <td className="py-3 px-4 text-right text-secondary-700">
+                        ₹{Number(item.unitPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-secondary-900">
+                        ₹{Number(item.total || (item.quantity || 0) * (item.unitPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Totals */}
+          <div className="mt-6 flex justify-end">
+            <div className="w-full md:w-80 space-y-2">
+              <div className="flex justify-between text-sm text-secondary-600">
+                <span>Subtotal:</span>
+                <span className="font-medium">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-sm text-secondary-600">
+                <span>Tax ({taxRate}%):</span>
+                <span className="font-medium">₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-base font-semibold text-secondary-900 border-t border-secondary-200 pt-2">
+                <span>Total Amount:</span>
+                <span>₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-sm text-secondary-600">
+                <span>Paid Amount:</span>
+                <span className="font-medium text-emerald-600">₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-base font-semibold border-t border-secondary-200 pt-2">
+                <span className={outstandingAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                  Outstanding:
+                </span>
+                <span className={outstandingAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                  ₹{outstandingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Notes */}
+        {invoiceData.notes && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm"
+          >
+            <h2 className="text-lg font-semibold text-secondary-900 mb-2">Notes</h2>
+            <p className="text-sm text-secondary-700 whitespace-pre-wrap">{invoiceData.notes}</p>
+          </motion.div>
+        )}
+
+        {/* Payment History */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.3 }}
+          className="rounded-xl border border-secondary-200/70 bg-white p-6 shadow-sm"
+        >
+          <h2 className="text-lg font-semibold text-secondary-900 mb-4">Payment History</h2>
+          {paidAmount > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-emerald-900">Payment Received</p>
+                  <p className="text-xs text-emerald-700">Paid amount: ₹{paidAmount.toLocaleString('en-IN')}</p>
+                </div>
+                <span className="text-sm font-semibold text-emerald-700">
+                  ₹{paidAmount.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-secondary-500">
+              <AlertCircle className="h-4 w-4" />
+              No payments recorded yet
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Invoice"
+        variant="dialog"
+        size="sm"
+        footer={(
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-secondary-700">
+            Are you sure you want to delete invoice <strong>{invoiceData.invoiceNumber}</strong>?
+          </p>
+          <p className="text-xs text-secondary-500">
+            This action cannot be undone. All invoice data will be permanently deleted.
+          </p>
+        </div>
+      </Modal>
+    </DashboardLayout>
+  );
+}

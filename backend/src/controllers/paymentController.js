@@ -2,6 +2,7 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
 const Invoice = require('../models/Invoice');
 const Payment = require('../models/Payment');
+const { broadcastDashboardUpdate } = require('../services/socketService');
 
 const getPayments = asyncHandler(async (req, res) => {
   const db = getDb();
@@ -51,6 +52,8 @@ const createPayment = asyncHandler(async (req, res) => {
     const newPaid = Number(inv.paid_amount || 0) + paymentRow.amount;
     const nextStatus = newPaid >= Number(inv.total_amount || 0) ? 'paid' : 'partial';
     await db('invoices').where({ id: inv.id }).update({ paid_amount: newPaid, status: nextStatus });
+    // Emit dashboard update
+    broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.status(201).json({ success: true, data: { id: pid, ...paymentRow } });
   }
   // Mongoose fallback
@@ -70,6 +73,8 @@ const createPayment = asyncHandler(async (req, res) => {
   inv.paidAmount = newPaid;
   inv.status = newPaid >= Number(inv.totalAmount || 0) ? 'paid' : 'partial';
   await inv.save();
+  // Emit dashboard update
+  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
   res.status(201).json({ success: true, data: paymentDoc });
 });
 

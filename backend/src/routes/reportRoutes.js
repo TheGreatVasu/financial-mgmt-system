@@ -1,31 +1,17 @@
 const express = require('express');
 const { authMiddleware } = require('../middlewares/authMiddleware');
+const { getReports, getDSOReport, getAgingReport, generatePDFReport } = require('../controllers/reportController');
 
 const router = express.Router();
 
 // Placeholder routes - will be implemented later
-router.get('/', authMiddleware, (req, res) => {
-  res.json({
-    success: true,
-    message: 'Report routes - Coming soon',
-    data: []
-  });
-});
+router.get('/', authMiddleware, getReports);
 
-router.get('/dso', authMiddleware, (req, res) => {
-  res.json({
-    success: true,
-    message: 'DSO report - Coming soon',
-    data: []
-  });
-});
+router.get('/dso', authMiddleware, getDSOReport);
 
-router.get('/aging', authMiddleware, (req, res) => {
-  res.json({
-    success: true,
-    message: 'Aging report - Coming soon',
-    data: []
-  });
-});
+router.get('/aging', authMiddleware, getAgingReport);
+
+// PDF export route
+router.post('/pdf', authMiddleware, generatePDFReport);
 
 module.exports = router;

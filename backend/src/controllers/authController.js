@@ -361,10 +361,10 @@ const getMe = asyncHandler(async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
+  res.json({
+    success: true,
       data: freshUser
-    });
+  });
   } catch (error) {
     console.error('Error in getMe:', error);
     throw error; // Let asyncHandler catch and format it

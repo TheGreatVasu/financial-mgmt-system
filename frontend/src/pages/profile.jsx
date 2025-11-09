@@ -168,7 +168,7 @@ export default function Profile() {
   // Sync profile data from user context
   useEffect(() => {
     if (user) {
-      setProfile({
+    setProfile({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
@@ -271,12 +271,12 @@ export default function Profile() {
 
   function onReset() {
     if (user) {
-      setProfile({
+    setProfile({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-      })
+    })
     }
   }
 
@@ -524,7 +524,7 @@ export default function Profile() {
             ) : sessions.length === 0 ? (
               <div className="mt-3 text-sm text-secondary-600">No active sessions</div>
             ) : (
-              <div className="mt-3 space-y-3 text-sm">
+            <div className="mt-3 space-y-3 text-sm">
                 {sessions.map((s) => {
                   const deviceName = `${s.browser} on ${s.os}`
                   const isCurrent = s.isCurrent
@@ -552,7 +552,7 @@ export default function Profile() {
                             IP: {s.ipAddress}
                           </div>
                         )}
-                      </div>
+                  </div>
                       {!isCurrent && (
                         <button 
                           onClick={() => handleLogoutSession(s.sessionToken)}
@@ -561,10 +561,10 @@ export default function Profile() {
                           Log out
                         </button>
                       )}
-                    </div>
+                </div>
                   )
                 })}
-              </div>
+            </div>
             )}
             <button 
               onClick={handleLogoutAll}

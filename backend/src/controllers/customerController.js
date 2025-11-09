@@ -1,6 +1,7 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
 const Customer = require('../models/Customer');
+const { broadcastDashboardUpdate } = require('../services/socketService');
 
 const getCustomers = asyncHandler(async (req, res) => {
   const db = getDb();
@@ -45,9 +46,13 @@ const createCustomer = asyncHandler(async (req, res) => {
       created_at: now,
     };
     const [id] = await db('customers').insert(row);
+    // Emit dashboard update
+    broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.status(201).json({ success: true, data: { id, ...row } });
   }
   const doc = await Customer.create({ name: p.name, companyName: p.companyName, email: p.email, phone: p.phone, gstNumber: p.gstNumber });
+  // Emit dashboard update
+  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
   res.status(201).json({ success: true, data: doc });
 });
 
@@ -58,10 +63,14 @@ const updateCustomer = asyncHandler(async (req, res) => {
   if (db) {
     await db('customers').where({ id }).update({ name: p.name, company_name: p.companyName, email: p.email, phone: p.phone, gst_number: p.gstNumber });
     const row = await db('customers').where({ id }).first();
+    // Emit dashboard update
+    broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true, data: row });
   }
   const doc = await Customer.findByIdAndUpdate(id, { name: p.name, companyName: p.companyName, email: p.email, phone: p.phone, gstNumber: p.gstNumber }, { new: true });
   if (!doc) return res.status(404).json({ success: false, message: 'Customer not found' });
+  // Emit dashboard update
+  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
   res.json({ success: true, data: doc });
 });
 
@@ -70,9 +79,13 @@ const deleteCustomer = asyncHandler(async (req, res) => {
   const id = req.params.id;
   if (db) {
     await db('customers').where({ id }).delete();
+    // Emit dashboard update
+    broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true });
   }
   await Customer.findByIdAndDelete(id);
+  // Emit dashboard update
+  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
   res.json({ success: true });
 });
 

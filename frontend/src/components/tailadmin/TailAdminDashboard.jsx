@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, CheckCircle2, AlertTriangle, RefreshCw, FileText } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import EcommerceMetrics from "./ecommerce/EcommerceMetrics";
 import MonthlySalesChart from "./ecommerce/MonthlySalesChart";
 import StatisticsChart from "./ecommerce/StatisticsChart";
@@ -8,66 +9,51 @@ import LineChart from "../ui/LineChart.jsx";
 import RecentOrders from "./ecommerce/RecentOrders";
 import DemographicCard from "./ecommerce/DemographicCard";
 import { useAuthContext } from "../../context/AuthContext.jsx";
-import { fetchDashboard } from "../../services/dashboardService.js";
+import { useRealtimeDashboard } from "../../hooks/useRealtimeDashboard.js";
 import Modal from "../ui/Modal.jsx";
 import { createInvoiceService } from "../../services/invoiceService.js";
 import { createPaymentService } from "../../services/paymentService.js";
 import { createCustomerService } from "../../services/customerService.js";
 import { listAlerts, markRead } from "../../services/alertsService.js";
+import AgingAnalysisChart from "../charts/AgingAnalysisChart.jsx";
+import RegionalBreakupChart from "../charts/RegionalBreakupChart.jsx";
+import CashInflowComparisonChart from "../charts/CashInflowComparisonChart.jsx";
+import SalesTrendChart from "../charts/SalesTrendChart.jsx";
+import TopCustomersTable from "../charts/TopCustomersTable.jsx";
 
 export default function TailAdminDashboard() {
   const { token } = useAuthContext()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading, error: dashboardError, isLive, connectionStatus, refresh } = useRealtimeDashboard(token)
   const [error, setError] = useState("")
   const [modal, setModal] = useState(null) // 'Create Invoice'|'Record Payment'|'Add Customer'|'Filter'|'Alerts'|null
   const [form, setForm] = useState({})
   const [filters, setFilters] = useState({})
   const [alerts, setAlerts] = useState([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const invApi = useMemo(() => createInvoiceService(token), [token])
   const payApi = useMemo(() => createPaymentService(token), [token])
   const custApi = useMemo(() => createCustomerService(token), [token])
 
+  // Use dashboard error if available
   useEffect(() => {
-    let mounted = true
-    async function load() {
-      setLoading(true)
-      setError("")
-      try {
-        const d = await fetchDashboard(token)
-        if (mounted) setData(d)
-      } catch (e) {
-        if (mounted) setError(e?.message || "Failed to load dashboard")
-      } finally {
-        if (mounted) setLoading(false)
-      }
+    if (dashboardError) {
+      setError(dashboardError)
     }
-    load()
-    // Realtime subscribe via SSE
-    const base = import.meta?.env?.VITE_API_BASE_URL?.trim() || '/api'
-    const url = `${base.replace(/\/$/,'')}/dashboard/events`
-    const es = new EventSource(url)
-    es.onmessage = (ev) => {
-      try {
-        const payload = JSON.parse(ev.data)
-        if (mounted) setData(payload)
-      } catch {}
-    }
-    es.addEventListener('update', (ev) => {
-      try {
-        const payload = JSON.parse(ev.data)
-        if (mounted) setData(payload)
-      } catch {}
-    })
-    es.onerror = () => {
-      // keep silent in offline mode
-    }
-    return () => { mounted = false }
-  }, [token])
+  }, [dashboardError])
 
-  async function refresh() {
-    const d = await fetchDashboard(token, filters)
-    setData(d)
+  // Handle refresh with loading state
+  async function handleRefresh() {
+    setIsRefreshing(true)
+    try {
+      await refresh()
+      // Small delay to show the refresh animation
+      setTimeout(() => {
+        setIsRefreshing(false)
+      }, 500)
+    } catch (err) {
+      setIsRefreshing(false)
+      setError(err?.message || 'Failed to refresh dashboard')
+    }
   }
 
   function normalizeInvoice(v) {
@@ -120,7 +106,11 @@ export default function TailAdminDashboard() {
     const rows = []
     for (const ep of endpoints) {
       try {
-        const res = await fetch(`${api}${ep}`)
+        const res = await fetch(`${api}${ep}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
         const json = await res.json().catch(() => ({}))
         const data = json?.data || []
         rows.push(...data.map((d) => ({ endpoint: ep.slice(1), ...d })))
@@ -138,6 +128,45 @@ export default function TailAdminDashboard() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  }
+
+  async function exportPdf() {
+    try {
+      const { createApiClient } = await import('../../services/apiClient')
+      const api = createApiClient(token)
+      
+      // Create PDF report data
+      const reportData = {
+        type: 'dashboard',
+        generatedAt: new Date().toISOString(),
+        kpis: data?.kpis || {},
+        agingAnalysis: data?.agingAnalysis || [],
+        regionalBreakup: data?.regionalBreakup || [],
+        monthlyTrends: data?.monthlyTrends || [],
+        topCustomersOverdue: data?.topCustomersOverdue || [],
+        filters: filters
+      }
+
+      const response = await api.post('/reports/pdf', reportData, {
+        responseType: 'blob',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `dashboard-report-${Date.now()}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export PDF:', err)
+      // Fallback: Show error or use client-side PDF generation
+      alert('PDF export is not available. Please use CSV export instead.')
+    }
   }
 
   const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
@@ -179,23 +208,70 @@ export default function TailAdminDashboard() {
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="text-white/95">
-              <div className="text-base sm:text-lg md:text-xl font-semibold tracking-wide">Receivables Dashboard</div>
-              <div className="text-[11px] sm:text-xs text-white/80">Actionable insights with live updates</div>
+              <div className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold tracking-wide">
+                <span>Receivables Dashboard</span>
+                {/* Live Indicator */}
+                <div className="relative flex items-center">
+                  <span 
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isLive 
+                        ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse' 
+                        : connectionStatus === 'polling'
+                        ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] animate-pulse'
+                        : 'bg-gray-400'
+                    }`}
+                    title={isLive ? 'Live updates active' : connectionStatus === 'polling' ? 'Polling mode (30s)' : 'Disconnected'}
+                  />
+                  {isLive && (
+                    <span className="ml-1.5 text-[10px] sm:text-xs text-white/90 font-medium">Live</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-[11px] sm:text-xs text-white/80">
+                {isLive 
+                  ? 'Actionable insights with live updates' 
+                  : connectionStatus === 'polling'
+                  ? 'Polling mode: Updates every 30 seconds'
+                  : 'Connecting to live updates...'}
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => handleQuickAction('Filter')} className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15">
+            <button onClick={() => handleQuickAction('Filter')} className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15 transition-colors">
               <Filter className="h-4 w-4" />
               Filters
             </button>
-            <button className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15">
+            <button className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15 transition-colors">
               <CalendarRange className="h-4 w-4" />
               Last 30 days
             </button>
-            <button onClick={exportCsv} className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white text-primary-700 text-xs sm:text-sm hover:bg-secondary-50 shadow-soft">
-              <Download className="h-4 w-4" />
-              Export
+            <button 
+              onClick={handleRefresh} 
+              disabled={isRefreshing || loading}
+              className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh dashboard data"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
+            <div className="relative inline-block">
+              <button 
+                onClick={exportCsv} 
+                className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white text-primary-700 text-xs sm:text-sm hover:bg-secondary-50 shadow-soft transition-colors"
+                title="Export to CSV"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+              <button 
+                onClick={exportPdf} 
+                className="ml-2 inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15 transition-colors"
+                title="Export to PDF"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF</span>
+              </button>
+            </div>
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3 text-white/90 text-xs">
@@ -205,8 +281,9 @@ export default function TailAdminDashboard() {
           <span className="inline-flex items-center gap-1">
             <Star className="h-4 w-4 animate-[ping_2.4s_linear_infinite]" /> Priority Accounts
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Zap className="h-4 w-4 animate-[pulse_2.6s_ease-in-out_infinite]" /> Realtime Sync
+          <span className={`inline-flex items-center gap-1 ${isLive ? '' : 'opacity-60'}`}>
+            <Zap className={`h-4 w-4 ${isLive ? 'animate-[pulse_2.6s_ease-in-out_infinite]' : ''}`} /> 
+            {isLive ? 'Realtime Sync' : connectionStatus === 'polling' ? 'Polling Mode' : 'Offline'}
           </span>
         </div>
       </div>
@@ -214,7 +291,7 @@ export default function TailAdminDashboard() {
       <Modal open={modal === 'Create Invoice'} onClose={() => setModal(null)} title="Create Invoice" variant="dialog" size="lg" footer={(
         <>
           <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={async () => { await invApi.create(normalizeInvoice(form)); setModal(null); refresh(); }}>Save</button>
+          <button className="btn btn-primary" onClick={async () => { await invApi.create(normalizeInvoice(form)); setModal(null); /* Dashboard will update automatically via WebSocket */ }}>Save</button>
         </>
       )}>
         <InvoiceForm form={form} setForm={setForm} />
@@ -223,7 +300,7 @@ export default function TailAdminDashboard() {
       <Modal open={modal === 'Record Payment'} onClose={() => setModal(null)} title="Record Payment" variant="dialog" size="md" footer={(
         <>
           <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={async () => { await payApi.create(normalizePayment(form)); setModal(null); refresh(); }}>Save</button>
+          <button className="btn btn-primary" onClick={async () => { await payApi.create(normalizePayment(form)); setModal(null); /* Dashboard will update automatically via WebSocket */ }}>Save</button>
         </>
       )}>
         <PaymentForm form={form} setForm={setForm} />
@@ -232,7 +309,7 @@ export default function TailAdminDashboard() {
       <Modal open={modal === 'Add Customer'} onClose={() => setModal(null)} title="Add Customer" variant="dialog" size="md" footer={(
         <>
           <button className="btn btn-outline" onClick={() => setModal(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={async () => { await custApi.create(normalizeCustomer(form)); setModal(null); refresh(); }}>Save</button>
+          <button className="btn btn-primary" onClick={async () => { await custApi.create(normalizeCustomer(form)); setModal(null); /* Dashboard will update automatically via WebSocket */ }}>Save</button>
         </>
       )}>
         <CustomerForm form={form} setForm={setForm} />
@@ -240,7 +317,7 @@ export default function TailAdminDashboard() {
 
       <Modal open={modal === 'Filter'} onClose={() => setModal(null)} title="Filters" variant="dialog" size="md" footer={(
         <>
-          <button className="btn btn-outline" onClick={() => { setFilters({}); setModal(null); refresh(); }}>Reset</button>
+          <button className="btn btn-outline" onClick={() => { setFilters({}); setModal(null); }}>Reset</button>
           <button className="btn btn-primary" onClick={() => { setModal(null); refresh(); }}>Apply</button>
         </>
       )}>
@@ -268,25 +345,87 @@ export default function TailAdminDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 xl:gap-6 stagger-children" data-tour="kpis">
-          <div className="rounded-2xl border border-sky-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-sky-300/80">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-secondary-500">Outstanding</div>
-              <Sparkles className="h-4 w-4 text-sky-500 blink-soft" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold text-sky-700">₹{(data?.kpis?.outstanding || 0).toLocaleString('en-IN')}</div>
-          </div>
-          <div className="rounded-2xl border border-rose-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-rose-300/80">
-            <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">Overdue Invoices</div><Bell className="h-4 w-4 text-rose-500 blink-soft" /></div>
-            <div className="mt-2 text-2xl font-semibold text-rose-700">{data?.kpis?.overdue || 0}</div>
-          </div>
-          <div className="rounded-2xl border border-violet-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-violet-300/80">
-            <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">DSO</div><Zap className="h-4 w-4 text-violet-500 blink-soft" /></div>
-            <div className="mt-2 text-2xl font-semibold text-violet-700">{data?.kpis?.dso || 0} days</div>
-          </div>
-          <div className="rounded-2xl border border-emerald-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-emerald-300/80">
-            <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">CEI</div><Star className="h-4 w-4 text-emerald-500 blink-soft" /></div>
-            <div className="mt-2 text-2xl font-semibold text-emerald-700">{data?.kpis?.cei || 0}%</div>
-          </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`outstanding-${data?.kpis?.outstanding || 0}`}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="rounded-2xl border border-sky-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-sky-300/80"
+            >
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-secondary-500">Outstanding</div>
+                <Sparkles className="h-4 w-4 text-sky-500 blink-soft" />
+              </div>
+              <motion.div 
+                key={`outstanding-value-${data?.kpis?.outstanding || 0}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="mt-2 text-2xl font-semibold text-sky-700"
+              >
+                ₹{(data?.kpis?.outstanding || 0).toLocaleString('en-IN')}
+              </motion.div>
+            </motion.div>
+            <motion.div
+              key={`overdue-${data?.kpis?.overdue || 0}`}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+              className="rounded-2xl border border-rose-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-rose-300/80"
+            >
+              <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">Overdue Invoices</div><Bell className="h-4 w-4 text-rose-500 blink-soft" /></div>
+              <motion.div 
+                key={`overdue-value-${data?.kpis?.overdue || 0}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="mt-2 text-2xl font-semibold text-rose-700"
+              >
+                {data?.kpis?.overdue || 0}
+              </motion.div>
+            </motion.div>
+            <motion.div
+              key={`dso-${data?.kpis?.dso || 0}`}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="rounded-2xl border border-violet-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-violet-300/80"
+            >
+              <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">DSO</div><Zap className="h-4 w-4 text-violet-500 blink-soft" /></div>
+              <motion.div 
+                key={`dso-value-${data?.kpis?.dso || 0}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="mt-2 text-2xl font-semibold text-violet-700"
+              >
+                {data?.kpis?.dso || 0} days
+              </motion.div>
+            </motion.div>
+            <motion.div
+              key={`cei-${data?.kpis?.cei || 0}`}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+              className="rounded-2xl border border-emerald-200/70 bg-white p-5 shadow-soft transition hover:shadow-theme-lg hover:border-emerald-300/80"
+            >
+              <div className="flex items-center justify-between"><div className="text-sm text-secondary-500">CEI</div><Star className="h-4 w-4 text-emerald-500 blink-soft" /></div>
+              <motion.div 
+                key={`cei-value-${data?.kpis?.cei || 0}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="mt-2 text-2xl font-semibold text-emerald-700"
+              >
+                {data?.kpis?.cei || 0}%
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       )}
 
@@ -359,6 +498,33 @@ export default function TailAdminDashboard() {
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Advanced Analytics Charts Section */}
+      <div className="space-y-4 md:space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-secondary-900">Advanced Analytics</h2>
+            <p className="text-sm text-secondary-500">Real-time financial insights and trends</p>
+          </div>
+        </div>
+
+        {/* First Row: Aging Analysis and Regional Breakup */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <AgingAnalysisChart data={data?.agingAnalysis || []} />
+          <RegionalBreakupChart data={data?.regionalBreakup || []} />
+        </div>
+
+        {/* Second Row: Cash Inflow Comparison and Sales Trend */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <CashInflowComparisonChart data={data?.cashInflowComparison || []} />
+          <SalesTrendChart data={data?.monthlyTrends || []} />
+        </div>
+
+        {/* Third Row: Top Customers Table - Full Width */}
+        <div className="grid grid-cols-1 gap-4 md:gap-6">
+          <TopCustomersTable data={data?.topCustomersOverdue || []} />
         </div>
       </div>
 
@@ -485,14 +651,101 @@ function Field({ label, children }) {
 }
 
 function FilterForm({ filters, setFilters }) {
+  const { token } = useAuthContext()
+  const [customers, setCustomers] = useState([])
+  const [regions] = useState(['North', 'South', 'East', 'West', 'Central'])
+
+  useEffect(() => {
+    // Load customers for dropdown
+    if (!token) return
+    
+    async function loadCustomers() {
+      try {
+        const { createApiClient } = await import('../../services/apiClient')
+        const api = createApiClient(token)
+        const { data } = await api.get('/customers?limit=100')
+        setCustomers(data?.data || [])
+      } catch (err) {
+        console.error('Failed to load customers:', err)
+      }
+    }
+    loadCustomers()
+  }, [token])
+
   const on = (k) => (e) => setFilters({ ...filters, [k]: e.target.value })
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Field label="Date From"><input type="date" className="input" value={filters.from||''} onChange={on('from')} /></Field>
-      <Field label="Date To"><input type="date" className="input" value={filters.to||''} onChange={on('to')} /></Field>
-      <Field label="Customer"><input className="input" value={filters.customer||''} onChange={on('customer')} /></Field>
-      <Field label="Status"><select className="input" value={filters.status||''} onChange={on('status')}><option value="">Any</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="overdue">Overdue</option></select></Field>
-      <Field label="Payment Type"><select className="input" value={filters.paymentType||''} onChange={on('paymentType')}><option value="">Any</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option></select></Field>
+      <Field label="Date Range From">
+        <input 
+          type="date" 
+          className="input" 
+          value={filters.from||''} 
+          onChange={on('from')}
+          max={filters.to || undefined}
+        />
+      </Field>
+      <Field label="Date Range To">
+        <input 
+          type="date" 
+          className="input" 
+          value={filters.to||''} 
+          onChange={on('to')}
+          min={filters.from || undefined}
+        />
+      </Field>
+      <Field label="Customer">
+        <select 
+          className="input" 
+          value={filters.customer||''} 
+          onChange={on('customer')}
+        >
+          <option value="">All Customers</option>
+          {customers.map((c) => (
+            <option key={c.id || c._id} value={c.id || c._id}>
+              {c.companyName || c.company_name || c.name || 'Unknown'}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Region">
+        <select 
+          className="input" 
+          value={filters.region||''} 
+          onChange={on('region')}
+        >
+          <option value="">All Regions</option>
+          {regions.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Status">
+        <select 
+          className="input" 
+          value={filters.status||''} 
+          onChange={on('status')}
+        >
+          <option value="">Any Status</option>
+          <option value="paid">Paid</option>
+          <option value="pending">Pending</option>
+          <option value="overdue">Overdue</option>
+          <option value="partial">Partial</option>
+        </select>
+      </Field>
+      <Field label="Payment Type">
+        <select 
+          className="input" 
+          value={filters.paymentType||''} 
+          onChange={on('paymentType')}
+        >
+          <option value="">Any Payment Type</option>
+          <option value="upi">UPI</option>
+          <option value="card">Card</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="cash">Cash</option>
+        </select>
+      </Field>
     </div>
   )
 }
