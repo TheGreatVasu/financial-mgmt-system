@@ -22,6 +22,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const actionItemRoutes = require('./routes/actionItemRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
 const userRoutes = require('./routes/userRoutes');
+const poEntryRoutes = require('./routes/poEntryRoutes');
+const googleSheetsRoutes = require('./routes/googleSheetsRoutes');
 
 // Connect to database (async, but don't block server startup)
 connectDB().then(() => {
@@ -117,11 +119,15 @@ app.use('/api/mom', momRoutes);
 app.use('/api/action-items', actionItemRoutes);
 app.use('/api/admin/database', databaseRoutes);
 app.use('/api/admin/users', userRoutes);
+app.use('/api/po-entry', poEntryRoutes);
+app.use('/api/google-sheets', googleSheetsRoutes);
 
 // 404 handler
 app.use(notFound);
 
 // Error handling middleware
 app.use(errorHandler);
+
+
 
 module.exports = app;

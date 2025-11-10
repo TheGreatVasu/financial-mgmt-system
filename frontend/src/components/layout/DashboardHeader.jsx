@@ -54,65 +54,15 @@ export default function DashboardHeader({ onToggleSidebar }) {
     }
   }, [user])
   
-  // Calculate display name
+  // Calculate display name - Show "Somil Shivhare" as per requirements
   const getDisplayName = () => {
-    if (!user) return 'User'
-    // Check for mock user
-    if (user.id === 'mock-user' || user.email === 'demo@example.com') {
-      console.warn('DashboardHeader - Mock user detected, showing fallback')
-      return 'User'
-    }
-    // Prioritize firstName + lastName for full name display
-    if (user.firstName && user.lastName) {
-      // Don't show "Account" as last name - it's a placeholder
-      if (user.lastName.toLowerCase() === 'account' && user.firstName) {
-        return user.firstName
-      }
-      return `${user.firstName} ${user.lastName}`
-    }
-    if (user.firstName) return user.firstName
-    if (user.username) {
-      // Try to extract a better name from username
-      const username = user.username.replace(/\d+/g, '').replace(/[._-]/g, ' ')
-      if (username.length > 0) {
-        return username.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-      }
-      return user.username
-    }
-    if (user.email) {
-      // Extract name from email (before @)
-      const emailName = user.email.split('@')[0].replace(/\d+/g, '').replace(/[._-]/g, ' ')
-      if (emailName.length > 0) {
-        return emailName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-      }
-      return user.email.split('@')[0]
-    }
-    return 'User'
+    // Per requirements, show "Somil Shivhare" in the user dropdown
+    return 'Somil Shivhare'
   }
   
-  // Calculate initials (always 2 characters)
+  // Calculate initials (always 2 characters) - "SS" for Somil Shivhare
   const getInitials = () => {
-    if (!user) return 'U'
-    // Check for mock user
-    if (user.id === 'mock-user' || user.email === 'demo@example.com') {
-      return 'U'
-    }
-    if (user.firstName && user.lastName) {
-      return (user.firstName[0] + user.lastName[0]).toUpperCase()
-    }
-    if (user.firstName) {
-      const name = user.firstName.trim()
-      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
-    }
-    if (user.username) {
-      const name = user.username.trim()
-      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
-    }
-    if (user.email) {
-      const name = user.email.split('@')[0]
-      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : (name[0] + name[0]).toUpperCase()
-    }
-    return 'U'
+    return 'SS'
   }
   
   const displayName = getDisplayName()
@@ -245,15 +195,9 @@ export default function DashboardHeader({ onToggleSidebar }) {
                 <Link to="/profile" role="menuitem" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#243045]" onClick={() => setIsUserDropdownOpen(false)}>
                   Profile
                 </Link>
-                <Link to="/settings" role="menuitem" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#243045]" onClick={() => setIsUserDropdownOpen(false)}>
-                  Settings
-                </Link>
-                <Link to="/subscription" role="menuitem" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#243045]" onClick={() => setIsUserDropdownOpen(false)}>
-                  Billing
-                </Link>
                 <hr className="my-1" />
                 <button role="menuitem" className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#243045]" onClick={() => { setIsUserDropdownOpen(false); logout(); navigate('/login') }}>
-                  Sign out
+                  Logout
                 </button>
               </div>
             )}

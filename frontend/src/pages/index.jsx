@@ -4,7 +4,7 @@ import { useAuthContext } from '../context/AuthContext.jsx'
 import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, loginWithMicrosoft } = useAuthContext()
+  const { login, loginWithGoogle } = useAuthContext()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -61,44 +61,64 @@ export default function LoginPage() {
     }
   }
 
-  // Load Google Identity Services
+  // Load Google Identity Services with cache-busting and clear diagnostics
   useEffect(() => {
-    const clientId = import.meta?.env?.VITE_GOOGLE_CLIENT_ID
-    if (!clientId) return
+    const clientId =
+      import.meta?.env?.VITE_GOOGLE_CLIENT_ID ||
+      (document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || '').trim() ||
+      (typeof window !== 'undefined' ? (window.__APP_CONFIG__?.googleClientId || localStorage.getItem('VITE_GOOGLE_CLIENT_ID') || '') : '')
+    if (!clientId) {
+      console.error('[Google Sign-In] Missing VITE_GOOGLE_CLIENT_ID in frontend/.env')
+      setError('Google sign-in is not configured. Missing client ID.')
+      return
+    }
     function onLoad() {
       /* global google */
-      if (!window.google) return
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: async (response) => {
-          try {
-            setLoading(true)
-            setError('')
-            setSuccessMessage('')
-            await loginWithGoogle({ idToken: response.credential })
-            // Show success message before redirecting
-            setSuccessMessage('Login successful! Redirecting to dashboard...')
-            setTimeout(() => {
-              navigate('/dashboard')
-            }, 1500)
-          } catch (e) {
-            setError(e?.message || 'Google login failed')
-            setLoading(false)
-          }
-        },
-      })
+      if (!window.google) {
+        console.error('[Google Sign-In] GIS script loaded but window.google is undefined')
+        setError('Google sign-in failed to initialize.')
+        return
+      }
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (response) => {
+            try {
+              setLoading(true)
+              setError('')
+              setSuccessMessage('')
+              await loginWithGoogle({ idToken: response.credential })
+              setSuccessMessage('Login successful! Redirecting to dashboard...')
+              setTimeout(() => {
+                navigate('/dashboard')
+              }, 1500)
+            } catch (e) {
+              console.error('[Google Sign-In] Verification error:', e)
+              setError(e?.message || 'Google login failed')
+              setLoading(false)
+            }
+          },
+        })
+      } catch (e) {
+        console.error('[Google Sign-In] initialize() failed:', e)
+        setError('Google sign-in failed to initialize.')
+      }
     }
-    if (!document.getElementById('gis')) {
-      const s = document.createElement('script')
-      s.src = 'https://accounts.google.com/gsi/client'
-      s.async = true
-      s.defer = true
-      s.id = 'gis'
-      s.onload = onLoad
-      document.head.appendChild(s)
-    } else {
-      onLoad()
+    // Remove any existing script to force reload from network
+    const existing = document.getElementById('gis')
+    if (existing) existing.remove()
+    const s = document.createElement('script')
+    s.src = `https://accounts.google.com/gsi/client?cbust=${Date.now()}`
+    s.async = true
+    s.defer = true
+    s.id = 'gis'
+    s.onload = onLoad
+    s.onerror = () => {
+      console.error('[Google Sign-In] Failed to load GIS script (network/cache)')
+      setError('Failed to load Google sign-in script. Check your connection.')
     }
+    document.head.appendChild(s)
+    // No cleanup necessary beyond script removal on next effect run
   }, [loginWithGoogle, navigate])
 
   return (
@@ -287,19 +307,39 @@ export default function LoginPage() {
                   </div>
 
                   {/* Social Login */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     <button 
                       type="button" 
                       onClick={async ()=>{ 
-                        const clientId = import.meta?.env?.VITE_GOOGLE_CLIENT_ID
-                        if (!clientId || !window.google) {
-                          setError('Google sign-in is not configured. Please contact support.')
+                        const clientId =
+                          import.meta?.env?.VITE_GOOGLE_CLIENT_ID ||
+                          (document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || '').trim() ||
+                          (typeof window !== 'undefined' ? (window.__APP_CONFIG__?.googleClientId || localStorage.getItem('VITE_GOOGLE_CLIENT_ID') || '') : '')
+                        if (!clientId) {
+                          console.error('[Google Sign-In] Missing VITE_GOOGLE_CLIENT_ID')
+                          setError('Google sign-in is not configured (missing client ID).')
+                          return
+                        }
+                        if (!window.google) {
+                          console.error('[Google Sign-In] GIS not loaded (window.google undefined)')
+                          setError('Google sign-in library not loaded. Hard refresh and try again.')
                           return
                         }
                         try {
                           setLoading(true)
                           setError('')
-                          window.google.accounts.id.prompt()
+                          window.google.accounts.id.prompt((notification) => {
+                            // Diagnostic hook for common origin/consent issues
+                            if (notification?.isNotDisplayed()) {
+                              console.error('[Google Sign-In] Prompt not displayed:', notification?.getNotDisplayedReason?.())
+                            }
+                            if (notification?.isSkippedMoment()) {
+                              console.warn('[Google Sign-In] Prompt skipped:', notification?.getSkippedReason?.())
+                            }
+                            if (notification?.isDismissedMoment()) {
+                              console.warn('[Google Sign-In] Prompt dismissed:', notification?.getDismissedReason?.())
+                            }
+                          })
                         } finally {
                           setLoading(false)
                         }
@@ -313,35 +353,6 @@ export default function LoginPage() {
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                       </svg>
                       Google
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={async ()=>{ 
-                        try{ 
-                          setLoading(true); 
-                          setError(''); 
-                          setSuccessMessage(''); 
-                          await loginWithMicrosoft(); 
-                          // Show success message before redirecting
-                          setSuccessMessage('Login successful! Redirecting to dashboard...')
-                          setTimeout(() => {
-                            navigate('/dashboard') 
-                          }, 1500)
-                        } catch(e){ 
-                          setError(e?.message||'Microsoft login failed') 
-                          setLoading(false) 
-                        } 
-                      }} 
-                      className="flex items-center justify-center gap-2 w-full h-12 rounded-xl border border-gray-300 bg-white text-gray-800 text-sm font-medium px-4 hover:bg-gray-50 transition-colors transform hover:scale-[1.02] active:scale-[0.98] shadow-sm disabled:opacity-50"
-                      disabled={loading}
-                    >
-                      <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fill="#F25022" d="M11 11H3V3h8z"/>
-                        <path fill="#7FBA00" d="M21 11h-8V3h8z"/>
-                        <path fill="#00A4EF" d="M11 21H3v-8h8z"/>
-                        <path fill="#FFB900" d="M21 21h-8v-8h8z"/>
-                      </svg>
-                      Microsoft
                     </button>
                   </div>
                 </form>
