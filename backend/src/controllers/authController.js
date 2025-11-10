@@ -552,22 +552,10 @@ const updatePreferences = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = {
-  register,
-  login,
-  getMe,
-  updateProfile,
-  changePassword,
-  logout,
-  uploadAvatar,
-  updatePreferences,
-  uploadAvatarMiddleware: upload.single('avatar')
-};
-
 // @desc    Login or register with Google ID token
 // @route   POST /api/auth/google-login
 // @access  Public
-module.exports.googleLogin = asyncHandler(async (req, res) => {
+const googleLogin = asyncHandler(async (req, res) => {
   const idToken = req.body?.idToken;
   if (!googleClient || !googleClientId) {
     return res.status(500).json({ success: false, message: 'Google login not configured' });
@@ -588,12 +576,120 @@ module.exports.googleLogin = asyncHandler(async (req, res) => {
   const user = await require('../services/userRepo').createOrGetGoogleUser({ email, firstName, lastName });
   if (!user) return res.status(500).json({ success: false, message: 'User store not available' });
 
-  // Issue JWT
+  // Check if profile completion is needed
+  // Profile completion is needed if:
+  // 1. Phone number is missing
+  // 2. Role is the default 'user' (needs to be set to one of the professional roles)
+  const needsProfileCompletion = !user.phoneNumber || user.role === 'user';
+
+  // Issue JWT (needed for profile completion endpoint)
   const token = generateToken(user.id);
 
   // Audit
   await audit({ action: 'login', entity: 'user', entityId: user.id, performedBy: user.id, ipAddress: req.ip, userAgent: req.get('User-Agent'), changes: { provider: 'google' } });
 
-  res.json({ success: true, message: 'Login successful', data: { user, token } });
+  if (needsProfileCompletion) {
+    return res.json({ 
+      success: true, 
+      message: 'Profile completion required', 
+      needsProfileCompletion: true,
+      data: { user, token } 
+    });
+  }
+
+  res.json({ success: true, message: 'Login successful', needsProfileCompletion: false, data: { user, token } });
 });
+
+// @desc    Complete Google user profile
+// @route   POST /api/auth/complete-google-profile
+// @access  Private
+const completeGoogleProfile = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+
+  const { firstName, lastName, phoneNumber, role } = req.body;
+  const userId = req.user.id;
+
+  // Validate role
+  const validRoles = ['business_user', 'company_admin', 'system_admin'];
+  if (!role || !validRoles.includes(role)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid role. Please select a valid role: business_user, company_admin, or system_admin.'
+    });
+  }
+
+  // Check if phone number is already taken by another user
+  if (phoneNumber) {
+    const taken = await isPhoneTaken(phoneNumber, userId);
+    if (taken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is already taken'
+      });
+    }
+  }
+
+  // Update user profile
+  let user;
+  try {
+    user = await updateProfileById(userId, { firstName, lastName, phoneNumber, role });
+  } catch (dbError) {
+    // Handle database errors, especially role column truncation
+    if (dbError.message && dbError.message.includes('Data truncated for column \'role\'')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database schema error: Role column needs to be updated. Please contact your administrator or run the migration script.',
+        error: 'ROLE_COLUMN_TRUNCATION',
+        hint: 'Run the migration: backend/migrations/202510150007_fix_role_column.sql or backend/fix-role-column.sql'
+      });
+    }
+    // Re-throw other database errors
+    throw dbError;
+  }
+  
+  if (!user) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update profile'
+    });
+  }
+
+  // Log profile completion
+  await audit({ 
+    action: 'update', 
+    entity: 'user', 
+    entityId: userId, 
+    changes: { firstName, lastName, phoneNumber, role, profileCompleted: true }, 
+    performedBy: userId, 
+    ipAddress: req.ip, 
+    userAgent: req.get('User-Agent') 
+  });
+
+  res.json({
+    success: true,
+    message: 'Profile completed successfully',
+    data: user
+  });
+});
+
+module.exports = {
+  register,
+  login,
+  getMe,
+  updateProfile,
+  changePassword,
+  logout,
+  googleLogin,
+  completeGoogleProfile,
+  uploadAvatar,
+  updatePreferences,
+  uploadAvatarMiddleware: upload.single('avatar')
+};
 

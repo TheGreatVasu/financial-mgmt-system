@@ -4,6 +4,7 @@ import { Suspense, lazy } from 'react'
 import Dashboard from './pages/dashboard'
 import LoginPage from './pages/index'
 import SignupPage from './pages/signup'
+import GoogleProfileCompletionPage from './pages/google-profile-completion'
 // Removed public marketing pages to ensure only login is visible before auth
 const PaymentsPage = lazy(() => import('./pages/payments'))
 const NotFoundPage = lazy(() => import('./pages/not-found'))
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/loading" element={<LoadingScreen />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/google-profile-completion" element={<GoogleProfileCompletionPage />} />
 
         <Route
           path="/dashboard"

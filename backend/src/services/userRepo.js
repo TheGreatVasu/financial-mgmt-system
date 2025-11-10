@@ -218,7 +218,7 @@ async function createOrGetGoogleUser({ email, firstName, lastName }) {
   return await findById(id);
 }
 
-async function updateProfileById(id, { firstName, lastName, email, phoneNumber, avatarUrl }) {
+async function updateProfileById(id, { firstName, lastName, email, phoneNumber, avatarUrl, role }) {
   const db = getDb();
   if (!db) return null;
   const updateData = {
@@ -229,9 +229,28 @@ async function updateProfileById(id, { firstName, lastName, email, phoneNumber, 
   if (email !== undefined) updateData.email = email;
   if (phoneNumber !== undefined) updateData.phone_number = phoneNumber;
   if (avatarUrl !== undefined) updateData.avatar_url = avatarUrl;
+  if (role !== undefined) {
+    const validRoles = ['admin', 'user', 'company', 'business_user', 'company_admin', 'system_admin'];
+    if (validRoles.includes(role)) {
+      updateData.role = role;
+    } else {
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+    }
+  }
   
-  await db('users').where({ id }).update(updateData);
-  return await findById(id);
+  try {
+    await db('users').where({ id }).update(updateData);
+    return await findById(id);
+  } catch (error) {
+    // Re-throw with more context for role column issues
+    if (error.message && error.message.includes('Data truncated for column \'role\'')) {
+      const dbError = new Error('Database schema error: Role column is too small. Please run the migration to fix it.');
+      dbError.originalError = error;
+      dbError.code = 'ROLE_COLUMN_TRUNCATION';
+      throw dbError;
+    }
+    throw error;
+  }
 }
 
 async function updateUserPreferences(id, preferences) {

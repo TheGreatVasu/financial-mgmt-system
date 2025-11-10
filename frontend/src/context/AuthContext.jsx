@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
   }
 
   async function loginWithGoogle(idToken) {
-    const { user: u, token: t } = await apiGoogleLogin(idToken)
+    const { user: u, token: t, needsProfileCompletion } = await apiGoogleLogin(idToken)
     // Ensure we're not setting a mock user/token
     if (t === 'mock-token' || u?.id === 'mock-user') {
       throw new Error('Google login failed: Received mock credentials. Please check your connection and try again.')
@@ -99,7 +99,7 @@ export function AuthProvider({ children }) {
     setUser(u)
     setToken(t)
     localStorage.setItem('fms_token', t)
-    return u
+    return { user: u, needsProfileCompletion: needsProfileCompletion || false }
   }
 
   async function loginWithMicrosoft() {

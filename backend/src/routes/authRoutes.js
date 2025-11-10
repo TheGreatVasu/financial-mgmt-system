@@ -8,6 +8,7 @@ const {
   changePassword,
   logout,
   googleLogin,
+  completeGoogleProfile,
   uploadAvatar,
   updatePreferences,
   uploadAvatarMiddleware
@@ -100,10 +101,38 @@ const changePasswordValidation = [
     .withMessage('New password must be at least 6 characters long')
 ];
 
+const completeGoogleProfileValidation = [
+  body('firstName')
+    .notEmpty()
+    .withMessage('First name is required')
+    .isLength({ min: 1, max: 50 })
+    .withMessage('First name must be between 1 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('First name can only contain letters and spaces'),
+  body('lastName')
+    .notEmpty()
+    .withMessage('Last name is required')
+    .isLength({ min: 1, max: 50 })
+    .withMessage('Last name must be between 1 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('Last name can only contain letters and spaces'),
+  body('phoneNumber')
+    .notEmpty()
+    .withMessage('Phone number is required')
+    .matches(/^\+?[1-9]\d{1,14}$/)
+    .withMessage('Phone number must be a valid international format (with country code)'),
+  body('role')
+    .notEmpty()
+    .withMessage('Role is required')
+    .isIn(['business_user', 'company_admin', 'system_admin'])
+    .withMessage('Role must be one of: business_user, company_admin, or system_admin')
+];
+
 // Routes
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.post('/google-login', googleLogin);
+router.post('/complete-google-profile', authMiddleware, completeGoogleProfileValidation, completeGoogleProfile);
 router.get('/me', authMiddleware, getMe);
 router.put('/profile', authMiddleware, updateProfileValidation, updateProfile);
 router.put('/change-password', authMiddleware, changePasswordValidation, changePassword);

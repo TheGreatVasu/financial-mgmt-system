@@ -318,7 +318,28 @@ export async function googleLogin(idToken) {
   const api = createApiClient()
   const { data } = await api.post('/auth/google-login', { idToken })
   if (!data?.success) throw new Error(data?.message || 'Google login failed')
-  return { user: data.data.user, token: data.data.token }
+  return { 
+    user: data.data.user, 
+    token: data.data.token,
+    needsProfileCompletion: data.needsProfileCompletion || false
+  }
+}
+
+export async function completeGoogleProfile(token, { firstName, lastName, phoneNumber, role }) {
+  const api = createApiClient(token)
+  try {
+    const { data } = await api.post('/auth/complete-google-profile', {
+      firstName,
+      lastName,
+      phoneNumber,
+      role
+    })
+    if (!data?.success) throw new Error(data?.message || 'Failed to complete profile')
+    return data.data
+  } catch (err) {
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to complete profile'
+    throw new Error(errorMessage)
+  }
 }
 
 export async function microsoftLogin() {
