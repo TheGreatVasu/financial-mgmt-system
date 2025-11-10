@@ -125,12 +125,21 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function refresh() {
+  async function refresh(forceRefresh = false) {
     if (!token) return
     try {
+      // Clear cache if force refresh is requested
+      if (forceRefresh) {
+        clearUserCache()
+      }
+      
       const me = await getCurrentUser(token)
       if (me) {
+        // Verify the user ID matches the token's user ID
         setUser(me)
+        console.log('✅ User refreshed:', { id: me.id, email: me.email })
+      } else {
+        console.warn('⚠️ refresh: getCurrentUser returned null')
       }
       // If me is null, keep existing user state (might be temporary network issue)
     } catch (e) {
@@ -143,9 +152,11 @@ export function AuthProvider({ children }) {
       // Only clear user if it's definitely an auth error
       const isAuthError = e?.response?.status === 401 || e?.response?.status === 403
       if (isAuthError) {
+        console.warn('Auth error during refresh, clearing session')
         setUser(null)
         setToken(null)
         localStorage.removeItem('fms_token')
+        clearUserCache()
       }
       // For other errors, keep existing user state
     }

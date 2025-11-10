@@ -54,15 +54,28 @@ export default function DashboardHeader({ onToggleSidebar }) {
     }
   }, [user])
   
-  // Calculate display name - Show "Somil Shivhare" as per requirements
+  // Calculate display name from actual user data
   const getDisplayName = () => {
-    // Per requirements, show "Somil Shivhare" in the user dropdown
-    return 'Somil Shivhare'
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName} ${user.lastName}`
+    }
+    if (user?.email) {
+      return user.email.split('@')[0]
+    }
+    return 'User'
   }
   
-  // Calculate initials (always 2 characters) - "SS" for Somil Shivhare
+  // Calculate initials from actual user data
   const getInitials = () => {
-    return 'SS'
+    if (user?.firstName && user?.lastName) {
+      const f = user.firstName[0] || ''
+      const l = user.lastName[0] || ''
+      return (f + l).toUpperCase()
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return 'U'
   }
   
   const displayName = getDisplayName()

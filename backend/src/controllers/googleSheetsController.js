@@ -5,12 +5,17 @@ const { getSheetValues, updateSheetValues } = require('../services/googleSheetsS
 const getValues = asyncHandler(async (req, res) => {
 	const spreadsheetId = (req.query.spreadsheetId || '').trim();
 	const range = (req.query.range || '').trim();
+	const userId = req.user?.id;
+
+	if (!userId) {
+		return res.status(401).json({ success: false, message: 'Authentication required' });
+	}
 
 	if (!spreadsheetId || !range) {
 		return res.status(400).json({ success: false, message: 'spreadsheetId and range are required' });
 	}
 
-	const data = await getSheetValues(spreadsheetId, range);
+	const data = await getSheetValues(userId, spreadsheetId, range);
 	return res.json({ success: true, data });
 });
 
@@ -21,6 +26,11 @@ const putValues = asyncHandler(async (req, res) => {
 	const range = (req.body.range || '').trim();
 	const values = req.body.values;
 	const valueInputOption = req.body.valueInputOption || 'RAW';
+	const userId = req.user?.id;
+
+	if (!userId) {
+		return res.status(401).json({ success: false, message: 'Authentication required' });
+	}
 
 	if (!spreadsheetId || !range) {
 		return res.status(400).json({ success: false, message: 'spreadsheetId and range are required' });
@@ -29,7 +39,7 @@ const putValues = asyncHandler(async (req, res) => {
 		return res.status(400).json({ success: false, message: 'values must be an array of arrays' });
 	}
 
-	const data = await updateSheetValues(spreadsheetId, range, values, valueInputOption);
+	const data = await updateSheetValues(userId, spreadsheetId, range, values, valueInputOption);
 	return res.json({ success: true, data });
 });
 

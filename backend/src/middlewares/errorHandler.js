@@ -4,8 +4,36 @@ const errorHandler = (err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
 
-  // Log error
+  // Log error with full details
   logger.error(err);
+  console.error('❌ Error Handler:', {
+    message: err.message,
+    code: err.code,
+    sqlState: err.sqlState,
+    sqlMessage: err.sqlMessage,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
+  });
+
+  // MySQL/Database errors
+  if (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE') {
+    const message = 'Database schema error. Please run migrations: npm run db:migrate';
+    error = { message, statusCode: 500, code: err.code };
+  }
+
+  // MySQL constraint errors
+  if (err.code === 'ER_DUP_ENTRY') {
+    const field = err.sqlMessage?.match(/for key '(.+?)'/)?.[1] || 'field';
+    const message = `${field} already exists`;
+    error = { message, statusCode: 400 };
+  }
+
+  // MySQL data truncation (e.g., role column too small)
+  if (err.code === 'WARN_DATA_TRUNCATED' || (err.message && err.message.includes('Data truncated'))) {
+    const message = 'Database schema error. Please run migrations to update the schema.';
+    error = { message, statusCode: 500, code: 'SCHEMA_ERROR' };
+  }
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
@@ -40,7 +68,15 @@ const errorHandler = (err, req, res, next) => {
   res.status(error.statusCode || 500).json({
     success: false,
     message: error.message || 'Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(error.code && { code: error.code }),
+    ...(process.env.NODE_ENV === 'development' && { 
+      stack: err.stack,
+      details: {
+        code: err.code,
+        sqlState: err.sqlState,
+        sqlMessage: err.sqlMessage
+      }
+    })
   });
 };
 

@@ -155,19 +155,28 @@ export default function GoogleProfileCompletionPage() {
       const formattedCountryCode = countryCode.startsWith('+') ? countryCode : `+${countryCode}`
       const fullPhoneNumber = `${formattedCountryCode}${phoneNumber.trim()}`
       
-      await completeGoogleProfile(token, {
+      const updatedUser = await completeGoogleProfile(token, {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phoneNumber: fullPhoneNumber,
         role
       })
 
-      // Refresh user data
-      await refresh()
+      // Verify we got the updated user data
+      if (updatedUser && updatedUser.id) {
+        console.log('✅ Profile completed, updated user:', { id: updatedUser.id, email: updatedUser.email })
+      }
+
+      // Force refresh user data from server (bypassing cache)
+      // This ensures we have the latest user data with updated profile
+      await refresh(true)
+
+      // Small delay to ensure state is updated before navigation
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       setSuccessMessage('Profile completed successfully! Logging you in...')
       setTimeout(() => {
-        navigate('/dashboard')
+        navigate('/dashboard', { replace: true })
       }, 1500)
     } catch (err) {
       const errorMsg = err?.message || 'Failed to complete profile'

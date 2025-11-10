@@ -133,11 +133,20 @@ export async function getCurrentUser(token) {
     }
     
     const user = data.data
+    
+    // Verify user data is valid
+    if (!user || !user.id) {
+      console.error('❌ getCurrentUser: Invalid user data received')
+      userCache = null
+      cacheTimestamp = 0
+      throw new Error('Invalid user data received from server')
+    }
+    
     // Update cache
     userCache = user
     cacheTimestamp = now
     
-    console.log('✅ getCurrentUser success:', { userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName })
+    console.log('✅ getCurrentUser success:', { userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role })
     
     return user
   } catch (err) {
@@ -316,12 +325,47 @@ export async function changePasswordApi(token, { currentPassword, newPassword })
 
 export async function googleLogin(idToken) {
   const api = createApiClient()
-  const { data } = await api.post('/auth/google-login', { idToken })
-  if (!data?.success) throw new Error(data?.message || 'Google login failed')
-  return { 
-    user: data.data.user, 
-    token: data.data.token,
-    needsProfileCompletion: data.needsProfileCompletion || false
+  try {
+    const { data } = await api.post('/auth/google-login', { idToken })
+    if (!data?.success) {
+      const errorMsg = data?.message || 'Google login failed'
+      console.error('❌ Google login failed:', errorMsg)
+      throw new Error(errorMsg)
+    }
+    return { 
+      user: data.data.user, 
+      token: data.data.token,
+      needsProfileCompletion: data.needsProfileCompletion || false
+    }
+  } catch (err) {
+    // Enhanced error handling
+    const status = err.response?.status
+    const errorData = err.response?.data
+    
+    let errorMessage = 'Google login failed. Please try again.'
+    
+    if (status === 500) {
+      errorMessage = errorData?.message || 'Server error during Google login. Please contact support.'
+      if (errorData?.code === 'SCHEMA_ERROR' || errorData?.code === 'ER_BAD_FIELD_ERROR') {
+        errorMessage = 'Database configuration error. Please contact support.'
+      }
+    } else if (status === 400) {
+      errorMessage = errorData?.message || 'Invalid Google account. Please try again.'
+    } else if (status === 503) {
+      errorMessage = errorData?.message || 'Database connection unavailable. Please try again later.'
+    } else if (errorData?.message) {
+      errorMessage = errorData.message
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+    
+    console.error('Google login error:', {
+      status,
+      message: errorMessage,
+      details: errorData
+    })
+    
+    throw new Error(errorMessage)
   }
 }
 
@@ -335,6 +379,10 @@ export async function completeGoogleProfile(token, { firstName, lastName, phoneN
       role
     })
     if (!data?.success) throw new Error(data?.message || 'Failed to complete profile')
+    
+    // Clear user cache after profile completion to ensure fresh data
+    clearUserCache()
+    
     return data.data
   } catch (err) {
     const errorMessage = err.response?.data?.message || err.message || 'Failed to complete profile'

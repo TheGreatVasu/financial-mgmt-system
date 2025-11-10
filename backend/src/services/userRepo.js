@@ -111,7 +111,13 @@ async function findById(id) {
 async function findByEmail(email) {
   const db = getDb();
   if (!db) return null;
-  return db('users').select('id','username','email','first_name as firstName','last_name as lastName','role','is_active as isActive','last_login as lastLogin').where({ email }).first();
+  // Use case-insensitive email matching like findByEmailWithPassword
+  const normalizedEmail = email?.toLowerCase().trim();
+  if (!normalizedEmail) return null;
+  return db('users')
+    .select('id','username','email','first_name as firstName','last_name as lastName','role','is_active as isActive','last_login as lastLogin')
+    .whereRaw('LOWER(email) = ?', [normalizedEmail])
+    .first();
 }
 
 async function isEmailTaken(email, excludeId) {
@@ -200,22 +206,58 @@ async function createUser({ username, email, password, firstName, lastName, phon
 
 async function createOrGetGoogleUser({ email, firstName, lastName }) {
   const db = getDb();
-  if (!db) return null;
-  const existing = await findByEmail(email);
-  if (existing) return existing;
-  const username = email.split('@')[0].slice(0, 30);
-  const [id] = await db('users').insert({
-    username,
-    email,
-    password_hash: '',
-    first_name: firstName || '',
-    last_name: lastName || '',
-    role: 'user',
-    is_active: 1,
-    created_at: db.fn.now(),
-    updated_at: db.fn.now()
-  });
-  return await findById(id);
+  if (!db) {
+    console.error('❌ createOrGetGoogleUser: Database not available');
+    return null;
+  }
+  
+  // Normalize email for lookup
+  const normalizedEmail = email?.toLowerCase().trim();
+  if (!normalizedEmail) {
+    console.error('❌ createOrGetGoogleUser: Invalid email provided');
+    return null;
+  }
+  
+  // Check if user already exists (case-insensitive)
+  const existing = await db('users')
+    .whereRaw('LOWER(email) = ?', [normalizedEmail])
+    .first();
+  
+  if (existing) {
+    console.log(`✅ Google user found: ${normalizedEmail} (ID: ${existing.id})`);
+    return await findById(existing.id);
+  }
+  
+  // Generate username from email
+  const username = normalizedEmail.split('@')[0].slice(0, 30).replace(/[^a-zA-Z0-9_]/g, '_');
+  
+  try {
+    console.log(`Creating new Google user: email=${normalizedEmail}, username=${username}`);
+    
+    const [id] = await db('users').insert({
+      username,
+      email: normalizedEmail,
+      password_hash: null, // NULL for Google OAuth users (no password)
+      first_name: firstName || '',
+      last_name: lastName || '',
+      role: 'user',
+      is_active: 1,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now()
+    });
+    
+    console.log(`✅ Google user created: ${normalizedEmail} (ID: ${id})`);
+    return await findById(id);
+  } catch (error) {
+    console.error('❌ Error creating Google user:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
+    throw error;
+  }
 }
 
 async function updateProfileById(id, { firstName, lastName, email, phoneNumber, avatarUrl, role }) {
@@ -250,6 +292,49 @@ async function updateProfileById(id, { firstName, lastName, email, phoneNumber, 
       throw dbError;
     }
     throw error;
+  }
+}
+
+async function updateGoogleTokens(userId, { accessToken, refreshToken, expiresAt }) {
+  const db = getDb();
+  if (!db) return null;
+  
+  const updateData = {
+    updated_at: db.fn.now()
+  };
+  if (accessToken !== undefined) updateData.google_access_token = accessToken;
+  if (refreshToken !== undefined) updateData.google_refresh_token = refreshToken;
+  if (expiresAt !== undefined) updateData.google_token_expires_at = expiresAt;
+  
+  try {
+    await db('users').where({ id: userId }).update(updateData);
+    return true;
+  } catch (error) {
+    console.error('Error updating Google tokens:', error);
+    throw error;
+  }
+}
+
+async function getGoogleTokens(userId) {
+  const db = getDb();
+  if (!db) return null;
+  
+  try {
+    const user = await db('users')
+      .select('google_access_token', 'google_refresh_token', 'google_token_expires_at')
+      .where({ id: userId })
+      .first();
+    
+    if (!user) return null;
+    
+    return {
+      accessToken: user.google_access_token,
+      refreshToken: user.google_refresh_token,
+      expiresAt: user.google_token_expires_at
+    };
+  } catch (error) {
+    console.error('Error getting Google tokens:', error);
+    return null;
   }
 }
 

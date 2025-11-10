@@ -29,9 +29,35 @@ const generateToken = (id) => {
   });
 };
 
-// Google OAuth client (ID from env)
-const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
-const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+// Google OAuth client (ID and Secret from env)
+// Load from env at module load time
+let googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+let googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+// For ID token verification, we only need Client ID
+// Client Secret is stored for potential future use (server-side OAuth flows)
+let googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+
+// Function to reinitialize Google client (useful if env changes)
+function initializeGoogleClient() {
+  googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+  googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+  googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+  
+  if (googleClientId) {
+    console.log('✅ Google OAuth client initialized');
+    console.log(`   Client ID: ${googleClientId.substring(0, 20)}...${googleClientId.substring(googleClientId.length - 10)}`);
+    if (googleClientSecret) {
+      console.log('   Client Secret: ✅ Configured');
+    } else {
+      console.log('   Client Secret: ⚠️  Not set (optional for ID token verification)');
+    }
+  } else {
+    console.warn('⚠️  Google OAuth client not initialized: GOOGLE_CLIENT_ID not set');
+  }
+}
+
+// Initialize on module load
+initializeGoogleClient();
 
 // Configure multer for avatar uploads
 const uploadDir = path.join(__dirname, '../../uploads/avatars');
@@ -223,11 +249,13 @@ const login = asyncHandler(async (req, res) => {
   // User's role is stored in database and used for authorization
 
   // Validate password hash exists
+  // Google OAuth users have NULL password_hash, so they must use Google login
   if (!found.password_hash) {
-    console.error(`Login attempt failed: No password hash for user: ${found.id}`);
-    return res.status(500).json({
+    console.log(`Login attempt with password for Google OAuth user: ${normalizedEmail} (ID: ${found.id})`);
+    return res.status(401).json({
       success: false,
-      message: 'Account configuration error. Please contact support.'
+      message: 'This account was created with Google. Please use "Sign in with Google" to log in.',
+      code: 'GOOGLE_OAUTH_ACCOUNT'
     });
   }
 
@@ -556,48 +584,167 @@ const updatePreferences = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/google-login
 // @access  Public
 const googleLogin = asyncHandler(async (req, res) => {
-  const idToken = req.body?.idToken;
-  if (!googleClient || !googleClientId) {
-    return res.status(500).json({ success: false, message: 'Google login not configured' });
-  }
-  if (!idToken) {
-    return res.status(400).json({ success: false, message: 'Missing idToken' });
-  }
-  // Verify token
-  const ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientId });
-  const payload = ticket.getPayload();
-  const email = payload?.email;
-  if (!email) return res.status(400).json({ success: false, message: 'Google token invalid: no email' });
-  const names = (payload?.name || '').split(' ');
-  const firstName = payload?.given_name || names[0] || '';
-  const lastName = payload?.family_name || names.slice(1).join(' ') || '';
+  try {
+    const idToken = req.body?.idToken;
+    
+    if (!googleClient || !googleClientId) {
+      console.error('Google login not configured: missing GOOGLE_CLIENT_ID');
+      console.error('Environment check:', {
+        hasGoogleClient: !!googleClient,
+        hasGoogleClientId: !!googleClientId,
+        googleClientIdValue: googleClientId || 'EMPTY',
+        envCheck: process.env.GOOGLE_CLIENT_ID ? 'SET' : 'NOT SET'
+      });
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Google login not configured. Please ensure GOOGLE_CLIENT_ID is set in backend/.env file.',
+        code: 'GOOGLE_NOT_CONFIGURED'
+      });
+    }
+    
+    if (!idToken) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing idToken. Please try signing in again.' 
+      });
+    }
+    
+    // Verify token with Google
+    let ticket, payload;
+    try {
+      ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientId });
+      payload = ticket.getPayload();
+    } catch (verifyError) {
+      console.error('Google token verification failed:', verifyError);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid Google token. Please try signing in again.' 
+      });
+    }
+    
+    const email = payload?.email;
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Google account email not found. Please use a different account.' 
+      });
+    }
+    
+    const names = (payload?.name || '').split(' ');
+    const firstName = payload?.given_name || names[0] || '';
+    const lastName = payload?.family_name || names.slice(1).join(' ') || '';
 
-  // Upsert user
-  const user = await require('../services/userRepo').createOrGetGoogleUser({ email, firstName, lastName });
-  if (!user) return res.status(500).json({ success: false, message: 'User store not available' });
+    // Check database connection
+    const { hasDb } = require('../services/userRepo');
+    if (!hasDb()) {
+      console.error('Google login failed: Database not connected');
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection unavailable. Please contact support.'
+      });
+    }
 
-  // Check if profile completion is needed
-  // Profile completion is needed if:
-  // 1. Phone number is missing
-  // 2. Role is the default 'user' (needs to be set to one of the professional roles)
-  const needsProfileCompletion = !user.phoneNumber || user.role === 'user';
+    // Upsert user
+    let user;
+    try {
+      user = await require('../services/userRepo').createOrGetGoogleUser({ email, firstName, lastName });
+    } catch (userError) {
+      console.error('Error creating/getting Google user:', userError);
+      // Check if it's a database schema issue
+      if (userError.message && userError.message.includes('password_hash')) {
+        return res.status(500).json({
+          success: false,
+          message: 'Database configuration error. Please run migrations to update the schema.',
+          error: 'SCHEMA_ERROR',
+          hint: 'Run: npm run db:migrate in the backend directory'
+        });
+      }
+      throw userError;
+    }
+    
+    if (!user) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create or retrieve user account. Please try again.' 
+      });
+    }
 
-  // Issue JWT (needed for profile completion endpoint)
-  const token = generateToken(user.id);
+    // Check if profile completion is needed
+    // Profile completion is needed if:
+    // 1. Phone number is missing
+    // 2. Role is the default 'user' (needs to be set to one of the professional roles)
+    const needsProfileCompletion = !user.phoneNumber || user.role === 'user';
 
-  // Audit
-  await audit({ action: 'login', entity: 'user', entityId: user.id, performedBy: user.id, ipAddress: req.ip, userAgent: req.get('User-Agent'), changes: { provider: 'google' } });
+    // Issue JWT (needed for profile completion endpoint)
+    let token;
+    try {
+      token = generateToken(user.id);
+    } catch (tokenError) {
+      console.error('Token generation error:', tokenError);
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication error. Please try again.'
+      });
+    }
 
-  if (needsProfileCompletion) {
-    return res.json({ 
+    // Update last login
+    try {
+      await updateLastLogin(user.id);
+    } catch (updateError) {
+      console.warn('Failed to update last login:', updateError);
+    }
+
+    // Create or update session
+    try {
+      await createOrUpdateSession(user.id, token, req);
+      
+      // Broadcast session update via Socket.io
+      const io = getIOInstance();
+      if (io) {
+        const { getUserSessions } = require('../services/sessionRepo');
+        const sessions = await getUserSessions(user.id);
+        io.to(`user:${user.id}`).emit('sessions:update', sessions);
+      }
+    } catch (sessionError) {
+      console.warn('Failed to create session:', sessionError);
+    }
+
+    // Audit
+    try {
+      await audit({ 
+        action: 'login', 
+        entity: 'user', 
+        entityId: user.id, 
+        performedBy: user.id, 
+        ipAddress: req.ip, 
+        userAgent: req.get('User-Agent'), 
+        changes: { provider: 'google' } 
+      });
+    } catch (auditError) {
+      console.warn('Failed to audit login:', auditError);
+    }
+
+    console.log(`✅ Google login successful: ${user.email} (ID: ${user.id})`);
+
+    if (needsProfileCompletion) {
+      return res.json({ 
+        success: true, 
+        message: 'Profile completion required', 
+        needsProfileCompletion: true,
+        data: { user, token } 
+      });
+    }
+
+    res.json({ 
       success: true, 
-      message: 'Profile completion required', 
-      needsProfileCompletion: true,
+      message: 'Login successful', 
+      needsProfileCompletion: false, 
       data: { user, token } 
     });
+  } catch (error) {
+    console.error('Google login error:', error);
+    throw error; // Let asyncHandler handle it
   }
-
-  res.json({ success: true, message: 'Login successful', needsProfileCompletion: false, data: { user, token } });
 });
 
 // @desc    Complete Google user profile
@@ -643,11 +790,11 @@ const completeGoogleProfile = asyncHandler(async (req, res) => {
   } catch (dbError) {
     // Handle database errors, especially role column truncation
     if (dbError.message && dbError.message.includes('Data truncated for column \'role\'')) {
+      console.error('Database error updating role:', dbError);
       return res.status(500).json({
         success: false,
-        message: 'Database schema error: Role column needs to be updated. Please contact your administrator or run the migration script.',
-        error: 'ROLE_COLUMN_TRUNCATION',
-        hint: 'Run the migration: backend/migrations/202510150007_fix_role_column.sql or backend/fix-role-column.sql'
+        message: 'Database schema error: Role column is too small. The migration has been applied. Please refresh and try again.',
+        error: 'ROLE_COLUMN_TRUNCATION'
       });
     }
     // Re-throw other database errors
@@ -672,11 +819,70 @@ const completeGoogleProfile = asyncHandler(async (req, res) => {
     userAgent: req.get('User-Agent') 
   });
 
+  // Verify the user was updated correctly and matches the token user
+  const finalUser = await findById(userId);
+  if (!finalUser) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve updated user data'
+    });
+  }
+
+  // Verify user ID matches the token (security check)
+  if (finalUser.id !== userId) {
+    console.error(`❌ User ID mismatch: token user ${userId} vs returned user ${finalUser.id}`);
+    return res.status(500).json({
+      success: false,
+      message: 'User data mismatch. Please try again.'
+    });
+  }
+
+  console.log(`✅ Profile completed for user: ${finalUser.email} (ID: ${finalUser.id}, Role: ${finalUser.role})`);
+
   res.json({
     success: true,
     message: 'Profile completed successfully',
-    data: user
+    data: finalUser
   });
+});
+
+// @desc    Store Google OAuth tokens for Sheets access
+// @route   POST /api/auth/store-google-tokens
+// @access  Private
+const storeGoogleTokens = asyncHandler(async (req, res) => {
+  const { accessToken, refreshToken, expiresIn } = req.body;
+  const userId = req.user.id;
+
+  if (!accessToken) {
+    return res.status(400).json({
+      success: false,
+      message: 'Access token is required'
+    });
+  }
+
+  // Calculate expiration time (expiresIn is in seconds)
+  const expiresAt = expiresIn 
+    ? new Date(Date.now() + expiresIn * 1000)
+    : new Date(Date.now() + 3600 * 1000); // Default 1 hour
+
+  try {
+    const { updateGoogleTokens } = require('../services/userRepo');
+    await updateGoogleTokens(userId, {
+      accessToken,
+      refreshToken: refreshToken || null,
+      expiresAt
+    });
+
+    console.log(`✅ Google tokens stored for user: ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Google tokens stored successfully'
+    });
+  } catch (error) {
+    console.error('Error storing Google tokens:', error);
+    throw error;
+  }
 });
 
 module.exports = {
@@ -690,6 +896,7 @@ module.exports = {
   completeGoogleProfile,
   uploadAvatar,
   updatePreferences,
+  storeGoogleTokens,
   uploadAvatarMiddleware: upload.single('avatar')
 };
 

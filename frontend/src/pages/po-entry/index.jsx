@@ -1,515 +1,399 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useMemo, useCallback } from 'react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
-import { LogIn, RefreshCw, Save, Loader2 } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
 
-// Google OAuth Configuration
-// Note: Client Secret is not needed for client-side OAuth (it's only for server-side)
-const CLIENT_ID = import.meta?.env?.VITE_GOOGLE_CLIENT_ID || '314260239831-ccsh2mg3bdbgijhtv51lue9ccsjdl4ct.apps.googleusercontent.com'
-const DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
-
-// Feature flag: use server-side service account to access Sheets (no Google login popups)
-const USE_SERVER_SHEETS = (import.meta?.env?.VITE_GOOGLE_SHEETS_VIA_SERVER || '').toString() === 'true'
-
-// Default spreadsheet ID - user can change this (can be provided via env)
-const DEFAULT_SPREADSHEET_ID = import.meta?.env?.VITE_DEFAULT_SHEET_ID || 'YOUR_SPREADSHEET_ID_HERE'
-const DEFAULT_RANGE = 'Sheet1!A1:Z100'
-
-import { useAuthContext } from '../../context/AuthContext.jsx'
-import { createGoogleSheetsService } from '../../services/googleSheetsService'
+// Memoized column letter calculation
+const getColumnLetter = (colIndex) => {
+  let result = ''
+  let index = colIndex
+  while (index >= 0) {
+    result = String.fromCharCode(65 + (index % 26)) + result
+    index = Math.floor(index / 26) - 1
+  }
+  return result
+}
 
 export default function POEntry() {
-  const { token } = useAuthContext()
-  const [isSignedIn, setIsSignedIn] = useState(USE_SERVER_SHEETS ? true : false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isFetching, setIsFetching] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [sheetData, setSheetData] = useState([])
-  const [spreadsheetId, setSpreadsheetId] = useState(DEFAULT_SPREADSHEET_ID)
-  const [range, setRange] = useState(DEFAULT_RANGE)
-  const [gapiLoaded, setGapiLoaded] = useState(false)
-  const [updateRange, setUpdateRange] = useState('Sheet1!A2:B2')
-  const [updateValues, setUpdateValues] = useState(['Somil', '5000'])
-  const gapiRef = useRef(null)
+  const [excelData, setExcelData] = useState([])
+  const [workbook, setWorkbook] = useState(null)
+  const [activeSheet, setActiveSheet] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [editingCell, setEditingCell] = useState(null) // { row, col }
+  const fileInputRef = useRef(null)
 
-  // Load Google API script
-  useEffect(() => {
-    if (USE_SERVER_SHEETS) {
-      // In server mode, fetch immediately if spreadsheet is configured
-      setIsLoading(false)
-      return
-    }
-    const loadGapi = () => {
-      // Check if gapi is already loaded
-      if (window.gapi) {
-        setGapiLoaded(true)
-        initializeGapi()
-        return
-      }
+  const handleFile = useCallback((e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
 
-      // Load the Google API script
-      const script = document.createElement('script')
-      script.src = 'https://apis.google.com/js/api.js'
-      script.async = true
-      script.defer = true
-      script.onload = () => {
-        window.gapi.load('client:auth2', () => {
-          setGapiLoaded(true)
-          initializeGapi()
+    setIsLoading(true)
+    const reader = new FileReader()
+
+    reader.onload = (event) => {
+      try {
+        if (!event.target?.result) {
+          throw new Error('File read result is empty')
+        }
+
+        const data = new Uint8Array(event.target.result)
+        const wb = XLSX.read(data, { type: 'array' })
+        
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          throw new Error('No sheets found in the Excel file')
+        }
+        
+        setWorkbook(wb)
+        const sheetName = wb.SheetNames[0]
+        setActiveSheet(sheetName)
+        
+        const sheetData = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { 
+          header: 1, 
+          defval: '',
+          raw: false 
         })
-      }
-      script.onerror = () => {
-        toast.error('Failed to load Google API. Please check your internet connection.')
+        
+        setExcelData(sheetData)
+        toast.success(`Excel file loaded! ${sheetData.length} rows`)
+      } catch (error) {
+        console.error('Error reading file:', error)
+        toast.error(`Failed to read Excel file: ${error.message || 'Unknown error'}`)
+        setWorkbook(null)
+        setExcelData([])
+      } finally {
         setIsLoading(false)
       }
-      document.body.appendChild(script)
-
-      return () => {
-        // Cleanup: remove script if component unmounts
-        const existingScript = document.querySelector('script[src="https://apis.google.com/js/api.js"]')
-        if (existingScript) {
-          existingScript.remove()
-        }
-      }
     }
 
-    loadGapi()
+    reader.onerror = () => {
+      toast.error('Error reading file. Please try again.')
+      setIsLoading(false)
+      setWorkbook(null)
+      setExcelData([])
+    }
+
+    reader.readAsArrayBuffer(file)
   }, [])
 
-  // Initialize Google API
-  const initializeGapi = async () => {
-    try {
-      await window.gapi.client.init({
-        clientId: CLIENT_ID,
-        discoveryDocs: DISCOVERY_DOCS,
-        scope: SCOPES
-      })
-
-      gapiRef.current = window.gapi
-
-      // Check if user is already signed in
-      const authInstance = window.gapi.auth2.getAuthInstance()
-      const isSignedIn = authInstance.isSignedIn.get()
-      setIsSignedIn(isSignedIn)
-    } catch (error) {
-      console.error('Error initializing Google API:', error)
-      toast.error('Failed to initialize Google API. Please refresh the page.')
-    } finally {
-      setIsLoading(false)
+  const handleSheetChange = useCallback((e) => {
+    const sheetName = e.target.value
+    setActiveSheet(sheetName)
+    
+    if (workbook?.Sheets[sheetName]) {
+      const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' })
+      setExcelData(sheetData)
     }
-  }
+  }, [workbook])
 
-  // Handle Google Sign In
-  const handleSignIn = async () => {
-    try {
-      setIsLoading(true)
-      const authInstance = window.gapi.auth2.getAuthInstance()
-      const user = await authInstance.signIn()
+  // Update cell value in both state and workbook
+  const updateCellValue = useCallback((rowIndex, colIndex, value) => {
+    // Update state
+    setExcelData(prev => {
+      const newData = [...prev]
+      if (!newData[rowIndex]) {
+        newData[rowIndex] = []
+      }
+      newData[rowIndex] = [...newData[rowIndex]]
+      newData[rowIndex][colIndex] = value
+      return newData
+    })
+
+    // Update workbook
+    if (workbook && activeSheet) {
+      const ws = workbook.Sheets[activeSheet]
+      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })
       
-      if (user) {
-        setIsSignedIn(true)
-        toast.success('Successfully signed in to Google!')
-      }
-    } catch (error) {
-      console.error('Error signing in:', error)
-      if (error.error === 'popup_closed_by_user') {
-        toast.error('Sign-in was cancelled')
+      if (value === '' || value === null) {
+        // Remove cell if empty
+        delete ws[cellAddress]
       } else {
-        toast.error('Failed to sign in. Please try again.')
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Handle Google Sign Out
-  const handleSignOut = async () => {
-    try {
-      const authInstance = window.gapi.auth2.getAuthInstance()
-      await authInstance.signOut()
-      setIsSignedIn(false)
-      setSheetData([])
-      toast.success('Signed out successfully')
-    } catch (error) {
-      console.error('Error signing out:', error)
-      toast.error('Failed to sign out')
-    }
-  }
-
-  // Refresh access token if needed
-  const refreshTokenIfNeeded = async () => {
-    try {
-      const authInstance = window.gapi.auth2.getAuthInstance()
-      const user = authInstance.currentUser.get()
-      const isAuthorized = user.hasGrantedScopes(SCOPES)
-      
-      if (!isAuthorized) {
-        // Request authorization again
-        await user.grant({ scope: SCOPES })
-      }
-
-      // Check if token is expired and refresh if needed
-      const token = user.getAuthResponse().access_token
-      if (!token) {
-        await user.reloadAuthResponse()
-      }
-    } catch (error) {
-      console.error('Error refreshing token:', error)
-      // If refresh fails, sign out and require re-authentication
-      await handleSignOut()
-      throw new Error('Session expired. Please sign in again.')
-    }
-  }
-
-  // Fetch data from Google Sheets
-  const fetchSheetData = async () => {
-    if (!spreadsheetId || spreadsheetId === 'YOUR_SPREADSHEET_ID_HERE') {
-      toast.error('Please enter a valid Google Sheet ID')
-      return
-    }
-
-    try {
-      setIsFetching(true)
-      if (USE_SERVER_SHEETS) {
-        const api = createGoogleSheetsService(token)
-        const data = await api.fetchValues(spreadsheetId, range)
-        const values = data?.values || []
-        setSheetData(values)
-        toast.success(`Successfully fetched ${values.length} rows`)
-      } else {
-        // Refresh token if needed
-        await refreshTokenIfNeeded()
-        const response = await window.gapi.client.sheets.spreadsheets.values.get({
-          spreadsheetId: spreadsheetId,
-          range: range
-        })
-        if (response.result.values) {
-          setSheetData(response.result.values)
-          toast.success(`Successfully fetched ${response.result.values.length} rows`)
+        // Update or create cell
+        if (!ws[cellAddress]) {
+          ws[cellAddress] = { t: 's', v: value }
         } else {
-          setSheetData([])
-          toast.info('Sheet is empty or range has no data')
+          ws[cellAddress].v = value
+          ws[cellAddress].t = 's' // String type
         }
       }
-    } catch (error) {
-      console.error('Error fetching sheet data:', error)
-      const status = error?.status || error?.response?.status
-      if (status === 404) {
-        toast.error('Spreadsheet not found. Please check the Sheet ID.')
-      } else if (status === 403) {
-        toast.error('Access denied. Please ensure the sheet is shared with your Google account.')
-      } else if (!USE_SERVER_SHEETS && status === 401) {
-        toast.error('Authentication expired. Please sign in again.')
-        setIsSignedIn(false)
-      } else {
-        toast.error(`Failed to fetch data: ${error.result?.error?.message || error.message || error?.response?.data?.message || 'Unknown error'}`)
+
+      // Update workbook reference
+      setWorkbook({ ...workbook })
+    }
+  }, [workbook, activeSheet])
+
+  const handleCellBlur = useCallback((rowIndex, colIndex, value) => {
+    updateCellValue(rowIndex, colIndex, value)
+    setEditingCell(null)
+  }, [updateCellValue])
+
+  // Memoized cell value getter
+  const getCellValue = useCallback((rowIndex, colIndex) => {
+    const row = excelData[rowIndex]
+    if (!row || row[colIndex] === undefined || row[colIndex] === null) {
+      return ''
+    }
+    return String(row[colIndex])
+  }, [excelData])
+
+  // Memoized calculations - Unlimited columns and rows
+  const maxColumns = useMemo(() => {
+    if (excelData.length === 0) return 50 // Default 50 columns for empty sheet
+    return Math.max(...excelData.map(row => row?.length || 0), 50)
+  }, [excelData])
+
+  const maxRows = useMemo(() => {
+    return Math.max(excelData.length, 100) // Default 100 rows for empty sheet
+  }, [excelData.length])
+
+  const handleCellKeyDown = useCallback((e, rowIndex, colIndex) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const value = e.target.textContent || ''
+      updateCellValue(rowIndex, colIndex, value)
+      setEditingCell(null)
+      
+      // Move to next row
+      setTimeout(() => {
+        const nextRow = rowIndex + 1
+        if (nextRow < maxRows) {
+          setEditingCell({ row: nextRow, col: colIndex })
+        }
+      }, 10)
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      const value = e.target.textContent || ''
+      updateCellValue(rowIndex, colIndex, value)
+      setEditingCell(null)
+      
+      // Move to next column
+      setTimeout(() => {
+        const nextCol = colIndex + 1
+        if (nextCol < maxColumns) {
+          setEditingCell({ row: rowIndex, col: nextCol })
+        } else if (rowIndex + 1 < maxRows) {
+          // Move to next row, first column
+          setEditingCell({ row: rowIndex + 1, col: 0 })
+        }
+      }, 10)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setEditingCell(null)
+      // Restore original value
+      const originalValue = getCellValue(rowIndex, colIndex)
+      if (e.target) {
+        e.target.textContent = originalValue
       }
-    } finally {
-      setIsFetching(false)
+    } else if (e.key === 'ArrowRight') {
+      const selection = window.getSelection()
+      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+      const isAtEnd = range && range.endOffset === e.target.textContent.length
+      
+      if (isAtEnd && colIndex + 1 < maxColumns) {
+        e.preventDefault()
+        const value = e.target.textContent || ''
+        updateCellValue(rowIndex, colIndex, value)
+        setEditingCell({ row: rowIndex, col: colIndex + 1 })
+      }
+    } else if (e.key === 'ArrowLeft') {
+      const selection = window.getSelection()
+      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+      const isAtStart = range && range.startOffset === 0
+      
+      if (isAtStart && colIndex > 0) {
+        e.preventDefault()
+        const value = e.target.textContent || ''
+        updateCellValue(rowIndex, colIndex, value)
+        setEditingCell({ row: rowIndex, col: colIndex - 1 })
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (rowIndex + 1 < maxRows) {
+        e.preventDefault()
+        const value = e.target.textContent || ''
+        updateCellValue(rowIndex, colIndex, value)
+        setEditingCell({ row: rowIndex + 1, col: colIndex })
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (rowIndex > 0) {
+        e.preventDefault()
+        const value = e.target.textContent || ''
+        updateCellValue(rowIndex, colIndex, value)
+        setEditingCell({ row: rowIndex - 1, col: colIndex })
+      }
     }
-  }
+  }, [maxRows, maxColumns, updateCellValue, getCellValue])
 
-  // Update data in Google Sheets
-  const handleUpdateSheet = async () => {
-    if (!spreadsheetId || spreadsheetId === 'YOUR_SPREADSHEET_ID_HERE') {
-      toast.error('Please enter a valid Google Sheet ID')
-      return
+  const handleCellClick = useCallback((rowIndex, colIndex) => {
+    setEditingCell({ row: rowIndex, col: colIndex })
+  }, [])
+
+  const handleCellFocus = useCallback((e) => {
+    // Select all text when cell is focused
+    if (e.target) {
+      const range = document.createRange()
+      range.selectNodeContents(e.target)
+      const selection = window.getSelection()
+      selection.removeAllRanges()
+      selection.addRange(range)
     }
+  }, [])
 
-    if (!updateRange || !updateValues || updateValues.length === 0) {
-      toast.error('Please provide a range and values to update')
-      return
-    }
-
+  const handleExport = useCallback(() => {
     try {
-      setIsUpdating(true)
-      // Convert updateValues array to 2D array format
-      const values = [Array.isArray(updateValues) ? updateValues : [updateValues]]
-      if (USE_SERVER_SHEETS) {
-        const api = createGoogleSheetsService(token)
-        await api.updateValues(spreadsheetId, updateRange, values, 'RAW')
-        toast.success(`Successfully updated ${updateRange}`)
-        await fetchSheetData()
+      let wb = workbook
+      
+      if (!wb) {
+        // Create new workbook if none exists
+        wb = XLSX.utils.book_new()
+        const ws = XLSX.utils.aoa_to_sheet(excelData)
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
       } else {
-        // Refresh token if needed
-        await refreshTokenIfNeeded()
-        const response = await window.gapi.client.sheets.spreadsheets.values.update({
-          spreadsheetId: spreadsheetId,
-          range: updateRange,
-          valueInputOption: 'RAW',
-          resource: {
-            values: values
-          }
-        })
-        if (response.result) {
-          toast.success(`Successfully updated ${updateRange}`)
-          // Optionally refresh the data after update
-          await fetchSheetData()
-        }
+        // Update workbook with current data
+        const ws = XLSX.utils.aoa_to_sheet(excelData)
+        wb.Sheets[activeSheet || wb.SheetNames[0]] = ws
       }
+      
+      const fileName = `PO_Entry_${new Date().toISOString().split('T')[0]}.xlsx`
+      XLSX.writeFile(wb, fileName)
+      toast.success('Excel file exported successfully!')
     } catch (error) {
-      console.error('Error updating sheet:', error)
-      const status = error?.status || error?.response?.status
-      if (status === 404) {
-        toast.error('Spreadsheet not found. Please check the Sheet ID.')
-      } else if (status === 403) {
-        toast.error('Access denied. Please ensure you have edit permissions.')
-      } else if (!USE_SERVER_SHEETS && status === 401) {
-        toast.error('Authentication expired. Please sign in again.')
-        setIsSignedIn(false)
-      } else {
-        toast.error(`Failed to update sheet: ${error.result?.error?.message || error.message || error?.response?.data?.message || 'Unknown error'}`)
-      }
-    } finally {
-      setIsUpdating(false)
+      console.error('Error exporting file:', error)
+      toast.error('Failed to export Excel file')
     }
-  }
+  }, [workbook, excelData, activeSheet])
 
-  // Handle update values input change
-  const handleUpdateValuesChange = (e) => {
-    const value = e.target.value
-    // Parse comma-separated values
-    const values = value.split(',').map(v => v.trim()).filter(v => v !== '')
-    setUpdateValues(values)
-  }
+  // Memoized column letters array
+  const columnLetters = useMemo(() => {
+    return Array.from({ length: maxColumns }, (_, i) => getColumnLetter(i))
+  }, [maxColumns])
+
+  const hasMultipleSheets = workbook && workbook.SheetNames.length > 1
+  const rowCount = excelData.length
 
   return (
     <ErrorBoundary message="An error occurred while loading the Purchase Order Entry page. Please try refreshing.">
       <DashboardLayout>
-        <div className="flex flex-col h-full w-full space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
+        <div className="flex flex-col h-full w-full">
+          {/* Minimal Header */}
+          <div className="flex items-center justify-between mb-4 px-1">
             <div>
-              <h1 className="text-3xl font-bold text-secondary-900 dark:text-gray-100">
-                Purchase Order Entry - Google Sheets
+              <h1 className="text-2xl font-bold text-secondary-900 dark:text-gray-100">
+                Purchase Order Entry
               </h1>
-              <p className="text-sm text-secondary-600 dark:text-gray-400 mt-1">
-                Connect to Google Sheets to view and update your PO data in real-time.
-              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {workbook && hasMultipleSheets && (
+                <select
+                  value={activeSheet}
+                  onChange={handleSheetChange}
+                  className="px-3 py-2 rounded-lg border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {workbook.SheetNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={handleExport}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFile}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 hover:bg-secondary-50 dark:hover:bg-[#243045] transition-colors disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load Excel'
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Authentication Section */}
-          {!isSignedIn && !USE_SERVER_SHEETS ? (
-            <div className="bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 p-6">
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className="text-center">
-                  <h2 className="text-xl font-semibold text-secondary-900 dark:text-gray-100 mb-2">
-                    Connect to Google Sheets
-                  </h2>
-                  <p className="text-sm text-secondary-600 dark:text-gray-400">
-                    Sign in with your Google account to access your sheets
-                  </p>
-                </div>
-                <button
-                  onClick={handleSignIn}
-                  disabled={isLoading || !gapiLoaded}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4" />
-                      Login with Google
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Configuration Section */}
-              <div className="bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-secondary-900 dark:text-gray-100">
-                    Sheet Configuration
-                  </h2>
-                  <button
-                    onClick={handleSignOut}
-                    className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Spreadsheet ID
-                    </label>
-                    <input
-                      type="text"
-                      value={spreadsheetId}
-                      onChange={(e) => setSpreadsheetId(e.target.value)}
-                      placeholder="Enter your Google Sheet ID"
-                      className="w-full px-3 py-2 border border-secondary-300 dark:border-secondary-700 rounded-lg bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-xs text-secondary-500 dark:text-gray-400 mt-1">
-                      Found in your Google Sheet URL: /spreadsheets/d/[ID]/edit
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Range (e.g., Sheet1!A1:Z100)
-                    </label>
-                    <input
-                      type="text"
-                      value={range}
-                      onChange={(e) => setRange(e.target.value)}
-                      placeholder="Sheet1!A1:Z100"
-                      className="w-full px-3 py-2 border border-secondary-300 dark:border-secondary-700 rounded-lg bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={fetchSheetData}
-                  disabled={isFetching || !spreadsheetId}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isFetching ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4" />
-                      Fetch Data
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Update Section */}
-              <div className="bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-secondary-900 dark:text-gray-100">
-                  Update Sheet
-                </h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Range (e.g., Sheet1!A2:B2)
-                    </label>
-                    <input
-                      type="text"
-                      value={updateRange}
-                      onChange={(e) => setUpdateRange(e.target.value)}
-                      placeholder="Sheet1!A2:B2"
-                      className="w-full px-3 py-2 border border-secondary-300 dark:border-secondary-700 rounded-lg bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Values (comma-separated, e.g., Somil, 5000)
-                    </label>
-                    <input
-                      type="text"
-                      value={updateValues.join(', ')}
-                      onChange={handleUpdateValuesChange}
-                      placeholder="Somil, 5000"
-                      className="w-full px-3 py-2 border border-secondary-300 dark:border-secondary-700 rounded-lg bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleUpdateSheet}
-                  disabled={isUpdating || !spreadsheetId}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Update Sheet
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Data Display Section */}
-              <div className="bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-secondary-900 dark:text-gray-100">
-                    Sheet Data
-                  </h2>
-                  {sheetData.length > 0 && (
-                    <span className="text-sm text-secondary-600 dark:text-gray-400">
-                      {sheetData.length} rows loaded
-                    </span>
-                  )}
-                </div>
-
-                {isFetching ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                    <span className="ml-3 text-secondary-600 dark:text-gray-400">Fetching data...</span>
-                  </div>
-                ) : sheetData.length === 0 ? (
-                  <div className="text-center py-12 text-secondary-600 dark:text-gray-400">
-                    No data loaded. Click "Fetch Data" to load your sheet.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-secondary-100 dark:bg-[#243045]">
-                          {sheetData[0]?.map((_, colIndex) => (
-                            <th
-                              key={colIndex}
-                              className="px-4 py-2 text-left text-sm font-semibold text-secondary-700 dark:text-gray-300 border border-secondary-300 dark:border-secondary-700"
-                            >
-                              {String.fromCharCode(65 + colIndex)}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sheetData.map((row, rowIndex) => (
-                          <tr
-                            key={rowIndex}
-                            className="hover:bg-secondary-50 dark:hover:bg-[#111827] transition-colors"
-                          >
-                            {row.map((cell, colIndex) => (
+          {/* Full Page Excel Spreadsheet */}
+          <div className="flex-1 bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 shadow-sm overflow-hidden">
+            <div className="h-full overflow-auto">
+              <div className="inline-block min-w-full">
+                <table className="border-collapse select-none" style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
+                  <thead>
+                    <tr>
+                      <th className="sticky top-0 left-0 z-20 bg-[#f8f9fa] dark:bg-[#1f2937] border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-center text-xs font-semibold text-[#5f6368] dark:text-gray-400 min-w-[50px] w-[50px]">
+                      </th>
+                      {columnLetters.map((letter, colIndex) => (
+                        <th
+                          key={colIndex}
+                          className="sticky top-0 z-10 bg-[#f8f9fa] dark:bg-[#1f2937] border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-center text-xs font-semibold text-[#5f6368] dark:text-gray-400 min-w-[100px] w-[100px]"
+                        >
+                          {letter}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: maxRows }, (_, rowIndex) => {
+                      const isEmptyRow = rowIndex >= rowCount
+                      return (
+                        <tr key={rowIndex} className="hover:bg-[#f8f9fa] dark:hover:bg-[#1e293b]">
+                          <td className="sticky left-0 z-10 bg-white dark:bg-[#111827] border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-center text-xs font-medium text-[#5f6368] dark:text-gray-400 min-w-[50px] w-[50px]">
+                            {rowIndex + 1}
+                          </td>
+                          {Array.from({ length: maxColumns }, (_, colIndex) => {
+                            const cellValue = isEmptyRow ? '' : getCellValue(rowIndex, colIndex)
+                            const isEmpty = !cellValue && isEmptyRow
+                            const isEditing = editingCell?.row === rowIndex && editingCell?.col === colIndex
+                            
+                            return (
                               <td
                                 key={colIndex}
-                                className="px-4 py-2 text-sm text-secondary-900 dark:text-gray-100 border border-secondary-300 dark:border-secondary-700"
+                                onClick={() => handleCellClick(rowIndex, colIndex)}
+                                className={`border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-left text-[#202124] dark:text-gray-200 min-w-[100px] w-[100px] cursor-cell ${
+                                  isEmpty 
+                                    ? 'bg-[#f8f9fa] dark:bg-[#0f172a]' 
+                                    : 'bg-white dark:bg-[#111827] hover:bg-[#f1f3f4] dark:hover:bg-[#1e293b]'
+                                } ${isEditing ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
                               >
-                                {cell || '\u00A0'}
+                                {isEditing ? (
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.textContent || '')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
+                                    onFocus={handleCellFocus}
+                                    className="outline-none min-h-[20px]"
+                                    style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                                  >
+                                    {cellValue}
+                                  </div>
+                                ) : (
+                                  <span className="block truncate" title={cellValue}>
+                                    {cellValue || '\u00A0'}
+                                  </span>
+                                )}
                               </td>
-                            ))}
-                            {/* Fill empty cells if row is shorter than header */}
-                            {Array.from({ length: Math.max(0, (sheetData[0]?.length || 0) - row.length) }).map((_, colIndex) => (
-                              <td
-                                key={`empty-${colIndex}`}
-                                className="px-4 py-2 text-sm text-secondary-900 dark:text-gray-100 border border-secondary-300 dark:border-secondary-700"
-                              >
-                                {'\u00A0'}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </>
-          )}
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     </ErrorBoundary>
