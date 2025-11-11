@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
-import { Download, Loader2 } from 'lucide-react'
+import { Download, Loader2, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 
@@ -23,14 +23,22 @@ const MAX_COLUMN_WIDTH = 500
 const DEFAULT_ROW_HEIGHT = 25
 const MIN_ROW_HEIGHT = 20
 const MAX_ROW_HEIGHT = 200
-const INITIAL_VISIBLE_ROWS = 100
-const INITIAL_VISIBLE_COLUMNS = 50
+const ROW_BLOCK_SIZE = 100
+const COL_BLOCK_SIZE = 50
+const INITIAL_VISIBLE_ROWS = ROW_BLOCK_SIZE
+const INITIAL_VISIBLE_COLUMNS = COL_BLOCK_SIZE
+// Upper bounds to protect the UI. Tune as needed.
+const MAX_ALLOWED_ROWS = 10000
+const MAX_ALLOWED_COLUMNS = 5000
 
 export default function POEntry() {
   const [excelData, setExcelData] = useState([])
   const [workbook, setWorkbook] = useState(null)
   const [activeSheet, setActiveSheet] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [visibleRows, setVisibleRows] = useState(INITIAL_VISIBLE_ROWS)
+  const [visibleCols, setVisibleCols] = useState(INITIAL_VISIBLE_COLUMNS)
   const [editingCell, setEditingCell] = useState(null) // { row, col }
   const [columnWidths, setColumnWidths] = useState({}) // Store custom column widths { colIndex: width }
   const [rowHeights, setRowHeights] = useState({}) // Store custom row heights { rowIndex: height }
@@ -43,10 +51,8 @@ export default function POEntry() {
   const fileInputRef = useRef(null)
   const tableRef = useRef(null)
 
-  const handleFile = useCallback((e) => {
-    const file = e.target.files?.[0]
+  const processFile = useCallback((file) => {
     if (!file) return
-
     setIsLoading(true)
     const reader = new FileReader()
 
@@ -74,6 +80,14 @@ export default function POEntry() {
         })
         
         setExcelData(sheetData)
+
+        // Adjust visible window up to the next block for rows/cols based on loaded data
+        const dataRows = sheetData.length
+        const dataCols = sheetData.reduce((m, r) => Math.max(m, r?.length || 0), 0)
+        const rowsBlocks = Math.ceil(Math.max(dataRows, INITIAL_VISIBLE_ROWS) / ROW_BLOCK_SIZE)
+        const colsBlocks = Math.ceil(Math.max(dataCols, INITIAL_VISIBLE_COLUMNS) / COL_BLOCK_SIZE)
+        setVisibleRows(Math.min(rowsBlocks * ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS))
+        setVisibleCols(Math.min(colsBlocks * COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS))
         toast.success(`Excel file loaded! ${sheetData.length} rows`)
       } catch (error) {
         console.error('Error reading file:', error)
@@ -94,6 +108,45 @@ export default function POEntry() {
 
     reader.readAsArrayBuffer(file)
   }, [])
+
+  const handleFile = useCallback((e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    processFile(file)
+  }, [processFile])
+
+  // Drag & drop handlers
+  const onDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) setIsDragging(true)
+  }, [isDragging])
+
+  const onDragEnter = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const onDragLeave = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer?.files?.[0]
+    if (!file) return
+    const name = file.name?.toLowerCase() || ''
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      toast.error('Please drop a .xlsx or .xls file')
+      return
+    }
+    processFile(file)
+  }, [processFile])
 
   const handleSheetChange = useCallback((e) => {
     const sheetName = e.target.value
@@ -139,6 +192,20 @@ export default function POEntry() {
       // Update workbook reference
       setWorkbook({ ...workbook })
     }
+
+    // Auto-expand visible window in blocks when user reaches current edges
+    setVisibleRows(prev => {
+      if (rowIndex >= prev - 1 && prev < MAX_ALLOWED_ROWS) {
+        return Math.min(prev + ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS)
+      }
+      return prev
+    })
+    setVisibleCols(prev => {
+      if (colIndex >= prev - 1 && prev < MAX_ALLOWED_COLUMNS) {
+        return Math.min(prev + COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS)
+      }
+      return prev
+    })
   }, [workbook, activeSheet])
 
   const handleCellBlur = useCallback((rowIndex, colIndex, value) => {
@@ -165,23 +232,49 @@ export default function POEntry() {
     return rowHeights[rowIndex] || DEFAULT_ROW_HEIGHT
   }, [rowHeights])
 
-  // Memoized calculations - Truly unlimited columns and rows
-  // Dynamically expand based on data and user interaction
+  // Memoized calculations - grid grows in blocks based on data and interaction
   const maxColumns = useMemo(() => {
-    if (excelData.length === 0) return INITIAL_VISIBLE_COLUMNS
+    if (excelData.length === 0) return visibleCols
     const maxDataColumns = Math.max(...excelData.map(row => row?.length || 0), 0)
     // Always show at least INITIAL_VISIBLE_COLUMNS, but expand if data requires more
     // Also check if user is editing beyond current max
     const editingCol = editingCell?.col ?? -1
-    return Math.max(maxDataColumns, INITIAL_VISIBLE_COLUMNS, editingCol + 1)
-  }, [excelData, editingCell])
+    const desired = Math.max(maxDataColumns, visibleCols, editingCol + 1)
+    return Math.min(desired, MAX_ALLOWED_COLUMNS)
+  }, [excelData, editingCell, visibleCols])
 
   const maxRows = useMemo(() => {
     const dataRows = excelData.length
     const editingRow = editingCell?.row ?? -1
     // Always show at least INITIAL_VISIBLE_ROWS, but expand if data requires more
-    return Math.max(dataRows, INITIAL_VISIBLE_ROWS, editingRow + 1)
-  }, [excelData.length, editingCell])
+    const desired = Math.max(dataRows, visibleRows, editingRow + 1)
+    return Math.min(desired, MAX_ALLOWED_ROWS)
+  }, [excelData.length, editingCell, visibleRows])
+
+  // If a full current block becomes filled (non-empty last row/col), advance to next block
+  useEffect(() => {
+    // Check last visible row for any non-empty cell
+    const lastRowIdx = visibleRows - 1
+    const lastColIdx = visibleCols - 1
+
+    // Expand rows if the last visible row has any non-empty cell
+    if (excelData[lastRowIdx]?.some(v => v !== undefined && v !== null && String(v) !== '') && visibleRows < MAX_ALLOWED_ROWS) {
+      setVisibleRows(v => Math.min(v + ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS))
+    }
+
+    // Expand columns if any row has non-empty cell in the last visible column
+    let hasDataAtLastCol = false
+    for (let r = 0; r < excelData.length; r++) {
+      const val = excelData[r]?.[lastColIdx]
+      if (val !== undefined && val !== null && String(val) !== '') {
+        hasDataAtLastCol = true
+        break
+      }
+    }
+    if (hasDataAtLastCol && visibleCols < MAX_ALLOWED_COLUMNS) {
+      setVisibleCols(c => Math.min(c + COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS))
+    }
+  }, [excelData, visibleRows, visibleCols])
 
   // Column resizing handlers
   const handleColumnResizeStart = useCallback((e, colIndex) => {
@@ -387,7 +480,7 @@ export default function POEntry() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 hover:bg-secondary-50 dark:hover:bg-[#243045] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -395,14 +488,36 @@ export default function POEntry() {
                     Loading...
                   </>
                 ) : (
-                  'Load Excel'
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Import
+                  </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Full Page Excel Spreadsheet */}
-          <div className="flex-1 bg-white dark:bg-[#1E293B] rounded-lg border border-secondary-200 dark:border-secondary-800 shadow-sm overflow-hidden">
+          {/* Full Page Excel Spreadsheet with drag & drop */}
+          <div
+            className={`relative flex-1 rounded-lg shadow-sm overflow-hidden ${
+              isDragging
+                ? 'border-2 border-dashed border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/20'
+                : 'border border-secondary-200 dark:border-secondary-800 bg-white dark:bg-[#1E293B]'
+            }`}
+            onDragOver={onDragOver}
+            onDragEnter={onDragEnter}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            role="region"
+            aria-label="Drop Excel file to import"
+          >
+            {isDragging && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                <div className="rounded-xl px-6 py-3 bg-white/90 dark:bg-[#0b1220]/80 text-emerald-700 dark:text-emerald-300 text-sm font-semibold border border-emerald-300">
+                  Drop your .xlsx or .xls file to import
+                </div>
+              </div>
+            )}
             <div className="h-full overflow-auto">
               <div className="inline-block min-w-full">
                 <table className="border-collapse select-none" style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
