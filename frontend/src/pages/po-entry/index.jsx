@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
-import { Download, Loader2, Settings, X } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 
@@ -40,11 +40,6 @@ export default function POEntry() {
   const [resizeStartY, setResizeStartY] = useState(0)
   const [resizeStartWidth, setResizeStartWidth] = useState(0)
   const [resizeStartHeight, setResizeStartHeight] = useState(0)
-  const [manualSheetRows, setManualSheetRows] = useState(null) // null = auto, number = manual
-  const [manualSheetColumns, setManualSheetColumns] = useState(null) // null = auto, number = manual
-  const [showSheetSizeModal, setShowSheetSizeModal] = useState(false)
-  const [tempRows, setTempRows] = useState(INITIAL_VISIBLE_ROWS)
-  const [tempColumns, setTempColumns] = useState(INITIAL_VISIBLE_COLUMNS)
   const fileInputRef = useRef(null)
   const tableRef = useRef(null)
 
@@ -171,34 +166,22 @@ export default function POEntry() {
   }, [rowHeights])
 
   // Memoized calculations - Truly unlimited columns and rows
-  // Dynamically expand based on data and user interaction, or use manual size if set
+  // Dynamically expand based on data and user interaction
   const maxColumns = useMemo(() => {
-    // If manual size is set, use it
-    if (manualSheetColumns !== null) {
-      return Math.max(manualSheetColumns, 1) // At least 1 column
-    }
-    
-    // Otherwise, auto-expand based on data and editing
     if (excelData.length === 0) return INITIAL_VISIBLE_COLUMNS
     const maxDataColumns = Math.max(...excelData.map(row => row?.length || 0), 0)
     // Always show at least INITIAL_VISIBLE_COLUMNS, but expand if data requires more
     // Also check if user is editing beyond current max
     const editingCol = editingCell?.col ?? -1
     return Math.max(maxDataColumns, INITIAL_VISIBLE_COLUMNS, editingCol + 1)
-  }, [excelData, editingCell, manualSheetColumns])
+  }, [excelData, editingCell])
 
   const maxRows = useMemo(() => {
-    // If manual size is set, use it
-    if (manualSheetRows !== null) {
-      return Math.max(manualSheetRows, 1) // At least 1 row
-    }
-    
-    // Otherwise, auto-expand based on data and editing
     const dataRows = excelData.length
     const editingRow = editingCell?.row ?? -1
     // Always show at least INITIAL_VISIBLE_ROWS, but expand if data requires more
     return Math.max(dataRows, INITIAL_VISIBLE_ROWS, editingRow + 1)
-  }, [excelData.length, editingCell, manualSheetRows])
+  }, [excelData.length, editingCell])
 
   // Column resizing handlers
   const handleColumnResizeStart = useCallback((e, colIndex) => {
@@ -356,44 +339,6 @@ export default function POEntry() {
     }
   }, [workbook, excelData, activeSheet])
 
-  // Sheet size modal handlers
-  const handleOpenSheetSizeModal = useCallback(() => {
-    setTempRows(manualSheetRows ?? maxRows)
-    setTempColumns(manualSheetColumns ?? maxColumns)
-    setShowSheetSizeModal(true)
-  }, [manualSheetRows, manualSheetColumns, maxRows, maxColumns])
-
-  const handleCloseSheetSizeModal = useCallback(() => {
-    setShowSheetSizeModal(false)
-  }, [])
-
-  const handleApplySheetSize = useCallback(() => {
-    const rows = parseInt(tempRows, 10)
-    const cols = parseInt(tempColumns, 10)
-    
-    if (isNaN(rows) || rows < 1 || rows > 1000000) {
-      toast.error('Please enter a valid number of rows (1-1,000,000)')
-      return
-    }
-    
-    if (isNaN(cols) || cols < 1 || cols > 16384) {
-      toast.error('Please enter a valid number of columns (1-16,384)')
-      return
-    }
-    
-    setManualSheetRows(rows)
-    setManualSheetColumns(cols)
-    setShowSheetSizeModal(false)
-    toast.success(`Sheet size set to ${rows} rows × ${cols} columns`)
-  }, [tempRows, tempColumns])
-
-  const handleResetSheetSize = useCallback(() => {
-    setManualSheetRows(null)
-    setManualSheetColumns(null)
-    setShowSheetSizeModal(false)
-    toast.success('Sheet size reset to auto-expand mode')
-  }, [])
-
   // Memoized column letters array
   const columnLetters = useMemo(() => {
     return Array.from({ length: maxColumns }, (_, i) => getColumnLetter(i))
@@ -425,19 +370,6 @@ export default function POEntry() {
                   ))}
                 </select>
               )}
-              <button
-                onClick={handleOpenSheetSizeModal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 hover:bg-secondary-50 dark:hover:bg-[#243045] transition-colors"
-                title="Set sheet size (rows × columns)"
-              >
-                <Settings className="h-4 w-4" />
-                Sheet Size
-                {(manualSheetRows !== null || manualSheetColumns !== null) && (
-                  <span className="ml-1 text-xs text-blue-600 dark:text-blue-400">
-                    ({maxRows}×{maxColumns})
-                  </span>
-                )}
-              </button>
               <button
                 onClick={handleExport}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
@@ -573,105 +505,6 @@ export default function POEntry() {
             </div>
           </div>
         </div>
-
-        {/* Sheet Size Modal */}
-        {showSheetSizeModal && (
-          <div 
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={handleCloseSheetSizeModal}
-          >
-            <div 
-              className="bg-white dark:bg-[#1E293B] rounded-lg shadow-xl max-w-md w-full mx-4 border border-secondary-200 dark:border-secondary-800"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-6 border-b border-secondary-200 dark:border-secondary-800">
-                <h2 className="text-xl font-semibold text-secondary-900 dark:text-gray-100">
-                  Set Sheet Size
-                </h2>
-                <button
-                  onClick={handleCloseSheetSizeModal}
-                  className="text-secondary-500 hover:text-secondary-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Number of Rows
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="1000000"
-                      value={tempRows}
-                      onChange={(e) => setTempRows(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter number of rows (1-1,000,000)"
-                    />
-                    <p className="mt-1 text-xs text-secondary-500 dark:text-gray-400">
-                      Excel supports up to 1,048,576 rows
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-secondary-700 dark:text-gray-300 mb-2">
-                      Number of Columns
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="16384"
-                      value={tempColumns}
-                      onChange={(e) => setTempColumns(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter number of columns (1-16,384)"
-                    />
-                    <p className="mt-1 text-xs text-secondary-500 dark:text-gray-400">
-                      Excel supports up to 16,384 columns (XFD)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Current Size:</strong> {maxRows} rows × {maxColumns} columns
-                    {manualSheetRows !== null || manualSheetColumns !== null ? (
-                      <span className="block mt-1 text-xs">Manual size is active</span>
-                    ) : (
-                      <span className="block mt-1 text-xs">Auto-expand mode (expands as you work)</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-6 border-t border-secondary-200 dark:border-secondary-800 bg-secondary-50 dark:bg-[#0f172a]">
-                <button
-                  onClick={handleResetSheetSize}
-                  className="px-4 py-2 text-sm font-medium text-secondary-700 dark:text-gray-300 hover:text-secondary-900 dark:hover:text-gray-100 transition-colors"
-                >
-                  Reset to Auto
-                </button>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleCloseSheetSizeModal}
-                    className="px-4 py-2 text-sm font-medium text-secondary-700 dark:text-gray-300 hover:bg-secondary-100 dark:hover:bg-[#1e293b] rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleApplySheetSize}
-                    className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </DashboardLayout>
     </ErrorBoundary>
   )
