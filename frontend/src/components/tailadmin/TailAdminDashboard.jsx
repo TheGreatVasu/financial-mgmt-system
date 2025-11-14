@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, CheckCircle2, AlertTriangle, RefreshCw, FileText } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, CheckCircle2, AlertTriangle, RefreshCw, FileText, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EcommerceMetrics from "./ecommerce/EcommerceMetrics";
 import MonthlySalesChart from "./ecommerce/MonthlySalesChart";
@@ -20,6 +20,9 @@ import RegionalBreakupChart from "../charts/RegionalBreakupChart.jsx";
 import CashInflowComparisonChart from "../charts/CashInflowComparisonChart.jsx";
 import SalesTrendChart from "../charts/SalesTrendChart.jsx";
 import TopCustomersTable from "../charts/TopCustomersTable.jsx";
+import ExcelImportOnboarding from "../onboarding/ExcelImportOnboarding.jsx";
+import { importExcelFile } from "../../services/importService";
+import toast from "react-hot-toast";
 
 export default function TailAdminDashboard() {
   const { token } = useAuthContext()
@@ -30,6 +33,7 @@ export default function TailAdminDashboard() {
   const [filters, setFilters] = useState({})
   const [alerts, setAlerts] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const fileInputRef = useRef(null)
   const invApi = useMemo(() => createInvoiceService(token), [token])
   const payApi = useMemo(() => createPaymentService(token), [token])
   const custApi = useMemo(() => createCustomerService(token), [token])
@@ -176,6 +180,20 @@ export default function TailAdminDashboard() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // Show onboarding if no data exists
+  if (!loading && (!data?.hasData || data?.hasData === false)) {
+    return (
+      <div className="space-y-6">
+        <ExcelImportOnboarding 
+          onImportComplete={() => {
+            // Refresh dashboard after import
+            refresh()
+          }} 
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Quick Actions row */}
@@ -262,6 +280,52 @@ export default function TailAdminDashboard() {
               >
                 <Download className="h-4 w-4" />
                 <span className="hidden sm:inline">Export</span>
+              </button>
+              {/* Import Excel - header action */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  // Validate size and type
+                  const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel']
+                  const isValidType = validTypes.includes(file.type) || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+                  if (!isValidType) {
+                    toast.error('Please select a valid Excel file (.xlsx or .xls)')
+                    e.target.value = ''
+                    return
+                  }
+                  if (file.size > 10 * 1024 * 1024) {
+                    toast.error('File size must be less than 10MB')
+                    e.target.value = ''
+                    return
+                  }
+                  try {
+                    const result = await importExcelFile(token, file)
+                    if (result?.success) {
+                      toast.success('Import completed successfully')
+                      await refresh()
+                    } else {
+                      toast.error(result?.message || 'Import failed')
+                    }
+                  } catch (err) {
+                    toast.error(err?.message || 'Failed to import Excel file')
+                  } finally {
+                    // allow uploading the same file again later
+                    e.target.value = ''
+                  }
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="ml-2 inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/10 text-white text-xs sm:text-sm hover:bg-white/15 transition-colors"
+                title="Import Excel"
+              >
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Import</span>
               </button>
               <button 
                 onClick={exportPdf} 
@@ -560,12 +624,18 @@ export default function TailAdminDashboard() {
         </div>
         <div className="xl:col-span-4 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 shadow-soft">
           <div className="text-sm font-medium text-secondary-700 mb-2">Activity Timeline</div>
-          <ul className="space-y-2 text-sm">
-            <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5" /> Payment received from ACME Pvt. Ltd.</li>
-            <li className="flex items-start gap-2"><TrendingUp className="h-4 w-4 text-sky-500 mt-0.5" /> Invoice INV-120 raised for ₹1,20,000</li>
-            <li className="flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" /> Overdue crossed 30d for 2 accounts</li>
-            <li className="flex items-start gap-2"><Bell className="h-4 w-4 text-primary-500 mt-0.5" /> Reminder sent to Zeta Corp</li>
-          </ul>
+          {(data?.activityTimeline && data.activityTimeline.length > 0) ? (
+            <ul className="space-y-2 text-sm">
+              {data.activityTimeline.map((item, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className="mt-0.5 text-primary-500">•</span>
+                  <span className="text-secondary-700">{item.description}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-sm text-secondary-500">No activity recorded yet.</div>
+          )}
         </div>
         {/* Action items / quick summary */}
         <div className="xl:col-span-8 col-span-1 rounded-2xl border border-primary-200/60 bg-white p-4 md:p-5 shadow-soft hover-tilt" data-tour="action-items">

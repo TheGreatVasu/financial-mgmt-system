@@ -46,16 +46,21 @@ async function buildDashboardPayload() {
       repo.getCashInflowComparison().catch(() => []),
     ]);
 
-    // Simple monthly series mock when DB empty
+    // Monthly series from actual data
+    const monthlyTrendsData = monthlyTrends || [];
+    const labels = monthlyTrendsData.map(m => m.month) || ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const collections = monthlyTrendsData.map(m => m.sales || 0);
+    const invoiceTrends = monthlyTrendsData.map(m => m.balanceDue || 0);
+    
     const series = {
-      collections: [12, 18, 15, 22, 28, 35, 30, 38, 42, 40, 45, 50],
-      invoices:    [15, 20, 18, 25, 30, 40, 33, 42, 48, 46, 50, 55],
-      labels:      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-      agingBuckets: [
-        { label: '0-30', value: 45 },
-        { label: '31-60', value: 22 },
-        { label: '61-90', value: 12 },
-        { label: '90+', value: 8 },
+      collections: collections.length > 0 ? collections : Array(12).fill(0),
+      invoices: invoiceTrends.length > 0 ? invoiceTrends : Array(12).fill(0),
+      labels: labels.length > 0 ? labels : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      agingBuckets: agingAnalysis.map(a => ({ label: a.period, value: a.amount })) || [
+        { label: '0-30', value: 0 },
+        { label: '31-60', value: 0 },
+        { label: '61-90', value: 0 },
+        { label: '90+', value: 0 },
       ],
     };
 
@@ -68,10 +73,10 @@ async function buildDashboardPayload() {
       createdAt: inv.createdAt,
     }));
 
-    // DSO rough estimate over 30-day period if we have totals
-    const dso = totalSum > 0 ? Math.round((outstanding / totalSum) * 30) : 0;
-    // Simple CEI placeholder (requires period data; here we scale by overdue)
-    const cei = Math.max(0, Math.min(100, Math.round(100 - (overdueCount * 5))));
+    // DSO calculation: Days Sales Outstanding
+    const dso = totalSum > 0 && invoiceCount > 0 ? Math.round((outstanding / totalSum) * 30) : 0;
+    // CEI calculation: Collection Effectiveness Index (simplified)
+    const cei = totalSum > 0 ? Math.max(0, Math.min(100, Math.round((paidSum / totalSum) * 100))) : 0;
 
     const alerts = [];
     if (overdueCount > 0) alerts.push({ type: 'danger', message: `${overdueCount} invoice(s) overdue` });
@@ -91,9 +96,9 @@ async function buildDashboardPayload() {
         series,
         // New dashboard domains
         monthlyCollectionPlan: {
-          target: [40,45,48,52,55,60,62,64,66,70,72,75],
-          actual: [35,42,44,50,54,57,59,61,63,65,69,71],
-          labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          target: collections.length > 0 ? collections.map(c => Math.round(c * 1.1)) : Array(12).fill(0),
+          actual: collections.length > 0 ? collections : Array(12).fill(0),
+          labels: labels
         },
         totalDebtors: {
           total: Math.max(totalSum, 0),
@@ -101,28 +106,24 @@ async function buildDashboardPayload() {
           buckets: series.agingBuckets || []
         },
         boqVsActual: {
-          boq: [120,140,160,180,210,230],
-          actual: [110,150,155,170,190,225],
+          boq: Array(6).fill(0),
+          actual: Array(6).fill(0),
           labels: ['Q1','Q2','Q3','Q4','Q5','Q6']
         },
         performance: {
-          onTimeCollectionRate: Math.min(100, 80 + Math.round(Math.random()*10)),
+          onTimeCollectionRate: cei,
           promiseToPay: cei,
-          slaCompliance: Math.min(100, 85 + Math.round(Math.random()*8))
+          slaCompliance: cei
         },
-        others: [
-          { title: 'Bank Reco Pending', value: 3 },
-          { title: 'Credit Notes Awaiting', value: 2 },
-          { title: 'Disputes Open', value: 4 }
-        ],
+        others: [],
         recentInvoices: invoices,
         alerts,
         actionItems: {
-          dueToday: Math.max(1, Math.round(overdueCount / 2)),
+          dueToday: overdueCount,
           needsAttention: overdueCount,
-          brokenPromises: Math.max(0, Math.round(overdueCount / 3)),
-          autopayInfo: Math.max(0, Math.round(invoiceCount / 20)),
-          approvalsPending: Math.max(0, Math.round(invoiceCount / 30)),
+          brokenPromises: 0,
+          autopayInfo: 0,
+          approvalsPending: 0,
         },
         topCustomers: (topByOutstanding || []).map(t => ({
           customerId: t.customerId || null,
@@ -135,97 +136,73 @@ async function buildDashboardPayload() {
         monthlyTrends: monthlyTrends || [],
         topCustomersOverdue: topCustomersOverdue || [],
         cashInflowComparison: cashInflowComparison || [],
+        activityTimeline: [],
     };
   } catch (e) {
-    // Offline fallback data
+    // Return empty data on error
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return {
         kpis: {
-          customers: 12,
-          invoices: 48,
-          outstanding: 325000,
-          overdue: 3,
-          collectedThisMonth: 145000,
-          dso: 18,
-          cei: 86,
+          customers: 0,
+          invoices: 0,
+          outstanding: 0,
+          overdue: 0,
+          collectedThisMonth: 0,
+          dso: 0,
+          cei: 0,
         },
         series: {
-          collections: [12,18,15,22,28,35,30,38,42,40,45,50],
-          invoices: [15,20,18,25,30,40,33,42,48,46,50,55],
-          labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+          collections: Array(12).fill(0),
+          invoices: Array(12).fill(0),
+          labels: labels,
           agingBuckets: [
-            { label: '0-30', value: 45 },
-            { label: '31-60', value: 22 },
-            { label: '61-90', value: 12 },
-            { label: '90+', value: 8 },
+            { label: '0-30', value: 0 },
+            { label: '31-60', value: 0 },
+            { label: '61-90', value: 0 },
+            { label: '90+', value: 0 },
           ],
         },
-        recentInvoices: [
-          { id: '1', invoiceNumber: 'INV20250001', customer: 'Acme Corp', totalAmount: 56000, status: 'sent', createdAt: new Date() },
-          { id: '2', invoiceNumber: 'INV20250002', customer: 'Globex', totalAmount: 120000, status: 'overdue', createdAt: new Date() },
-        ],
-        alerts: [
-          { type: 'warning', message: '3 invoices due today' },
-          { type: 'danger', message: '2 invoices overdue 30+ days' },
-          { type: 'success', message: 'Payment received: ₹45,000' },
-        ],
+        recentInvoices: [],
+        alerts: [],
         actionItems: {
-          dueToday: 14,
-          needsAttention: 6,
-          brokenPromises: 57,
-          autopayInfo: 190,
-          approvalsPending: 4,
+          dueToday: 0,
+          needsAttention: 0,
+          brokenPromises: 0,
+          autopayInfo: 0,
+          approvalsPending: 0,
         },
-        topCustomers: [
-          { customer: 'Acme Corp', outstanding: 120000 },
-          { customer: 'Globex', outstanding: 82000 },
-          { customer: 'Initech', outstanding: 64000 },
+        topCustomers: [],
+        agingAnalysis: [],
+        regionalBreakup: [],
+        monthlyTrends: [],
+        topCustomersOverdue: [],
+        cashInflowComparison: [],
+        monthlyCollectionPlan: {
+          target: Array(12).fill(0),
+          actual: Array(12).fill(0),
+          labels: labels
+        },
+        totalDebtors: {
+          total: 0,
+          outstanding: 0,
+          buckets: []
+        },
+        boqVsActual: {
+          boq: Array(6).fill(0),
+          actual: Array(6).fill(0),
+          labels: ['Q1','Q2','Q3','Q4','Q5','Q6']
+        },
+        performance: {
+          onTimeCollectionRate: 0,
+          promiseToPay: 0,
+          slaCompliance: 0
+        },
+        others: [
+          { title: 'Bank Reco Pending', value: 0 },
+          { title: 'Credit Notes Awaiting', value: 0 },
+          { title: 'Disputes Open', value: 0 }
         ],
-        // Advanced analytics fallback
-        agingAnalysis: [
-          { period: '0-30', amount: 125000, count: 15 },
-          { period: '31-60', amount: 85000, count: 8 },
-          { period: '61-90', amount: 65000, count: 5 },
-          { period: '90+', amount: 50000, count: 3 },
-        ],
-        regionalBreakup: [
-          { region: 'North', amount: 125000, overdue: 45000 },
-          { region: 'South', amount: 98000, overdue: 32000 },
-          { region: 'East', amount: 87000, overdue: 28000 },
-          { region: 'West', amount: 115000, overdue: 38000 },
-        ],
-        monthlyTrends: [
-          { month: 'Jan', sales: 120000, balanceDue: 80000 },
-          { month: 'Feb', sales: 135000, balanceDue: 85000 },
-          { month: 'Mar', sales: 145000, balanceDue: 90000 },
-          { month: 'Apr', sales: 130000, balanceDue: 82000 },
-          { month: 'May', sales: 150000, balanceDue: 95000 },
-          { month: 'Jun', sales: 140000, balanceDue: 88000 },
-          { month: 'Jul', sales: 160000, balanceDue: 100000 },
-          { month: 'Aug', sales: 155000, balanceDue: 98000 },
-          { month: 'Sep', sales: 145000, balanceDue: 92000 },
-          { month: 'Oct', sales: 165000, balanceDue: 105000 },
-          { month: 'Nov', sales: 150000, balanceDue: 95000 },
-          { month: 'Dec', sales: 170000, balanceDue: 110000 },
-        ],
-        topCustomersOverdue: [
-          { customer: 'Acme Corp', overdue: 125000, totalOutstanding: 180000 },
-          { customer: 'Globex', overdue: 98000, totalOutstanding: 145000 },
-          { customer: 'Initech', overdue: 87000, totalOutstanding: 120000 },
-        ],
-        cashInflowComparison: [
-          { month: 'Jan', actual: 120000, estimated: 130000 },
-          { month: 'Feb', actual: 135000, estimated: 140000 },
-          { month: 'Mar', actual: 145000, estimated: 150000 },
-          { month: 'Apr', actual: 130000, estimated: 135000 },
-          { month: 'May', actual: 150000, estimated: 155000 },
-          { month: 'Jun', actual: 140000, estimated: 145000 },
-          { month: 'Jul', actual: 160000, estimated: 165000 },
-          { month: 'Aug', actual: 155000, estimated: 160000 },
-          { month: 'Sep', actual: 145000, estimated: 150000 },
-          { month: 'Oct', actual: 165000, estimated: 170000 },
-          { month: 'Nov', actual: 150000, estimated: 155000 },
-          { month: 'Dec', actual: 170000, estimated: 175000 },
-        ],
+        activityTimeline: [],
     };
   }
 }
@@ -233,7 +210,8 @@ async function buildDashboardPayload() {
 // REST endpoint
 exports.getDashboard = asyncHandler(async (req, res) => {
   const payload = await buildDashboardPayload();
-  return res.json({ success: true, data: payload });
+  const hasData = await repo.hasData();
+  return res.json({ success: true, data: payload, hasData });
 });
 
 // Server-Sent Events for realtime updates

@@ -53,11 +53,30 @@ frontend/.env.production
 database_backup/
 db_backup/
 *.dump.sql
+*.sql.gz
+*.mysql.gz
+
+# Prefer ignoring generic dump files while keeping migration/seed SQL (code)
+*.sql
+!backend/migrations/*.sql
+!backend/seeds/*.sql
 
 # MySQL specific
 mysql_data/
 mysqldump_*.sql
 *.mysql
+my.cnf
+my.ini
+mysql.cnf
+config/mysql/
+docker/mysql/
+docker/data/
+docker/volumes/**/mysql/**
+data/mysql/
+db_dumps/
+sql_dumps/
+dump/
+backups/
 
 # ============================================
 # Logs

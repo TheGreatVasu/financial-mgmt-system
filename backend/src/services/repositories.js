@@ -6,11 +6,11 @@ async function getKpis() {
   const db = getDb();
   if (!db) {
     return {
-      customers: 12,
-      invoices: 48,
-      outstanding: 325000,
-      overdue: 3,
-      collectedThisMonth: 145000,
+      customers: 0,
+      invoices: 0,
+      outstanding: 0,
+      overdue: 0,
+      collectedThisMonth: 0,
     };
   }
   const [customers, invoices, paidSumRow, totalSumRow, overdue] = await Promise.all([
@@ -34,11 +34,7 @@ async function getKpis() {
 async function listAlerts(limit = 10) {
   const db = getDb();
   if (!db) {
-    return [
-      { id: 'a1', type: 'danger', message: '2 invoices overdue 30+ days' },
-      { id: 'a2', type: 'warning', message: 'Payment promise broken' },
-      { id: 'a3', type: 'success', message: 'Payment received: ₹45,000' },
-    ];
+    return [];
   }
   return db('alerts').orderBy('created_at', 'desc').limit(limit).select('*');
 }
@@ -79,10 +75,10 @@ async function getAgingAnalysis() {
   const db = getDb();
   if (!db) {
     return [
-      { period: '0-30', amount: 125000, count: 15 },
-      { period: '31-60', amount: 85000, count: 8 },
-      { period: '61-90', amount: 65000, count: 5 },
-      { period: '90+', amount: 50000, count: 3 },
+      { period: '0-30', amount: 0, count: 0 },
+      { period: '31-60', amount: 0, count: 0 },
+      { period: '61-90', amount: 0, count: 0 },
+      { period: '90+', amount: 0, count: 0 },
     ];
   }
   
@@ -138,10 +134,10 @@ async function getRegionalBreakup() {
   const db = getDb();
   if (!db) {
     return [
-      { region: 'North', amount: 125000, overdue: 45000 },
-      { region: 'South', amount: 98000, overdue: 32000 },
-      { region: 'East', amount: 87000, overdue: 28000 },
-      { region: 'West', amount: 115000, overdue: 38000 },
+      { region: 'North', amount: 0, overdue: 0 },
+      { region: 'South', amount: 0, overdue: 0 },
+      { region: 'East', amount: 0, overdue: 0 },
+      { region: 'West', amount: 0, overdue: 0 },
     ];
   }
   
@@ -178,10 +174,10 @@ async function getMonthlyTrends() {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months.map((m, i) => ({
+    return months.map((m) => ({
       month: m,
-      sales: 120000 + Math.random() * 50000,
-      balanceDue: 80000 + Math.random() * 40000,
+      sales: 0,
+      balanceDue: 0,
     }));
   }
   
@@ -219,11 +215,7 @@ async function getMonthlyTrends() {
 async function getTopCustomersByOverdue(limit = 10) {
   const db = getDb();
   if (!db) {
-    return [
-      { customer: 'Acme Corp', overdue: 125000, totalOutstanding: 180000 },
-      { customer: 'Globex', overdue: 98000, totalOutstanding: 145000 },
-      { customer: 'Initech', overdue: 87000, totalOutstanding: 120000 },
-    ];
+    return [];
   }
   
   const rows = await db('invoices as i')
@@ -250,10 +242,10 @@ async function getCashInflowComparison() {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months.map((m, i) => ({
+    return months.map((m) => ({
       month: m,
-      actual: 120000 + Math.random() * 30000,
-      estimated: 130000 + Math.random() * 20000,
+      actual: 0,
+      estimated: 0,
     }));
   }
   
@@ -288,6 +280,24 @@ async function getCashInflowComparison() {
   return months;
 }
 
+// Check if database has any data
+async function hasData() {
+  const db = getDb();
+  if (!db) {
+    return false;
+  }
+  try {
+    const [customerCount, invoiceCount, paymentCount] = await Promise.all([
+      db('customers').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+      db('invoices').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+      db('payments').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    ]);
+    return (customerCount + invoiceCount + paymentCount) > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
 module.exports = {
   getKpis,
   listAlerts,
@@ -298,6 +308,7 @@ module.exports = {
   getMonthlyTrends,
   getTopCustomersByOverdue,
   getCashInflowComparison,
+  hasData,
 };
 
 

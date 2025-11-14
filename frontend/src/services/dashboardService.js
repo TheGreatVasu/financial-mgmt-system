@@ -5,51 +5,42 @@ export async function fetchDashboard(token, params = {}) {
   try {
     const { data } = await api.get('/dashboard', { params })
     if (!data?.success) throw new Error(data?.message || 'Failed to load dashboard')
-    return data.data
+    return { ...data.data, hasData: data.hasData !== false }
   } catch (e) {
-    // Offline/mock fallback to avoid UI error banners
+    // Return empty data on error
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     return {
+      hasData: false,
       kpis: {
-        customers: 12,
-        invoices: 48,
-        outstanding: 325000,
-        overdue: 3,
-        collectedThisMonth: 145000,
-        dso: 18,
-        cei: 86,
+        customers: 0,
+        invoices: 0,
+        outstanding: 0,
+        overdue: 0,
+        collectedThisMonth: 0,
+        dso: 0,
+        cei: 0,
       },
       series: {
-        collections: [12,18,15,22,28,35,30,38,42,40,45,50],
-        invoices: [15,20,18,25,30,40,33,42,48,46,50,55],
-        labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+        collections: Array(12).fill(0),
+        invoices: Array(12).fill(0),
+        labels: labels,
         agingBuckets: [
-          { label: '0-30', value: 45 },
-          { label: '31-60', value: 22 },
-          { label: '61-90', value: 12 },
-          { label: '90+', value: 8 },
+          { label: '0-30', value: 0 },
+          { label: '31-60', value: 0 },
+          { label: '61-90', value: 0 },
+          { label: '90+', value: 0 },
         ],
       },
-      recentInvoices: [
-        { id: '1', invoiceNumber: 'INV20250001', customer: 'Acme Corp', totalAmount: 56000, status: 'sent', createdAt: new Date() },
-        { id: '2', invoiceNumber: 'INV20250002', customer: 'Globex', totalAmount: 120000, status: 'overdue', createdAt: new Date() },
-      ],
-      alerts: [
-        { type: 'warning', message: '3 invoices due today' },
-        { type: 'danger', message: '2 invoices overdue 30+ days' },
-        { type: 'success', message: 'Payment received: ₹45,000' },
-      ],
+      recentInvoices: [],
+      alerts: [],
       actionItems: {
-        dueToday: 14,
-        needsAttention: 6,
-        brokenPromises: 57,
-        autopayInfo: 190,
-        approvalsPending: 4,
+        dueToday: 0,
+        needsAttention: 0,
+        brokenPromises: 0,
+        autopayInfo: 0,
+        approvalsPending: 0,
       },
-      topCustomers: [
-        { customer: 'Acme Corp', outstanding: 120000 },
-        { customer: 'Globex', outstanding: 82000 },
-        { customer: 'Initech', outstanding: 64000 },
-      ],
+      topCustomers: [],
     }
   }
 }
