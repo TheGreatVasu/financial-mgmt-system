@@ -6,44 +6,38 @@ const repo = require('../services/repositories');
 
 // GET /api/dashboard
 // Returns KPIs, chart series, recent invoices, and alerts
-async function buildDashboardPayload() {
+// userId: Optional user ID to filter data by user (for user-specific dashboards)
+async function buildDashboardPayload(userId = null) {
   try {
-    // Prefer SQL repository when available; fall back to Mongoose/offline
-    const kpisFromRepo = await repo.getKpis().catch(() => null);
-    const [customerCount, invoiceCount, paidSumAgg, totalSumAgg, overdueCount, recentInvoices, topByOutstanding] = await Promise.all([
-      kpisFromRepo ? Promise.resolve(kpisFromRepo.customers) : Customer.countDocuments().catch(() => 0),
-      kpisFromRepo ? Promise.resolve(kpisFromRepo.invoices) : Invoice.countDocuments().catch(() => 0),
-      Invoice.aggregate([
-        { $group: { _id: null, paid: { $sum: '$paidAmount' } } },
-      ]).catch(() => []),
-      Invoice.aggregate([
-        { $group: { _id: null, total: { $sum: '$totalAmount' } } },
-      ]).catch(() => []),
-      kpisFromRepo ? Promise.resolve(kpisFromRepo.overdue) : Invoice.countDocuments({ status: 'overdue' }).catch(() => 0),
-      repo.recentInvoices(6).catch(() => Invoice.find({}).sort({ createdAt: -1 }).limit(6).populate('customer', 'companyName').lean().catch(() => [])),
-      repo.topCustomersByOutstanding(5).catch(() => (
-        Invoice.aggregate([
-          { $group: { _id: '$customer', outstanding: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } } } },
-          { $sort: { outstanding: -1 } },
-          { $limit: 5 },
-          { $lookup: { from: 'customers', localField: '_id', foreignField: '_id', as: 'customer' } },
-          { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
-          { $project: { _id: 0, customerId: '$customer._id', customer: '$customer.companyName', outstanding: 1 } },
-        ]).catch(() => [])
-      )),
+    // CRITICAL: userId is required for user-specific dashboards
+    if (!userId) {
+      console.warn('buildDashboardPayload called without userId - returning empty data');
+      throw new Error('User ID is required for dashboard data');
+    }
+    
+    // Use SQL repository with user filtering - NO fallback to unfiltered Mongoose queries
+    // This ensures data isolation between users
+    const kpisFromRepo = await repo.getKpis(userId);
+    const [customerCount, invoiceCount, overdueCount, recentInvoices, topByOutstanding] = await Promise.all([
+      Promise.resolve(kpisFromRepo.customers),
+      Promise.resolve(kpisFromRepo.invoices),
+      Promise.resolve(kpisFromRepo.overdue),
+      repo.recentInvoices(6, userId), // Always pass userId for filtering
+      repo.topCustomersByOutstanding(5, userId), // Always pass userId for filtering
     ]);
 
-    const paidSum = kpisFromRepo ? Number(kpisFromRepo.collectedThisMonth || 0) : (Array.isArray(paidSumAgg) && paidSumAgg[0] ? paidSumAgg[0].paid : 0);
-    const totalSum = kpisFromRepo ? Number(kpisFromRepo.outstanding || 0) + Number(paidSum) : (Array.isArray(totalSumAgg) && totalSumAgg[0] ? totalSumAgg[0].total : 0);
+    // Calculate totals from user-filtered KPIs
+    const paidSum = Number(kpisFromRepo.collectedThisMonth || 0);
+    const totalSum = Number(kpisFromRepo.outstanding || 0) + Number(paidSum);
     const outstanding = Math.max(totalSum - paidSum, 0);
 
-    // Fetch advanced analytics
+    // Fetch advanced analytics with user filtering
     const [agingAnalysis, regionalBreakup, monthlyTrends, topCustomersOverdue, cashInflowComparison] = await Promise.all([
-      repo.getAgingAnalysis().catch(() => []),
-      repo.getRegionalBreakup().catch(() => []),
-      repo.getMonthlyTrends().catch(() => []),
-      repo.getTopCustomersByOverdue(10).catch(() => []),
-      repo.getCashInflowComparison().catch(() => []),
+      repo.getAgingAnalysis(userId).catch(() => []),
+      repo.getRegionalBreakup(userId).catch(() => []),
+      repo.getMonthlyTrends(userId).catch(() => []),
+      repo.getTopCustomersByOverdue(10, userId).catch(() => []),
+      repo.getCashInflowComparison(userId).catch(() => []),
     ]);
 
     // Monthly series from actual data
@@ -64,13 +58,14 @@ async function buildDashboardPayload() {
       ],
     };
 
+    // Map recent invoices - handle both SQL and Mongoose response formats
     const invoices = (recentInvoices || []).map((inv) => ({
-      id: inv._id,
-      invoiceNumber: inv.invoiceNumber,
-      customer: inv.customer?.companyName || '—',
-      totalAmount: inv.totalAmount,
+      id: inv.id || inv._id,
+      invoiceNumber: inv.invoiceNumber || inv.invoice_number,
+      customer: inv.customer || inv.customer_name || '—',
+      totalAmount: inv.totalAmount || inv.total_amount || 0,
       status: inv.status,
-      createdAt: inv.createdAt,
+      createdAt: inv.createdAt || inv.created_at,
     }));
 
     // DSO calculation: Days Sales Outstanding
@@ -209,13 +204,46 @@ async function buildDashboardPayload() {
 
 // REST endpoint
 exports.getDashboard = asyncHandler(async (req, res) => {
-  const payload = await buildDashboardPayload();
-  const hasData = await repo.hasData();
-  return res.json({ success: true, data: payload, hasData });
+  // Get userId from authenticated user (req.user is set by authMiddleware)
+  const userId = req.user?.id || null;
+  
+  // If no user is authenticated, return error (dashboard should be user-specific)
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required to access dashboard'
+    });
+  }
+  
+  console.log(`📊 Dashboard request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'})`);
+  
+  const payload = await buildDashboardPayload(userId);
+  const hasData = await repo.hasData(userId);
+  
+  // Log dashboard summary for debugging
+  console.log(`📊 Dashboard data for user ${userId}:`, {
+    customers: payload.kpis.customers,
+    invoices: payload.kpis.invoices,
+    outstanding: payload.kpis.outstanding,
+    hasData
+  });
+  
+  return res.json({ success: true, data: payload, hasData, userId }); // Include userId in response for debugging
 });
 
 // Server-Sent Events for realtime updates
 exports.streamDashboard = asyncHandler(async (req, res) => {
+  // Get userId from authenticated user
+  const userId = req.user?.id || null;
+  
+  // If no user is authenticated, return error
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required to access dashboard stream'
+    });
+  }
+  
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -226,7 +254,7 @@ exports.streamDashboard = asyncHandler(async (req, res) => {
 
   async function push() {
     if (!alive) return;
-    const payload = await buildDashboardPayload();
+    const payload = await buildDashboardPayload(userId);
     res.write(`event: update\n`);
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   }

@@ -15,8 +15,23 @@ function computeTotals(items = [], taxRate = 0) {
 const getInvoices = asyncHandler(async (req, res) => {
   const db = getDb();
   const { page = 1, limit = 20, status, customer, from, to, q } = req.query;
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to view invoices' 
+    });
+  }
+  
   if (db) {
     const qb = db('invoices as i').leftJoin('customers as c', 'c.id', 'i.customer_id');
+    
+    // CRITICAL: Filter by user to ensure data isolation
+    // Also exclude NULL created_by to prevent showing orphaned data
+    qb.where('i.created_by', userId).whereNotNull('i.created_by');
+    
     if (status) qb.where('i.status', status);
     if (customer) qb.where('i.customer_id', customer);
     if (from) qb.where('i.created_at', '>=', new Date(from));
@@ -64,10 +79,21 @@ const getInvoice = asyncHandler(async (req, res) => {
   const id = req.params.id;
   // Convert ID to number if it's a string (MySQL uses numeric IDs)
   const invoiceId = isNaN(id) ? id : Number(id);
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to view invoice' 
+    });
+  }
+  
   if (db) {
     const row = await db('invoices as i')
       .leftJoin('customers as c', 'c.id', 'i.customer_id')
       .where('i.id', invoiceId)
+      .where('i.created_by', userId) // CRITICAL: Ensure user can only access their own invoices
       .select('i.*', 'c.company_name as customer_name')
       .first();
     
@@ -218,6 +244,15 @@ const createInvoice = asyncHandler(async (req, res) => {
         
         // Build row with only columns that exist in the database
         // Check which columns exist by attempting to describe the table structure
+        // Get user ID from authenticated request
+        const userId = req.user?.id;
+        if (!userId) {
+          return res.status(401).json({ 
+            success: false, 
+            message: 'Authentication required to create invoice' 
+          });
+        }
+        
         const row = {
           invoice_number: invoiceNumber,
           customer_id: customerId,
@@ -229,6 +264,7 @@ const createInvoice = asyncHandler(async (req, res) => {
           total_amount: total,
           paid_amount: 0,
           status: payload.status || 'draft',
+          created_by: userId, // Set the user who created this invoice
           created_at: now,
         };
         
@@ -487,9 +523,21 @@ const updateInvoice = asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: 'No data provided for update' });
     }
     
+    // Get user ID from authenticated request - CRITICAL for user isolation
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required to update invoice' 
+      });
+    }
+    
     if (db) {
-      // First, check if invoice exists
-      const existing = await db('invoices').where({ id: invoiceId }).first();
+      // First, check if invoice exists AND belongs to the user
+      const existing = await db('invoices')
+        .where({ id: invoiceId })
+        .where('created_by', userId) // CRITICAL: Ensure user can only update their own invoices
+        .first();
       if (!existing) {
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
@@ -782,8 +830,29 @@ const deleteInvoice = asyncHandler(async (req, res) => {
   const id = req.params.id;
   // Convert ID to number if it's a string (MySQL uses numeric IDs)
   const invoiceId = isNaN(id) ? id : Number(id);
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to delete invoice' 
+    });
+  }
+  
   if (db) {
-    await db('invoices').where({ id: invoiceId }).delete();
+    // CRITICAL: Only allow deletion of invoices created by the user
+    const deleted = await db('invoices')
+      .where({ id: invoiceId })
+      .where('created_by', userId)
+      .delete();
+    
+    if (deleted === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invoice not found or you do not have permission to delete it' 
+      });
+    }
     // Emit dashboard update
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true });

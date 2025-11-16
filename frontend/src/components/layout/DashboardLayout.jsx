@@ -105,7 +105,10 @@ export default function DashboardLayout({ children }) {
       const validationErrors = []
 
       // Process files sequentially
-      for (const file of filesArray) {
+      for (let fileIndex = 0; fileIndex < filesArray.length; fileIndex++) {
+        const file = filesArray[fileIndex]
+        const isLastFile = fileIndex === filesArray.length - 1
+        
         try {
           console.log(`📤 Starting import for file: ${file.name}`, { size: file.size, type: file.type })
           const result = await importExcelFile(token, file)
@@ -117,16 +120,29 @@ export default function DashboardLayout({ children }) {
             const fileErrors = result.data?.errorCount || result.data?.errors || 0
             const errorDetails = result.data?.errorDetails || []
             const columnMapping = result.data?.columnMapping || {}
+            const mergeSummary = result.data?.mergeSummary || {}
             
             console.log(`✅ Import successful for ${file.name}:`, {
               importedCount,
               fileErrors,
               matchedColumns: columnMapping.matchedCount,
-              ignoredColumns: columnMapping.ignoredCount
+              ignoredColumns: columnMapping.ignoredCount,
+              mergeSummary
             })
             
             totalImported += importedCount
             totalErrors += fileErrors
+            
+            // Show merge summary if available
+            if (mergeSummary && Object.keys(mergeSummary).length > 0) {
+              const { newRecords = 0, updatedRecords = 0, deletedRecords = 0 } = mergeSummary
+              if (newRecords > 0 || updatedRecords > 0 || deletedRecords > 0) {
+                toast.success(
+                  `${file.name}: ${newRecords} new, ${updatedRecords} updated, ${deletedRecords} deleted`,
+                  { duration: 6000 }
+                )
+              }
+            }
             
             // Show column mapping information
             if (columnMapping) {
@@ -164,6 +180,16 @@ export default function DashboardLayout({ children }) {
               if (errorDetails && Array.isArray(errorDetails)) {
                 validationErrors.push(...errorDetails.map(e => `${file.name}: ${e}`))
               }
+            }
+            
+            // Auto-open modal for next file if not the last file
+            if (!isLastFile && filesArray.length > 1) {
+              // Close modal temporarily, then reopen after a short delay
+              closeImportModal()
+              setTimeout(() => {
+                openImportModal()
+                toast.info(`Ready to import next file: ${filesArray[fileIndex + 1].name}`, { duration: 3000 })
+              }, 500)
             }
           } else {
             errors.push(`${file.name}: ${result?.message || 'Import failed'}`)
@@ -255,6 +281,7 @@ export default function DashboardLayout({ children }) {
         }
       }
       
+      // Only close modal if all files are processed
       closeImportModal()
       
       // Trigger dashboard refresh without page reload

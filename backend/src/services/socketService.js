@@ -122,6 +122,23 @@ async function broadcastDashboardUpdate() {
     const dashboardData = await buildDashboardPayload();
     // Broadcast to all connected users
     io.emit('dashboard:update', dashboardData);
+    
+    // Also broadcast sales invoice dashboard update
+    const { getSalesInvoiceDashboard } = require('../controllers/salesInvoiceDashboardController');
+    // We need to create a mock request object for the controller
+    const mockReq = { query: {} };
+    const mockRes = {
+      json: (data) => {
+        // Broadcast the sales invoice dashboard data
+        io.emit('sales-invoice-dashboard:update', data);
+      }
+    };
+    // Call the controller function directly (it's asyncHandler wrapped)
+    try {
+      await getSalesInvoiceDashboard(mockReq, mockRes);
+    } catch (err) {
+      console.error('Error broadcasting sales invoice dashboard update:', err);
+    }
   } catch (error) {
     console.error('Error broadcasting dashboard update:', error);
   }

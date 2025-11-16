@@ -9,14 +9,9 @@ export function initializeSocket(token) {
     return socket;
   }
 
-  const apiBaseUrl = import.meta?.env?.VITE_API_BASE_URL || '';
-  // Extract base URL for socket (remove /api if present)
-  let socketUrl = apiBaseUrl || 'http://localhost:5001';
-  if (socketUrl.endsWith('/api')) {
-    socketUrl = socketUrl.slice(0, -4);
-  } else if (!socketUrl.startsWith('http')) {
-    socketUrl = `http://${socketUrl}`;
-  }
+  // Socket connects directly to backend, not through proxy
+  // In development, vite proxy handles /api, but socket needs direct connection
+  const socketUrl = 'http://localhost:5001';
 
   socket = io(socketUrl, {
     auth: {

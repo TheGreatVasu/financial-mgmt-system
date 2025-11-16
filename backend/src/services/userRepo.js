@@ -453,6 +453,64 @@ async function audit({ action, entity, entityId, performedBy, ipAddress, userAge
   }
 }
 
+/**
+ * Initialize a user's dashboard when they first register/login
+ * Creates a dashboard record in user_dashboards table with default configuration
+ * @param {number} userId - The user ID
+ * @returns {Promise<boolean>} - Returns true if dashboard was initialized, false otherwise
+ */
+async function initializeUserDashboard(userId) {
+  const db = getDb();
+  if (!db) {
+    console.warn('initializeUserDashboard: Database not available');
+    return false;
+  }
+  
+  try {
+    // Check if dashboard already exists
+    const existing = await db('user_dashboards')
+      .where({ user_id: userId })
+      .first();
+    
+    if (existing) {
+      console.log(`Dashboard already exists for user ${userId}`);
+      return true;
+    }
+    
+    // Create default dashboard configuration
+    const defaultConfig = {
+      widgets: [],
+      layout: 'default',
+      preferences: {
+        refreshInterval: 30, // seconds
+        showEmptyStates: true,
+        defaultView: 'overview'
+      }
+    };
+    
+    // Insert new dashboard record
+    await db('user_dashboards').insert({
+      user_id: userId,
+      dashboard_config: JSON.stringify(defaultConfig),
+      is_initialized: 1,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now()
+    });
+    
+    console.log(`✅ Dashboard initialized for user ${userId}`);
+    return true;
+  } catch (error) {
+    // If table doesn't exist yet (migration not run), log warning but don't fail
+    if (error.message && error.message.includes("doesn't exist")) {
+      console.warn(`user_dashboards table doesn't exist yet. Run migration: 202510160002_create_user_dashboards.sql`);
+      return false;
+    }
+    console.error(`Error initializing dashboard for user ${userId}:`, error);
+    // Don't throw - dashboard initialization shouldn't block user creation
+    return false;
+  }
+}
+
 module.exports = {
   hasDb,
   findByEmailWithPassword,
@@ -471,6 +529,7 @@ module.exports = {
   createCompanyDatabase,
   getCompanyDatabaseName,
   getAllUsers,
+  initializeUserDashboard,
 };
 
 

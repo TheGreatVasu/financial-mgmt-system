@@ -9,8 +9,23 @@ const fs = require('fs');
 const getCustomers = asyncHandler(async (req, res) => {
   const db = getDb();
   const { page = 1, limit = 50, q } = req.query;
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to view customers' 
+    });
+  }
+  
   if (db) {
     const qb = db('customers');
+    
+    // CRITICAL: Filter by user to ensure data isolation
+    // Also exclude NULL created_by to prevent showing orphaned data
+    qb.where('created_by', userId).whereNotNull('created_by');
+    
     if (q) qb.whereILike('company_name', `%${q}%`).orWhereILike('name', `%${q}%`);
     const rows = await qb.clone().orderBy('created_at', 'desc').limit(Number(limit)).offset((Number(page)-1)*Number(limit)).select('*');
     const [{ c }] = await qb.clone().count({ c: '*' });
@@ -25,8 +40,21 @@ const getCustomers = asyncHandler(async (req, res) => {
 const getCustomer = asyncHandler(async (req, res) => {
   const db = getDb();
   const id = req.params.id;
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to view customer' 
+    });
+  }
+  
   if (db) {
-    const row = await db('customers').where({ id }).first();
+    const row = await db('customers')
+      .where({ id })
+      .where('created_by', userId) // CRITICAL: Ensure user can only access their own customers
+      .first();
     if (!row) return res.status(404).json({ success: false, message: 'Customer not found' });
     return res.json({ success: true, data: row });
   }
@@ -39,6 +67,16 @@ const createCustomer = asyncHandler(async (req, res) => {
   const db = getDb();
   const p = req.body || {};
   const now = new Date();
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to create customer' 
+    });
+  }
+  
   if (db) {
     const row = {
       name: p.name || null,
@@ -46,6 +84,7 @@ const createCustomer = asyncHandler(async (req, res) => {
       email: p.email || null,
       phone: p.phone || null,
       gst_number: p.gstNumber || null,
+      created_by: userId, // Set the user who created this customer
       created_at: now,
     };
     const [id] = await db('customers').insert(row);
@@ -63,9 +102,34 @@ const updateCustomer = asyncHandler(async (req, res) => {
   const db = getDb();
   const id = req.params.id;
   const p = req.body || {};
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to update customer' 
+    });
+  }
+  
   if (db) {
-    await db('customers').where({ id }).update({ name: p.name, company_name: p.companyName, email: p.email, phone: p.phone, gst_number: p.gstNumber });
-    const row = await db('customers').where({ id }).first();
+    // CRITICAL: Only allow update of customers created by the user
+    const updated = await db('customers')
+      .where({ id })
+      .where('created_by', userId)
+      .update({ name: p.name, company_name: p.companyName, email: p.email, phone: p.phone, gst_number: p.gstNumber });
+    
+    if (updated === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Customer not found or you do not have permission to update it' 
+      });
+    }
+    
+    const row = await db('customers')
+      .where({ id })
+      .where('created_by', userId)
+      .first();
     // Emit dashboard update
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true, data: row });
@@ -80,8 +144,29 @@ const updateCustomer = asyncHandler(async (req, res) => {
 const deleteCustomer = asyncHandler(async (req, res) => {
   const db = getDb();
   const id = req.params.id;
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to delete customer' 
+    });
+  }
+  
   if (db) {
-    await db('customers').where({ id }).delete();
+    // CRITICAL: Only allow deletion of customers created by the user
+    const deleted = await db('customers')
+      .where({ id })
+      .where('created_by', userId)
+      .delete();
+    
+    if (deleted === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Customer not found or you do not have permission to delete it' 
+      });
+    }
     // Emit dashboard update
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true });

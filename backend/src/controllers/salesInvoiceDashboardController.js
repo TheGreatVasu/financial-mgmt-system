@@ -2,8 +2,101 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
 
 /**
+ * Build filter query based on request parameters
+ */
+function buildFilterQuery(query, filters, db) {
+  if (!filters || Object.keys(filters).length === 0) {
+    return query;
+  }
+
+  // Date range filter
+  if (filters.dateFrom) {
+    query = query.where('gst_tax_invoice_date', '>=', filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    query = query.where('gst_tax_invoice_date', '<=', filters.dateTo);
+  }
+
+  // Customer filter
+  if (filters.customer) {
+    query = query.where('customer_name', filters.customer);
+  }
+
+  // Business Unit filter
+  if (filters.businessUnit) {
+    query = query.where('business_unit', filters.businessUnit);
+  }
+
+  // Region filter
+  if (filters.region) {
+    query = query.where('region', filters.region);
+  }
+
+  // Zone filter
+  if (filters.zone) {
+    query = query.where('zone', filters.zone);
+  }
+
+  // Invoice Type filter
+  if (filters.invoiceType) {
+    query = query.where('invoice_type', filters.invoiceType);
+  }
+
+  // Amount range filter
+  if (filters.amountMin !== undefined && filters.amountMin !== null) {
+    query = query.where('total_invoice_value', '>=', filters.amountMin);
+  }
+  if (filters.amountMax !== undefined && filters.amountMax !== null) {
+    query = query.where('total_invoice_value', '<=', filters.amountMax);
+  }
+
+  // Tax type filter - filter invoices that have the selected tax types
+  if (filters.taxTypes && Array.isArray(filters.taxTypes) && filters.taxTypes.length > 0) {
+    const taxConditions = filters.taxTypes.map(taxType => {
+      switch(taxType) {
+        case 'CGST':
+          return db.raw('cgst_output > 0');
+        case 'SGST':
+          return db.raw('sgst_output > 0');
+        case 'IGST':
+          return db.raw('igst_output > 0');
+        case 'UGST':
+          return db.raw('ugst_output > 0');
+        case 'TCS':
+          return db.raw('tcs > 0');
+        default:
+          return null;
+      }
+    }).filter(condition => condition !== null);
+    
+    if (taxConditions.length > 0) {
+      query = query.where(function() {
+        taxConditions.forEach((condition, index) => {
+          if (index === 0) {
+            this.whereRaw(condition);
+          } else {
+            this.orWhereRaw(condition);
+          }
+        });
+      });
+    }
+  }
+
+  return query;
+}
+
+/**
  * GET /api/dashboard/sales-invoice
  * Get comprehensive dashboard data from sales_invoice_master table
+ * Supports query parameters for filtering:
+ * - dateFrom, dateTo: Date range filter
+ * - customer: Customer name filter
+ * - businessUnit: Business unit filter
+ * - region: Region filter
+ * - zone: Zone filter
+ * - invoiceType: Invoice type filter
+ * - amountMin, amountMax: Amount range filter
+ * - taxTypes: Comma-separated tax types (CGST,SGST,IGST,UGST,TCS)
  */
 exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
   const db = getDb();
@@ -14,7 +107,33 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
     });
   }
 
+  // CRITICAL: Get user ID from authenticated request - REQUIRED for user data isolation
+  const userId = req.user?.id || null;
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required to access sales invoice dashboard'
+    });
+  }
+
+  console.log(`📊 Sales Invoice Dashboard request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'})`);
+
   try {
+    // Extract filters from query parameters
+    const filters = {};
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+    if (req.query.customer) filters.customer = req.query.customer;
+    if (req.query.businessUnit) filters.businessUnit = req.query.businessUnit;
+    if (req.query.region) filters.region = req.query.region;
+    if (req.query.zone) filters.zone = req.query.zone;
+    if (req.query.invoiceType) filters.invoiceType = req.query.invoiceType;
+    if (req.query.amountMin) filters.amountMin = parseFloat(req.query.amountMin);
+    if (req.query.amountMax) filters.amountMax = parseFloat(req.query.amountMax);
+    if (req.query.taxTypes) {
+      filters.taxTypes = req.query.taxTypes.split(',').map(t => t.trim());
+    }
+
     // Check if table exists first
     const tableExists = await db.schema.hasTable('sales_invoice_master');
     if (!tableExists) {
@@ -46,16 +165,40 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
             bankCharges: 0,
             interest: 0,
             otherExceptions: []
+          },
+          availableOptions: {
+            customers: [],
+            businessUnits: [],
+            regions: [],
+            zones: [],
+            invoiceTypes: []
           }
         }
       });
     }
 
-    // Get all invoices
-    const invoices = await db('sales_invoice_master')
+    // CRITICAL: Get all invoices with filters applied AND user filtering
+    // This ensures each user only sees their own imported sales invoices
+    let invoicesQuery = db('sales_invoice_master')
       .select('*')
+      .where('created_by', userId) // CRITICAL: Filter by user
+      .whereNotNull('created_by'); // CRITICAL: Exclude orphaned data
+    
+    invoicesQuery = buildFilterQuery(invoicesQuery, filters, db);
+    const invoices = await invoicesQuery
       .orderBy('gst_tax_invoice_date', 'desc')
       .limit(10000); // Reasonable limit
+
+    // Get available filter options (for dropdowns) - ALSO filtered by user
+    const allInvoices = await db('sales_invoice_master')
+      .select('customer_name', 'business_unit', 'region', 'zone', 'invoice_type')
+      .where('created_by', userId) // CRITICAL: Only show options from user's own data
+      .whereNotNull('created_by');
+    const customers = [...new Set(allInvoices.map(inv => inv.customer_name).filter(Boolean))].sort();
+    const businessUnits = [...new Set(allInvoices.map(inv => inv.business_unit).filter(Boolean))].sort();
+    const regions = [...new Set(allInvoices.map(inv => inv.region).filter(Boolean))].sort();
+    const zones = [...new Set(allInvoices.map(inv => inv.zone).filter(Boolean))].sort();
+    const invoiceTypes = [...new Set(allInvoices.map(inv => inv.invoice_type).filter(Boolean))].sort();
 
     if (invoices.length === 0) {
       return res.json({
@@ -86,6 +229,13 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
             bankCharges: 0,
             interest: 0,
             otherExceptions: []
+          },
+          availableOptions: {
+            customers,
+            businessUnits,
+            regions,
+            zones,
+            invoiceTypes
           }
         }
       });
@@ -212,6 +362,14 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
         }))
     };
 
+    // Log dashboard summary for debugging
+    console.log(`📊 Sales Invoice Dashboard data for user ${userId}:`, {
+      totalInvoices: invoices.length,
+      totalInvoiceAmount: summary.totalInvoiceAmount,
+      netReceivables: summary.netReceivables,
+      hasData: invoices.length > 0
+    });
+
     res.json({
       success: true,
       data: {
@@ -225,8 +383,16 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
         taxBreakup,
         monthlyTrends,
         deductionComparison,
-        reconciliation
-      }
+        reconciliation,
+        availableOptions: {
+          customers,
+          businessUnits,
+          regions,
+          zones,
+          invoiceTypes
+        }
+      },
+      userId // Include userId in response for debugging
     });
   } catch (error) {
     console.error('Error fetching sales invoice dashboard:', error);

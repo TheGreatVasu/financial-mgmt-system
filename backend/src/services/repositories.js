@@ -2,7 +2,7 @@ const { getDb } = require('../config/db');
 
 // Repository layer: uses MySQL via Knex when configured, otherwise returns mock data
 
-async function getKpis() {
+async function getKpis(userId = null) {
   const db = getDb();
   if (!db) {
     return {
@@ -13,12 +13,23 @@ async function getKpis() {
       collectedThisMonth: 0,
     };
   }
+  
+  // Build base queries with user filtering if userId is provided
+  // CRITICAL: Always filter by userId when provided, and exclude NULL created_by for security
+  const customerQuery = userId 
+    ? db('customers').where('created_by', userId).whereNotNull('created_by')
+    : db('customers');
+  
+  const invoiceQuery = userId
+    ? db('invoices').where('created_by', userId).whereNotNull('created_by')
+    : db('invoices');
+  
   const [customers, invoices, paidSumRow, totalSumRow, overdue] = await Promise.all([
-    db('customers').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-    db('invoices').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-    db('invoices').sum({ paid: 'paid_amount' }).first().catch(() => ({ paid: 0 })),
-    db('invoices').sum({ total: 'total_amount' }).first().catch(() => ({ total: 0 })),
-    db('invoices').where({ status: 'overdue' }).count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    customerQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    invoiceQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    invoiceQuery.clone().sum({ paid: 'paid_amount' }).first().catch(() => ({ paid: 0 })),
+    invoiceQuery.clone().sum({ total: 'total_amount' }).first().catch(() => ({ total: 0 })),
+    invoiceQuery.clone().where({ status: 'overdue' }).count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
   ]);
   const paid = Number(paidSumRow?.paid || 0);
   const total = Number(totalSumRow?.total || 0);
@@ -31,19 +42,29 @@ async function getKpis() {
   };
 }
 
-async function listAlerts(limit = 10) {
+async function listAlerts(limit = 10, userId = null) {
   const db = getDb();
   if (!db) {
     return [];
   }
+  // Alerts are typically global, but if we want user-specific alerts, we can filter by user_id
+  // For now, keeping it global but can be extended later
   return db('alerts').orderBy('created_at', 'desc').limit(limit).select('*');
 }
 
-async function recentInvoices(limit = 6) {
+async function recentInvoices(limit = 6, userId = null) {
   const db = getDb();
   if (!db) return [];
-  const rows = await db('invoices as i')
-    .leftJoin('customers as c', 'c.id', 'i.customer_id')
+  let query = db('invoices as i')
+    .leftJoin('customers as c', 'c.id', 'i.customer_id');
+  
+  // Filter by user if userId is provided
+  // CRITICAL: Always exclude NULL created_by for security
+  if (userId) {
+    query = query.where('i.created_by', userId).whereNotNull('i.created_by');
+  }
+  
+  const rows = await query
     .orderBy('i.created_at', 'desc')
     .limit(limit)
     .select('i.id','i.invoice_number','i.total_amount','i.status','i.created_at','c.company_name');
@@ -57,11 +78,19 @@ async function recentInvoices(limit = 6) {
   }));
 }
 
-async function topCustomersByOutstanding(limit = 5) {
+async function topCustomersByOutstanding(limit = 5, userId = null) {
   const db = getDb();
   if (!db) return [];
-  const rows = await db('invoices as i')
-    .leftJoin('customers as c', 'c.id', 'i.customer_id')
+  let query = db('invoices as i')
+    .leftJoin('customers as c', 'c.id', 'i.customer_id');
+  
+  // Filter by user if userId is provided
+  // CRITICAL: Always exclude NULL created_by for security
+  if (userId) {
+    query = query.where('i.created_by', userId).whereNotNull('i.created_by');
+  }
+  
+  const rows = await query
     .groupBy('i.customer_id','c.company_name')
     .orderBy('outstanding','desc')
     .limit(limit)
@@ -71,7 +100,7 @@ async function topCustomersByOutstanding(limit = 5) {
 }
 
 // Aging Analysis: Breakdown of AR balance by time periods
-async function getAgingAnalysis() {
+async function getAgingAnalysis(userId = null) {
   const db = getDb();
   if (!db) {
     return [
@@ -87,8 +116,17 @@ async function getAgingAnalysis() {
   const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   
+  // Helper to build base query with user filter
+  const buildQuery = () => {
+    let q = db('invoices as i');
+    if (userId) {
+      q = q.where('i.created_by', userId);
+    }
+    return q;
+  };
+  
   const [bucket0_30, bucket31_60, bucket61_90, bucket90Plus] = await Promise.all([
-    db('invoices as i')
+    buildQuery()
       .where('i.due_date', '>=', thirtyDaysAgo)
       .where('i.due_date', '<=', now)
       .whereRaw('(i.total_amount - i.paid_amount) > 0')
@@ -96,7 +134,7 @@ async function getAgingAnalysis() {
       .count({ count: '*' })
       .first()
       .catch(() => ({ amount: 0, count: 0 })),
-    db('invoices as i')
+    buildQuery()
       .where('i.due_date', '>=', sixtyDaysAgo)
       .where('i.due_date', '<', thirtyDaysAgo)
       .whereRaw('(i.total_amount - i.paid_amount) > 0')
@@ -104,7 +142,7 @@ async function getAgingAnalysis() {
       .count({ count: '*' })
       .first()
       .catch(() => ({ amount: 0, count: 0 })),
-    db('invoices as i')
+    buildQuery()
       .where('i.due_date', '>=', ninetyDaysAgo)
       .where('i.due_date', '<', sixtyDaysAgo)
       .whereRaw('(i.total_amount - i.paid_amount) > 0')
@@ -112,7 +150,7 @@ async function getAgingAnalysis() {
       .count({ count: '*' })
       .first()
       .catch(() => ({ amount: 0, count: 0 })),
-    db('invoices as i')
+    buildQuery()
       .where('i.due_date', '<', ninetyDaysAgo)
       .whereRaw('(i.total_amount - i.paid_amount) > 0')
       .sum({ amount: db.raw('i.total_amount - i.paid_amount') })
@@ -130,7 +168,7 @@ async function getAgingAnalysis() {
 }
 
 // Regional breakdown of overdue balance
-async function getRegionalBreakup() {
+async function getRegionalBreakup(userId = null) {
   const db = getDb();
   if (!db) {
     return [
@@ -142,10 +180,18 @@ async function getRegionalBreakup() {
   }
   
   // Group by state/region - using state as region
-  const rows = await db('invoices as i')
+  let query = db('invoices as i')
     .leftJoin('customers as c', 'c.id', 'i.customer_id')
     .whereRaw('(i.total_amount - i.paid_amount) > 0')
-    .whereNotNull('c.state')
+    .whereNotNull('c.state');
+  
+  // Filter by user if userId is provided
+  // CRITICAL: Always exclude NULL created_by for security
+  if (userId) {
+    query = query.where('i.created_by', userId).whereNotNull('i.created_by');
+  }
+  
+  const rows = await query
     .groupBy('c.state')
     .select('c.state as region')
     .sum({ amount: db.raw('i.total_amount - i.paid_amount') })
@@ -170,7 +216,7 @@ async function getRegionalBreakup() {
 }
 
 // Monthly trends for past 12 months
-async function getMonthlyTrends() {
+async function getMonthlyTrends(userId = null) {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -188,17 +234,26 @@ async function getMonthlyTrends() {
     const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const monthName = date.toLocaleDateString('en-US', { month: 'short' });
     
-    const [sales, balanceDue] = await Promise.all([
-      db('invoices')
+    // Build base queries with user filtering
+    const buildInvoiceQuery = () => {
+      let q = db('invoices')
         .where('created_at', '>=', date)
-        .where('created_at', '<', nextMonth)
+        .where('created_at', '<', nextMonth);
+      if (userId) {
+        q = q.where('created_by', userId);
+      }
+      return q;
+    };
+    
+    const [sales, balanceDue] = await Promise.all([
+      buildInvoiceQuery()
+        .clone()
         .sum({ total: 'total_amount' })
         .first()
         .then(r => Number(r?.total || 0))
         .catch(() => 0),
-      db('invoices')
-        .where('created_at', '>=', date)
-        .where('created_at', '<', nextMonth)
+      buildInvoiceQuery()
+        .clone()
         .sum({ due: db.raw('total_amount - paid_amount') })
         .first()
         .then(r => Number(r?.due || 0))
@@ -212,16 +267,24 @@ async function getMonthlyTrends() {
 }
 
 // Top 10 customers by overdue amount
-async function getTopCustomersByOverdue(limit = 10) {
+async function getTopCustomersByOverdue(limit = 10, userId = null) {
   const db = getDb();
   if (!db) {
     return [];
   }
   
-  const rows = await db('invoices as i')
+  let query = db('invoices as i')
     .leftJoin('customers as c', 'c.id', 'i.customer_id')
     .where('i.status', 'overdue')
-    .whereRaw('(i.total_amount - i.paid_amount) > 0')
+    .whereRaw('(i.total_amount - i.paid_amount) > 0');
+  
+  // Filter by user if userId is provided
+  // CRITICAL: Always exclude NULL created_by for security
+  if (userId) {
+    query = query.where('i.created_by', userId).whereNotNull('i.created_by');
+  }
+  
+  const rows = await query
     .groupBy('i.customer_id', 'c.company_name')
     .orderBy('overdue', 'desc')
     .limit(limit)
@@ -238,7 +301,7 @@ async function getTopCustomersByOverdue(limit = 10) {
 }
 
 // Cash inflow estimates (actual vs estimated)
-async function getCashInflowComparison() {
+async function getCashInflowComparison(userId = null) {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -256,18 +319,46 @@ async function getCashInflowComparison() {
     const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const monthName = date.toLocaleDateString('en-US', { month: 'short' });
     
-    const [actual, estimated] = await Promise.all([
-      db('payments')
+    // Build queries with user filtering
+    const buildPaymentQuery = () => {
+      let q = db('payments')
         .where('payment_date', '>=', date)
-        .where('payment_date', '<', nextMonth)
-        .sum({ total: 'amount' })
+        .where('payment_date', '<', nextMonth);
+      // Payments don't have created_by, but we can filter by invoice's created_by via join
+      // For now, if userId is provided, we'll filter payments by invoices created_by
+      return q;
+    };
+    
+    const buildInvoiceQuery = () => {
+      let q = db('invoices')
+        .where('due_date', '>=', date)
+        .where('due_date', '<', nextMonth);
+      if (userId) {
+        q = q.where('created_by', userId);
+      }
+      return q;
+    };
+    
+    // For payments, we need to join with invoices to filter by user
+    // This is a simplified version - in production, you might want to add created_by to payments table
+    let actualQuery = db('payments')
+      .where('payment_date', '>=', date)
+      .where('payment_date', '<', nextMonth);
+    
+    if (userId) {
+      actualQuery = actualQuery
+        .leftJoin('invoices as i', 'i.id', 'payments.invoice_id')
+        .where('i.created_by', userId);
+    }
+    
+    const [actual, estimated] = await Promise.all([
+      actualQuery
+        .sum({ total: 'payments.amount' })
         .first()
         .then(r => Number(r?.total || 0))
         .catch(() => 0),
       // Estimate based on invoices due in that month (80% collection rate)
-      db('invoices')
-        .where('due_date', '>=', date)
-        .where('due_date', '<', nextMonth)
+      buildInvoiceQuery()
         .sum({ total: 'total_amount' })
         .first()
         .then(r => Number(r?.total || 0) * 0.8)
@@ -281,16 +372,33 @@ async function getCashInflowComparison() {
 }
 
 // Check if database has any data
-async function hasData() {
+async function hasData(userId = null) {
   const db = getDb();
   if (!db) {
     return false;
   }
   try {
+    const customerQuery = userId 
+      ? db('customers').where('created_by', userId)
+      : db('customers');
+    
+    const invoiceQuery = userId
+      ? db('invoices').where('created_by', userId)
+      : db('invoices');
+    
     const [customerCount, invoiceCount, paymentCount] = await Promise.all([
-      db('customers').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-      db('invoices').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-      db('payments').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+      customerQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+      invoiceQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+      // Payments don't have created_by, but we can check via invoices
+      userId 
+        ? db('payments')
+            .leftJoin('invoices as i', 'i.id', 'payments.invoice_id')
+            .where('i.created_by', userId)
+            .count({ c: '*' })
+            .first()
+            .then(r => Number(r?.c || 0))
+            .catch(() => 0)
+        : db('payments').count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
     ]);
     return (customerCount + invoiceCount + paymentCount) > 0;
   } catch (error) {

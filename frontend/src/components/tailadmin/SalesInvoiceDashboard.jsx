@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, TrendingUp, DollarSign, Receipt, AlertTriangle, Package, FileText, BarChart3 } from "lucide-react";
 import { useAuthContext } from "../../context/AuthContext.jsx";
 import { useImportContext } from "../../context/ImportContext.jsx";
 import { getSalesInvoiceDashboard } from "../../services/salesInvoiceService.js";
+import { initializeSocket, getSocket } from "../../services/socketService.js";
 import SalesInvoiceMasterTable from "../tables/SalesInvoiceMasterTable.jsx";
+import SalesInvoiceFilterPanel from "../filters/SalesInvoiceFilterPanel.jsx";
 import RegionZoneChart from "../charts/RegionZoneChart.jsx";
 import BusinessUnitChart from "../charts/BusinessUnitChart.jsx";
 import CustomerContributionChart from "../charts/CustomerContributionChart.jsx";
@@ -19,12 +21,14 @@ export default function SalesInvoiceDashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({});
+  const [filterDebounceTimer, setFilterDebounceTimer] = useState(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async (currentFilters = filters) => {
     try {
       setError(null);
-      console.log('📊 Fetching dashboard data...');
-      const response = await getSalesInvoiceDashboard(token);
+      console.log('📊 Fetching dashboard data with filters:', currentFilters);
+      const response = await getSalesInvoiceDashboard(token, currentFilters);
       console.log('📊 Dashboard data received:', {
         success: response.success,
         hasData: response.data?.hasData,
@@ -44,7 +48,23 @@ export default function SalesInvoiceDashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [token]);
+
+  // Handle filter changes with debounce
+  const handleFiltersChange = useCallback((newFilters) => {
+    setFilters(newFilters);
+    // Clear existing timer
+    if (filterDebounceTimer) {
+      clearTimeout(filterDebounceTimer);
+    }
+    // Set loading state immediately for better UX
+    setIsRefreshing(true);
+    // Debounce API call
+    const timer = setTimeout(() => {
+      fetchDashboardData(newFilters);
+    }, 300); // 300ms debounce
+    setFilterDebounceTimer(timer);
+  }, [filterDebounceTimer, fetchDashboardData]);
 
   useEffect(() => {
     if (token) {
@@ -66,6 +86,39 @@ export default function SalesInvoiceDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger, token]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (filterDebounceTimer) {
+        clearTimeout(filterDebounceTimer);
+      }
+    };
+  }, [filterDebounceTimer]);
+
+  // Set up real-time socket updates
+  useEffect(() => {
+    if (!token) return;
+
+    // Initialize socket connection
+    const socket = initializeSocket(token);
+
+    // Listen for sales invoice dashboard updates
+    const handleDashboardUpdate = (data) => {
+      if (data && data.success && data.data) {
+        console.log('🔄 Real-time dashboard update received');
+        setDashboardData(data.data);
+        toast.success('Dashboard updated with latest data', { duration: 3000 });
+      }
+    };
+
+    socket.on('sales-invoice-dashboard:update', handleDashboardUpdate);
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('sales-invoice-dashboard:update', handleDashboardUpdate);
+    };
+  }, [token]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -119,7 +172,7 @@ export default function SalesInvoiceDashboard() {
     );
   }
 
-  const { summary, invoices, regionWise, businessUnitWise, customerWise, taxBreakup, monthlyTrends, deductionComparison, reconciliation } = dashboardData;
+  const { summary, invoices, regionWise, businessUnitWise, customerWise, taxBreakup, monthlyTrends, deductionComparison, reconciliation, availableOptions } = dashboardData;
 
   return (
     <div className="space-y-6">
@@ -140,6 +193,13 @@ export default function SalesInvoiceDashboard() {
           Refresh
         </button>
       </div>
+
+      {/* Filter Panel */}
+      <SalesInvoiceFilterPanel
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        availableOptions={availableOptions || {}}
+      />
 
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -17,7 +17,8 @@ const {
   comparePassword,
   findById,
   changePassword: repoChangePassword,
-  audit
+  audit,
+  initializeUserDashboard
 } = require('../services/userRepo');
 const { createOrUpdateSession } = require('../services/sessionRepo');
 const { getIOInstance } = require('../services/socketService');
@@ -157,6 +158,15 @@ const register = asyncHandler(async (req, res) => {
     });
   }
 
+  // Initialize user's dashboard
+  try {
+    await initializeUserDashboard(user.id);
+    console.log(`✅ Dashboard initialized for new user: ${user.email} (ID: ${user.id})`);
+  } catch (dashboardError) {
+    // Don't fail registration if dashboard initialization fails
+    console.warn(`Failed to initialize dashboard for user ${user.id}:`, dashboardError);
+  }
+
   // Log registration
   await audit({ action: 'create', entity: 'user', entityId: user.id, performedBy: user.id, ipAddress: req.ip, userAgent: req.get('User-Agent') });
 
@@ -290,6 +300,14 @@ const login = asyncHandler(async (req, res) => {
   } catch (updateError) {
     // Don't fail login if last login update fails, just log it
     console.warn('Failed to update last login:', updateError);
+  }
+
+  // Ensure dashboard is initialized (in case it wasn't created during registration)
+  try {
+    await initializeUserDashboard(found.id);
+  } catch (dashboardError) {
+    // Don't fail login if dashboard initialization fails
+    console.warn(`Failed to ensure dashboard exists for user ${found.id}:`, dashboardError);
   }
 
   // Generate token
@@ -646,8 +664,17 @@ const googleLogin = asyncHandler(async (req, res) => {
 
     // Upsert user
     let user;
+    let isNewUser = false;
     try {
+      // Check if user already exists before creating
+      const existingUser = await require('../services/userRepo').findByEmail(email);
       user = await require('../services/userRepo').createOrGetGoogleUser({ email, firstName, lastName });
+      
+      // If user didn't exist before, this is a new user
+      // createOrGetGoogleUser returns existing user if found, so check if it was just created
+      if (!existingUser && user) {
+        isNewUser = true;
+      }
     } catch (userError) {
       console.error('Error creating/getting Google user:', userError);
       // Check if it's a database schema issue
@@ -667,6 +694,17 @@ const googleLogin = asyncHandler(async (req, res) => {
         success: false, 
         message: 'Failed to create or retrieve user account. Please try again.' 
       });
+    }
+    
+    // Initialize dashboard for new users
+    if (isNewUser) {
+      try {
+        await initializeUserDashboard(user.id);
+        console.log(`✅ Dashboard initialized for new Google user: ${user.email} (ID: ${user.id})`);
+      } catch (dashboardError) {
+        // Don't fail login if dashboard initialization fails
+        console.warn(`Failed to initialize dashboard for user ${user.id}:`, dashboardError);
+      }
     }
 
     // Check if profile completion is needed

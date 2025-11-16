@@ -20,20 +20,31 @@ router.get('/:id/pdf', asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invoice ID is required' });
     }
     
+    // Get user ID from authenticated request - CRITICAL for user isolation
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required to generate invoice PDF' 
+      });
+    }
+    
     // Convert ID to number if it's a string (MySQL uses numeric IDs)
     const invoiceId = isNaN(id) ? id : Number(id);
   
   let invoiceData;
   if (db) {
       // Fetch fresh data from database with customer information
+      // CRITICAL: Ensure user can only generate PDF for their own invoices
     const row = await db('invoices as i')
       .leftJoin('customers as c', 'c.id', 'i.customer_id')
         .where('i.id', invoiceId)
+        .where('i.created_by', userId) // CRITICAL: User isolation
       .select('i.*', 'c.company_name as customer_name')
       .first();
     
     if (!row) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
+      return res.status(404).json({ success: false, message: 'Invoice not found or you do not have permission to access it' });
     }
     
       // Parse items JSON if present (keep as string for PDF service to handle)

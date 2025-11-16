@@ -7,8 +7,24 @@ const { broadcastDashboardUpdate } = require('../services/socketService');
 const getPayments = asyncHandler(async (req, res) => {
   const db = getDb();
   const { page = 1, limit = 20, method, status, from, to, q } = req.query;
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to view payments' 
+    });
+  }
+  
   if (db) {
-    const qb = db('payments as p').leftJoin('invoices as i', 'i.id', 'p.invoice_id');
+    const qb = db('payments as p')
+      .leftJoin('invoices as i', 'i.id', 'p.invoice_id');
+    
+    // CRITICAL: Filter by user through invoice's created_by to ensure data isolation
+    // Also exclude NULL created_by to prevent showing orphaned data
+    qb.where('i.created_by', userId).whereNotNull('i.created_by');
+    
     if (method) qb.where('p.payment_method', method);
     if (status) qb.where('p.status', status);
     if (from) qb.where('p.payment_date', '>=', new Date(from));
@@ -35,10 +51,23 @@ const createPayment = asyncHandler(async (req, res) => {
   const db = getDb();
   const payload = req.body || {};
   const now = new Date();
+  
+  // Get user ID from authenticated request - CRITICAL for user isolation
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required to create payment' 
+    });
+  }
+  
   if (db) {
-    // find invoice and update paid amount
-    const inv = await db('invoices').where({ invoice_number: payload.invoiceNumber }).first();
-    if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found' });
+    // find invoice and verify it belongs to the user
+    const inv = await db('invoices')
+      .where({ invoice_number: payload.invoiceNumber })
+      .where('created_by', userId) // CRITICAL: Ensure user can only create payments for their own invoices
+      .first();
+    if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found or you do not have permission to create payment for it' });
     const paymentRow = {
       invoice_id: inv.id,
       amount: Number(payload.amount || 0),

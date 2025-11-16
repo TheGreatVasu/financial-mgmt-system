@@ -569,7 +569,17 @@ function parseNumber(value) {
  * Import sales invoice data from Excel with all 93 columns
  */
 exports.importSalesInvoice = asyncHandler(async (req, res) => {
-  console.log('📤 Sales Invoice Import Request:', {
+  // CRITICAL: Get user ID from authenticated request - REQUIRED for user data isolation
+  const userId = req.user?.id || null;
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required to import sales invoices',
+      error: 'AUTHENTICATION_REQUIRED'
+    });
+  }
+
+  console.log(`📤 Sales Invoice Import Request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'})`, {
     hasFile: !!req.file,
     fileName: req.file?.originalname,
     fileSize: req.file?.size,
@@ -723,6 +733,12 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
   let importedCount = 0;
   let errorCount = 0;
   const errors = [];
+  
+  // Track merge changes
+  let newRecordsCount = 0;
+  let updatedRecordsCount = 0;
+  const updatedInvoiceNos = [];
+  const newInvoiceNos = [];
 
   console.log('🔄 Starting data import process...', {
     totalRows: rows.length,
@@ -838,7 +854,7 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
         lc_discrepancy_charge: parseNumber(getColumnValue(rowData, 'LC Discrepancy Charge')),
         provision_for_bad_debts: parseNumber(getColumnValue(rowData, 'Provision for Bad Debts')),
         bad_debts: parseNumber(getColumnValue(rowData, 'Bad Debts')),
-        created_by: req.user?.id || null,
+        created_by: userId, // CRITICAL: Set from authenticated user (already validated above)
         created_at: new Date(),
         updated_at: new Date()
       };
@@ -866,17 +882,22 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
 
       console.log(`📝 Row ${rowNum}: Processing invoice - GST: ${invoiceData.gst_tax_invoice_no}, Customer: ${invoiceData.customer_name}`);
 
-      // Check if invoice already exists
+      // CRITICAL: Check if invoice already exists FOR THIS USER ONLY
+      // Users can have invoices with the same invoice number, but they belong to different users
       let existingInvoice = null;
       try {
         if (invoiceData.gst_tax_invoice_no) {
           existingInvoice = await trx('sales_invoice_master')
             .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
+            .where('created_by', userId) // CRITICAL: Only check within user's own invoices
+            .whereNotNull('created_by')
             .first();
         }
         if (!existingInvoice && invoiceData.internal_invoice_no) {
           existingInvoice = await trx('sales_invoice_master')
             .where('internal_invoice_no', invoiceData.internal_invoice_no)
+            .where('created_by', userId) // CRITICAL: Only check within user's own invoices
+            .whereNotNull('created_by')
             .first();
         }
       } catch (dbError) {
@@ -893,17 +914,27 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
 
       try {
         if (existingInvoice) {
-          // Update existing invoice
-          console.log(`🔄 Row ${rowNum}: Updating existing invoice ID ${existingInvoice.id}`);
+          // Update existing invoice - verify it belongs to the user
+          if (existingInvoice.created_by !== userId) {
+            errors.push(`Row ${rowNum}: Invoice already exists but belongs to another user. Cannot update.`);
+            errorCount++;
+            continue;
+          }
+          
+          console.log(`🔄 Row ${rowNum}: Updating existing invoice ID ${existingInvoice.id} for user ${userId}`);
           const updateResult = await trx('sales_invoice_master')
             .where('id', existingInvoice.id)
+            .where('created_by', userId) // CRITICAL: Ensure user can only update their own invoices
             .update({
               ...invoiceData,
+              created_by: userId, // Ensure created_by is preserved
               updated_at: new Date()
             });
             
           if (updateResult > 0) {
-          importedCount++;
+            importedCount++;
+            updatedRecordsCount++;
+            updatedInvoiceNos.push(invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no);
             console.log(`✅ Row ${rowNum}: Successfully updated invoice ID ${existingInvoice.id}`);
           } else {
             console.warn(`⚠️ Row ${rowNum}: Update returned 0 rows affected`);
@@ -911,11 +942,15 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
             errorCount++;
           }
         } else {
-          // Insert new invoice
-          console.log(`➕ Row ${rowNum}: Inserting new invoice`);
+          // Insert new invoice - ensure created_by is set
+          console.log(`➕ Row ${rowNum}: Inserting new invoice for user ${userId}`);
+          // Ensure created_by is explicitly set (it should already be in invoiceData, but double-check)
+          invoiceData.created_by = userId;
           const insertResult = await trx('sales_invoice_master').insert(invoiceData);
           const insertedId = Array.isArray(insertResult) ? insertResult[0] : insertResult;
           importedCount++;
+          newRecordsCount++;
+          newInvoiceNos.push(invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no);
           console.log(`✅ Row ${rowNum}: Successfully inserted new invoice with ID ${insertedId || 'unknown'}`);
         }
       } catch (dbError) {
@@ -1018,6 +1053,13 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
         matchedCount: matchedColumns?.length || 0,
         ignoredCount: ignoredColumns?.length || 0,
         totalDetected: (matchedColumns?.length || 0) + (ignoredColumns?.length || 0)
+      },
+      mergeSummary: {
+        newRecords: newRecordsCount,
+        updatedRecords: updatedRecordsCount,
+        deletedRecords: 0, // Not tracking deletions in current implementation
+        newInvoiceNos: newInvoiceNos.slice(0, 10), // Sample of new invoice numbers
+        updatedInvoiceNos: updatedInvoiceNos.slice(0, 10) // Sample of updated invoice numbers
       }
     }
   };
