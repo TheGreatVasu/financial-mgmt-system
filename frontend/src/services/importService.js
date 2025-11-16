@@ -1,6 +1,13 @@
 import { createApiClient } from './apiClient'
 
 export async function importExcelFile(token, file) {
+  console.log('📤 importExcelFile called:', {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    hasToken: !!token
+  });
+  
   const api = createApiClient(token)
   const formData = new FormData()
   formData.append('file', file)
@@ -9,13 +16,42 @@ export async function importExcelFile(token, file) {
     // Always try sales invoice import first (93 columns format)
     // This will parse any valid Excel file with the expected 93 columns regardless of filename
     // Note: Don't set Content-Type header - let browser set it automatically with boundary for FormData
+    console.log('📤 Sending POST request to /import/sales-invoice...');
     const { data } = await api.post('/import/sales-invoice', formData)
+    console.log('✅ Import response received:', data);
     return data
   } catch (error) {
-    // If sales invoice import fails, provide clear error message
+    console.error('❌ Import error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    // Handle 400 Bad Request errors with detailed validation messages
+    if (error.response?.status === 400) {
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.message || 'Invalid Excel format'
+      const errorDetails = errorData.error || errorData.details || errorData.errorCode
+      const validationErrors = errorData.errors || []
+      
+      // Create a structured error object for better handling
+      const structuredError = new Error(errorMessage)
+      structuredError.status = 400
+      structuredError.errorCode = errorData.errorCode || 'VALIDATION_ERROR'
+      structuredError.details = errorDetails
+      structuredError.validationErrors = validationErrors
+      structuredError.originalError = errorData
+      
+      throw structuredError
+    }
+    
+    // For other errors, provide clear error message
     const errorMessage = error.response?.data?.message || error.message || 'Failed to import Excel file'
     const errorDetails = error.response?.data?.details || error.response?.data?.error
-    throw new Error(errorDetails ? `${errorMessage}. ${errorDetails}` : errorMessage)
+    const structuredError = new Error(errorDetails ? `${errorMessage}. ${errorDetails}` : errorMessage)
+    structuredError.status = error.response?.status || 500
+    structuredError.originalError = error.response?.data
+    throw structuredError
   }
 }
 

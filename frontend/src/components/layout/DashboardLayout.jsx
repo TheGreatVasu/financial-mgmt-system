@@ -102,47 +102,190 @@ export default function DashboardLayout({ children }) {
       let totalImported = 0
       let totalErrors = 0
       const errors = []
+      const validationErrors = []
 
       // Process files sequentially
       for (const file of filesArray) {
         try {
+          console.log(`📤 Starting import for file: ${file.name}`, { size: file.size, type: file.type })
           const result = await importExcelFile(token, file)
+          console.log(`📥 Import response received for ${file.name}:`, result)
+          
           if (result?.success) {
-            const { imported, errors: fileErrors } = result.data || {}
-            totalImported += imported || 0
-            totalErrors += fileErrors || 0
+            // Support both old and new response formats
+            const importedCount = result.importedCount || result.data?.importedCount || result.data?.imported || 0
+            const fileErrors = result.data?.errorCount || result.data?.errors || 0
+            const errorDetails = result.data?.errorDetails || []
+            const columnMapping = result.data?.columnMapping || {}
+            
+            console.log(`✅ Import successful for ${file.name}:`, {
+              importedCount,
+              fileErrors,
+              matchedColumns: columnMapping.matchedCount,
+              ignoredColumns: columnMapping.ignoredCount
+            })
+            
+            totalImported += importedCount
+            totalErrors += fileErrors
+            
+            // Show column mapping information
+            if (columnMapping) {
+              const matchedCount = columnMapping.matchedCount || 0
+              const ignoredCount = columnMapping.ignoredCount || 0
+              
+              if (matchedCount > 0) {
+                toast.success(
+                  `${file.name}: ${matchedCount} columns matched and imported`,
+                  { duration: 5000 }
+                )
+              }
+              
+              if (ignoredCount > 0) {
+                const ignoredList = columnMapping.ignored?.slice(0, 5).join(', ') || ''
+                const moreCount = ignoredCount > 5 ? ` and ${ignoredCount - 5} more` : ''
+                toast.info(
+                  `${file.name}: ${ignoredCount} columns ignored (${ignoredList}${moreCount})`,
+                  { duration: 6000 }
+                )
+              }
+              
+              // Show matched columns if few enough
+              if (columnMapping.matched && columnMapping.matched.length > 0 && columnMapping.matched.length <= 10) {
+                const matchedList = columnMapping.matched
+                  .map(m => `${m.detected} → ${m.mapped}`)
+                  .slice(0, 5)
+                  .join(', ')
+                console.log(`Matched columns for ${file.name}:`, columnMapping.matched)
+              }
+            }
+            
             if (fileErrors > 0) {
               errors.push(`${file.name}: ${fileErrors} errors`)
+              if (errorDetails && Array.isArray(errorDetails)) {
+                validationErrors.push(...errorDetails.map(e => `${file.name}: ${e}`))
+              }
             }
           } else {
             errors.push(`${file.name}: ${result?.message || 'Import failed'}`)
           }
         } catch (err) {
-          errors.push(`${file.name}: ${err?.message || 'Failed to import'}`)
+          console.error(`❌ Import error for ${file.name}:`, {
+            error: err,
+            status: err.status,
+            message: err.message,
+            details: err.details,
+            validationErrors: err.validationErrors,
+            originalError: err.originalError
+          });
+          
+          // Handle 400 Bad Request errors with detailed validation messages
+          if (err.status === 400 || err.response?.status === 400) {
+            const errorData = err.originalError || err.response?.data || {}
+            const errorMsg = errorData.message || err.message || 'Invalid Excel format. Please check column names and try again.'
+            const errorCode = errorData.errorCode || errorData.error
+            const errorDetails = errorData.details || errorData.error
+            
+            errors.push(`${file.name}: ${errorMsg}`)
+            
+            // Show detailed error information
+            let fullErrorMessage = errorMsg;
+            if (errorCode) {
+              fullErrorMessage += ` (${errorCode})`;
+            }
+            if (errorDetails && errorDetails !== errorMsg) {
+              fullErrorMessage += ` - ${errorDetails}`;
+            }
+            
+            // Collect validation errors if available
+            if (err.validationErrors && Array.isArray(err.validationErrors)) {
+              validationErrors.push(...err.validationErrors.map(e => `${file.name}: ${e}`))
+            } else if (errorData.errors && Array.isArray(errorData.errors)) {
+              validationErrors.push(...errorData.errors.map(e => {
+                if (typeof e === 'object' && e.error) {
+                  return `${file.name}: ${e.error}`;
+                }
+                return `${file.name}: ${e}`;
+              }))
+            } else if (errorDetails) {
+              validationErrors.push(`${file.name}: ${errorDetails}`)
+            }
+            
+            // Show main error toast with full details
+            toast.error(fullErrorMessage, { duration: 8000 })
+            
+            // Show validation errors if any
+            if (err.validationErrors && err.validationErrors.length > 0) {
+              const errorList = err.validationErrors.slice(0, 5).join(', ')
+              const moreCount = err.validationErrors.length > 5 ? ` and ${err.validationErrors.length - 5} more` : ''
+              toast.error(`Validation errors: ${errorList}${moreCount}`, { duration: 8000 })
+            } else if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+              const errorList = errorData.errors.slice(0, 5).map(e => typeof e === 'object' ? e.error : e).join(', ')
+              const moreCount = errorData.errors.length > 5 ? ` and ${errorData.errors.length - 5} more` : ''
+              toast.error(`Validation errors: ${errorList}${moreCount}`, { duration: 8000 })
+            } else if (errorDetails && errorDetails !== errorMsg) {
+              toast.error(`Details: ${errorDetails}`, { duration: 6000 })
+            }
+            
+            // Log detected headers if available
+            if (errorData.detectedHeaders) {
+              console.log('📊 Detected headers from error:', errorData.detectedHeaders);
+            }
+            if (errorData.expectedColumns) {
+              console.log('📊 Expected columns from error:', errorData.expectedColumns);
+            }
+          } else {
+            errors.push(`${file.name}: ${err?.message || 'Failed to import'}`)
+            toast.error(`${file.name}: ${err?.message || 'Failed to import'}`, { duration: 5000 })
+          }
         }
       }
 
-      // Show summary
-      if (errors.length > 0) {
-        toast.success(
-          `Import completed: ${totalImported} records imported from ${filesArray.length} file(s), ${totalErrors} errors`,
-          { duration: 6000 }
-        )
-        if (errors.length <= 3) {
-          errors.forEach(error => toast.error(error, { duration: 4000 }))
+      // Show summary for successful imports
+      if (errors.length === 0 || totalImported > 0) {
+        if (totalErrors > 0) {
+          toast.success(
+            `Import completed: ${totalImported} records imported from ${filesArray.length} file(s), ${totalErrors} errors`,
+            { duration: 6000 }
+          )
+          if (validationErrors.length > 0 && validationErrors.length <= 5) {
+            validationErrors.forEach(error => toast.error(error, { duration: 5000 }))
+          }
+        } else {
+          toast.success(`Successfully imported ${totalImported} records from ${filesArray.length} file(s)! Dashboard will refresh automatically.`)
         }
-      } else {
-        toast.success(`Successfully imported ${totalImported} records from ${filesArray.length} file(s)! Dashboard will refresh automatically.`)
       }
       
       closeImportModal()
       
       // Trigger dashboard refresh without page reload
       if (totalImported > 0) {
-        triggerRefresh()
+        console.log('🔄 Triggering dashboard refresh after import...', { 
+          totalImported, 
+          totalErrors,
+          filesProcessed: filesArray.length 
+        })
+        // Small delay to ensure database has committed
+        setTimeout(() => {
+          console.log('🔄 Calling triggerRefresh() now...')
+          triggerRefresh()
+        }, 1000) // Increased delay to ensure DB commit
+      } else {
+        console.warn('⚠️ No records imported, skipping refresh', {
+          totalImported,
+          totalErrors,
+          errors: errors.length
+        })
+        if (errors.length > 0) {
+          console.error('❌ Import errors:', errors)
+        }
       }
     } catch (err) {
-      toast.error(err?.message || 'Failed to import files')
+      // Fallback error handling
+      const errorMsg = err?.message || 'Failed to import files'
+      toast.error(errorMsg, { duration: 6000 })
+      if (err?.validationErrors && Array.isArray(err.validationErrors)) {
+        err.validationErrors.slice(0, 3).forEach(e => toast.error(e, { duration: 5000 }))
+      }
     } finally {
       setIsUploading(false)
     }

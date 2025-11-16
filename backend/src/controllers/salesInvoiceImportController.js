@@ -34,40 +34,237 @@ const EXPECTED_COLUMNS = [
 ];
 
 /**
- * Validates file format and column headers
+ * Required columns that must be present for import to succeed
  */
-function validateHeaders(headers) {
+const REQUIRED_COLUMNS = [
+  'GST Tax Invoice No',
+  'Customer Name'
+];
+
+/**
+ * Normalizes a header string for flexible matching:
+ * - Trims leading/trailing spaces
+ * - Collapses multiple spaces to single space
+ * - Converts to lowercase
+ * - Normalizes separators (underscores, hyphens, etc. to spaces)
+ * - Removes special characters that don't affect meaning (keeps alphanumeric, spaces, and common separators)
+ */
+function normalizeHeader(header) {
+  if (!header || typeof header !== 'string') return '';
+  
+  return header
+    .toString()
+    .trim()
+    .replace(/[_\-\/]/g, ' ') // Replace underscores, hyphens, slashes with spaces
+    .replace(/\s+/g, ' ') // Collapse multiple spaces to single space
+    .toLowerCase()
+    .replace(/[^\w\s@%()&]/g, '') // Remove special chars except @, %, (, ), & (keep alphanumeric and spaces)
+    .trim();
+}
+
+/**
+ * Calculates similarity between two strings using Levenshtein distance
+ * Returns a score between 0 and 1 (1 = identical, 0 = completely different)
+ */
+function calculateSimilarity(str1, str2) {
+  const s1 = normalizeHeader(str1);
+  const s2 = normalizeHeader(str2);
+  
+  if (s1 === s2) return 1.0;
+  if (s1.length === 0 || s2.length === 0) return 0.0;
+  
+  // Check if one contains the other (partial match)
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const minLen = Math.min(s1.length, s2.length);
+    const maxLen = Math.max(s1.length, s2.length);
+    return minLen / maxLen;
+  }
+  
+  // Levenshtein distance
+  const matrix = [];
+  for (let i = 0; i <= s2.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= s1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= s2.length; i++) {
+    for (let j = 1; j <= s1.length; j++) {
+      if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  
+  const distance = matrix[s2.length][s1.length];
+  const maxLen = Math.max(s1.length, s2.length);
+  return 1 - (distance / maxLen);
+}
+
+/**
+ * Maps detected headers to expected columns using smart matching
+ * Returns a mapping object: { detectedHeader: expectedColumn }
+ */
+function mapHeaders(detectedHeaders, expectedColumns) {
+  const mapping = {};
+  const usedExpected = new Set();
+  const headerMappingLog = [];
+  
+  console.log('🔍 Header Mapping Started:', {
+    detectedCount: detectedHeaders.length,
+    expectedCount: expectedColumns.length,
+    detectedHeaders: detectedHeaders.slice(0, 10) // Log first 10
+  });
+  
+  // First pass: exact matches (after normalization)
+  for (const detected of detectedHeaders) {
+    const normalizedDetected = normalizeHeader(detected);
+    
+    for (const expected of expectedColumns) {
+      if (usedExpected.has(expected)) continue;
+      
+      const normalizedExpected = normalizeHeader(expected);
+      if (normalizedDetected === normalizedExpected) {
+        mapping[detected] = expected;
+        usedExpected.add(expected);
+        headerMappingLog.push({
+          detected,
+          expected,
+          method: 'exact',
+          similarity: 1.0
+        });
+        break;
+      }
+    }
+  }
+  
+  // Second pass: fuzzy matching for unmapped headers
+  for (const detected of detectedHeaders) {
+    if (mapping[detected]) continue; // Already mapped
+    
+    let bestMatch = null;
+    let bestScore = 0.6; // Minimum similarity threshold
+    
+    for (const expected of expectedColumns) {
+      if (usedExpected.has(expected)) continue;
+      
+      const similarity = calculateSimilarity(detected, expected);
+      if (similarity > bestScore) {
+        bestScore = similarity;
+        bestMatch = expected;
+      }
+    }
+    
+    if (bestMatch) {
+      mapping[detected] = bestMatch;
+      usedExpected.add(bestMatch);
+      headerMappingLog.push({
+        detected,
+        expected: bestMatch,
+        method: 'fuzzy',
+        similarity: bestScore.toFixed(3)
+      });
+    }
+  }
+  
+  console.log('✅ Header Mapping Complete:', {
+    mappedCount: Object.keys(mapping).length,
+    unmappedCount: detectedHeaders.length - Object.keys(mapping).length,
+    mappings: headerMappingLog.slice(0, 20) // Log first 20 mappings
+  });
+  
+  return mapping;
+}
+
+/**
+ * Validates headers and creates mapping to expected columns
+ * Never fails on unknown columns - only maps matching ones
+ * Returns { valid, missing, errors, headerMap, matchedColumns, ignoredColumns }
+ */
+function validateAndMapHeaders(detectedHeaders) {
   const errors = [];
   const missing = [];
-  const normalizedHeaders = headers.map(h => h?.toString().trim() || '');
-  const normalizedExpected = EXPECTED_COLUMNS.map(c => c.toLowerCase().trim());
-
-  // Check for missing columns (flexible - warn but don't fail)
-  EXPECTED_COLUMNS.forEach(expectedCol => {
-    const found = normalizedHeaders.some(h => 
-      h.toLowerCase().trim() === expectedCol.toLowerCase().trim()
-    );
-    if (!found) {
-      missing.push(expectedCol);
+  
+  // Normalize detected headers
+  const normalizedDetected = detectedHeaders.map(h => normalizeHeader(h));
+  
+  // Create header mapping - this will map detected headers to expected columns
+  const headerMap = mapHeaders(detectedHeaders, EXPECTED_COLUMNS);
+  
+  // Identify matched and ignored columns
+  const matchedColumns = [];
+  const ignoredColumns = [];
+  
+  detectedHeaders.forEach(detected => {
+    if (headerMap[detected]) {
+      matchedColumns.push({
+        detected: detected,
+        mapped: headerMap[detected]
+      });
+    } else {
+      ignoredColumns.push(detected);
     }
   });
-
-  if (missing.length > 0 && missing.length > EXPECTED_COLUMNS.length * 0.3) {
-    // Only add error if more than 30% of columns are missing
-    errors.push(`Missing ${missing.length} columns. Please ensure your Excel file contains all 93 required columns.`);
+  
+  // Check for required columns (warn but don't fail - allow import to proceed)
+  for (const required of REQUIRED_COLUMNS) {
+    const normalizedRequired = normalizeHeader(required);
+    const found = Object.values(headerMap).some(mapped => 
+      normalizeHeader(mapped) === normalizedRequired
+    );
+    
+    if (!found) {
+      // Check if any detected header is similar to required
+      const similarFound = detectedHeaders.some(detected => {
+        const similarity = calculateSimilarity(detected, required);
+        return similarity >= 0.7; // 70% similarity threshold
+      });
+      
+      if (!similarFound) {
+        missing.push(required);
+        errors.push(`Missing required column: ${required}`);
+      }
+    }
   }
-
-  // Accept file if at least 70% of expected columns are present (flexible validation)
-  // This allows for minor column name variations while ensuring the file is valid
+  
+  // Format errors as requested: { error: 'Missing required column: GST Tax Invoice No' }
+  const formattedErrors = errors.length > 0 ? errors.map(err => ({ error: err })) : [];
+  
+  // Log validation results with detailed information
+  console.log('📋 Header Validation Results:', {
+    detectedHeaders: detectedHeaders.length,
+    detectedHeadersList: detectedHeaders,
+    expectedColumns: EXPECTED_COLUMNS.length,
+    mappedHeaders: Object.keys(headerMap).length,
+    matchedColumns: matchedColumns.length,
+    matchedColumnsList: matchedColumns,
+    ignoredColumns: ignoredColumns.length,
+    ignoredColumnsList: ignoredColumns,
+    missingRequired: missing,
+    errors: errors.length,
+    headerMap: headerMap
+  });
+  
+  // Always return valid=true - we never fail on unknown columns, only warn about missing required ones
   return {
-    valid: missing.length < EXPECTED_COLUMNS.length * 0.3, // Allow if at least 70% columns present
+    valid: true, // Always valid - unknown columns are just ignored
     missing,
-    errors
+    errors: formattedErrors,
+    headerMap,
+    matchedColumns,
+    ignoredColumns
   };
 }
 
 /**
- * Parses Excel file (xlsx or xls)
+ * Parses Excel file (xlsx or xls) with smart header mapping
  */
 async function parseExcelFile(fileBuffer) {
   const workbook = new ExcelJS.Workbook();
@@ -79,25 +276,52 @@ async function parseExcelFile(fileBuffer) {
   }
 
   // Extract headers from first row
-  const headers = [];
+  const detectedHeaders = [];
   worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell) => {
-    headers.push(cell.value?.toString().trim() || '');
+    const value = cell.value?.toString() || '';
+    detectedHeaders.push(value);
   });
 
-  // Validate headers
-  const validation = validateHeaders(headers);
-  if (!validation.valid) {
-    throw new Error(validation.errors.join('; '));
+  // Also try to get all cells including empty ones to catch spacing issues
+  const allHeaders = [];
+  for (let col = 1; col <= worksheet.columnCount; col++) {
+    const cell = worksheet.getRow(1).getCell(col);
+    const value = cell.value?.toString() || '';
+    if (value.trim()) {
+      allHeaders.push(value);
+    }
   }
 
-  // Parse data rows
+  console.log('📊 Detected Headers (Excel):', {
+    count: detectedHeaders.length,
+    allHeaders: detectedHeaders,
+    totalColumns: worksheet.columnCount,
+    totalRows: worksheet.rowCount,
+    firstRowSample: worksheet.getRow(2).getCell(1)?.value
+  });
+
+  // Validate and map headers - never fails, only maps matching columns
+  const validation = validateAndMapHeaders(detectedHeaders);
+  
+  // Log mapping results
+  console.log('✅ Header mapping complete:', {
+    matched: validation.matchedColumns.length,
+    ignored: validation.ignoredColumns.length,
+    missingRequired: validation.missing.length
+  });
+
+  // Parse data rows using header mapping - only include matched columns
   const rows = [];
   for (let rowNum = 2; rowNum <= worksheet.rowCount; rowNum++) {
     const row = worksheet.getRow(rowNum);
     if (!row.getCell(1).value) break; // Empty row
 
+    // Build normalized row data with only matched fields
     const rowData = {};
-    headers.forEach((header, index) => {
+    
+    // First, extract all detected values
+    const detectedValues = {};
+    detectedHeaders.forEach((detectedHeader, index) => {
       const cell = row.getCell(index + 1);
       let value = cell.value;
 
@@ -105,20 +329,39 @@ async function parseExcelFile(fileBuffer) {
       if (value instanceof Date) {
         value = value;
       } else if (typeof value === 'number' && 
-                 (header.toLowerCase().includes('date') || header.toLowerCase().includes('due'))) {
+                 (detectedHeader.toLowerCase().includes('date') || detectedHeader.toLowerCase().includes('due'))) {
+        try {
         value = ExcelJS.DateTime.fromExcelSerialNumber(value);
+        } catch (e) {
+          // If not a valid Excel date, keep as number
+        }
       }
 
-      rowData[header] = value;
+      detectedValues[detectedHeader] = value;
     });
+    
+    // Now build normalized dataset with only matched fields
+    // Use mapped header name (expected column name) as key
+    Object.keys(validation.headerMap).forEach(detectedHeader => {
+      const mappedHeader = validation.headerMap[detectedHeader];
+      rowData[mappedHeader] = detectedValues[detectedHeader];
+    });
+    
+    // All unmatched expected columns will be null by default (handled in getColumnValue)
     rows.push(rowData);
   }
 
-  return { headers, rows };
+  return { 
+    headers: Object.values(validation.headerMap), 
+    rows, 
+    headerMap: validation.headerMap,
+    matchedColumns: validation.matchedColumns,
+    ignoredColumns: validation.ignoredColumns
+  };
 }
 
 /**
- * Parses CSV file
+ * Parses CSV file with smart header mapping
  */
 function parseCSVFile(fileBuffer) {
   const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
@@ -134,66 +377,191 @@ function parseCSVFile(fileBuffer) {
     throw new Error('CSV file is empty');
   }
 
-  const headers = Object.keys(jsonData[0]).map(h => h.trim());
-  const validation = validateHeaders(headers);
-  if (!validation.valid) {
-    throw new Error(validation.errors.join('; '));
-  }
+  const detectedHeaders = Object.keys(jsonData[0]);
+  
+  console.log('📊 Detected Headers (CSV):', {
+    count: detectedHeaders.length,
+    headers: detectedHeaders.slice(0, 10)
+  });
 
-  const rows = jsonData.map(row => {
+  // Validate and map headers - never fails, only maps matching columns
+  const validation = validateAndMapHeaders(detectedHeaders);
+  
+  // Log mapping results
+  console.log('✅ Header mapping complete (CSV):', {
+    matched: validation.matchedColumns.length,
+    ignored: validation.ignoredColumns.length,
+    missingRequired: validation.missing.length
+  });
+
+  // Transform rows using header mapping - only include matched columns
+  const rows = jsonData.map((row, rowIndex) => {
+    // Build normalized row data with only matched fields
     const rowData = {};
-    headers.forEach(header => {
-      let value = row[header];
-      if (value && (header.toLowerCase().includes('date') || header.toLowerCase().includes('due'))) {
-        const dateValue = new Date(value);
-        if (!isNaN(dateValue.getTime())) {
-          value = dateValue;
+    
+    // Extract all detected values first
+    const detectedValues = {};
+    detectedHeaders.forEach(detectedHeader => {
+      let value = row[detectedHeader];
+      
+      // Try to parse dates
+      if (value && (detectedHeader.toLowerCase().includes('date') || detectedHeader.toLowerCase().includes('due'))) {
+        const parsedDate = parseDate(value);
+        if (parsedDate) {
+          value = parsedDate;
         }
       }
-      rowData[header] = value;
+      
+      detectedValues[detectedHeader] = value;
     });
+    
+    // Now build normalized dataset with only matched fields
+    // Use mapped header name (expected column name) as key
+    Object.keys(validation.headerMap).forEach(detectedHeader => {
+      const mappedHeader = validation.headerMap[detectedHeader];
+      rowData[mappedHeader] = detectedValues[detectedHeader];
+    });
+    
+    // All unmatched expected columns will be null by default (handled in getColumnValue)
     return rowData;
   });
 
-  return { headers, rows };
+  return { 
+    headers: Object.values(validation.headerMap), 
+    rows, 
+    headerMap: validation.headerMap,
+    matchedColumns: validation.matchedColumns,
+    ignoredColumns: validation.ignoredColumns
+  };
 }
 
 /**
- * Gets column value from row data (case-insensitive)
+ * Gets column value from row data using smart header matching
  */
-function getColumnValue(rowData, columnName) {
-  const normalizedColumn = columnName.toLowerCase().trim();
+function getColumnValue(rowData, expectedColumnName) {
+  // First try exact match (case-insensitive)
+  const normalizedExpected = normalizeHeader(expectedColumnName);
+  
   for (const key in rowData) {
-    if (key.toLowerCase().trim() === normalizedColumn) {
+    const normalizedKey = normalizeHeader(key);
+    if (normalizedKey === normalizedExpected) {
       return rowData[key];
     }
   }
-  return null;
+  
+  // Try fuzzy match
+  let bestMatch = null;
+  let bestScore = 0.7; // Minimum similarity threshold
+  
+  for (const key in rowData) {
+    const similarity = calculateSimilarity(key, expectedColumnName);
+    if (similarity > bestScore) {
+      bestScore = similarity;
+      bestMatch = key;
+    }
+  }
+  
+  return bestMatch ? rowData[bestMatch] : null;
 }
 
 /**
- * Parses date value from various formats
+ * Parses date value from various formats with extensive format support
  */
 function parseDate(value) {
   if (!value) return null;
-  if (value instanceof Date) return value;
+  if (value instanceof Date) {
+    // Validate the date
+    if (isNaN(value.getTime())) return null;
+    return value;
+  }
+  
   if (typeof value === 'number') {
+    // Excel serial number
+    try {
     return ExcelJS.DateTime.fromExcelSerialNumber(value);
+    } catch (e) {
+      // If not Excel date, try as Unix timestamp
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date;
+    }
+    return null;
   }
+  
   if (typeof value === 'string') {
-    const date = new Date(value);
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    
+    // Try standard Date parsing first
+    let date = new Date(trimmed);
     if (!isNaN(date.getTime())) return date;
+    
+    // Try common date formats
+    const formats = [
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,           // MM/DD/YYYY or DD/MM/YYYY
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/,            // YYYY-MM-DD
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,             // DD-MM-YYYY or MM-DD-YYYY
+      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,          // DD.MM.YYYY
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,          // YYYY/MM/DD
+    ];
+    
+    for (const format of formats) {
+      const match = trimmed.match(format);
+      if (match) {
+        let year, month, day;
+        if (format === formats[0] || format === formats[2]) {
+          // MM/DD/YYYY or DD/MM/YYYY - try both interpretations
+          const part1 = parseInt(match[1], 10);
+          const part2 = parseInt(match[2], 10);
+          const part3 = parseInt(match[3], 10);
+          
+          // Heuristic: if part1 > 12, it's likely DD/MM/YYYY
+          if (part1 > 12) {
+            day = part1;
+            month = part2 - 1; // JS months are 0-indexed
+            year = part3;
+          } else {
+            month = part1 - 1;
+            day = part2;
+            year = part3;
+          }
+        } else if (format === formats[1] || format === formats[4]) {
+          // YYYY-MM-DD or YYYY/MM/DD
+          year = parseInt(match[1], 10);
+          month = parseInt(match[2], 10) - 1;
+          day = parseInt(match[3], 10);
+        } else {
+          // DD.MM.YYYY
+          day = parseInt(match[1], 10);
+          month = parseInt(match[2], 10) - 1;
+          year = parseInt(match[3], 10);
+        }
+        
+        date = new Date(year, month, day);
+        if (!isNaN(date.getTime())) return date;
+      }
+    }
   }
+  
   return null;
 }
 
 /**
- * Parses numeric value
+ * Parses numeric value, safely converting to number or returning 0
  */
 function parseNumber(value) {
   if (value === null || value === undefined || value === '') return 0;
-  const num = parseFloat(value);
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    // Remove common number formatting
+    const cleaned = trimmed.replace(/[,\s]/g, '').replace(/[₹$€£]/g, '');
+    const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
+  }
+  return 0;
 }
 
 /**
@@ -207,14 +575,21 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
     fileSize: req.file?.size,
     fileMimetype: req.file?.mimetype,
     hasBuffer: !!req.file?.buffer,
-    bufferLength: req.file?.buffer?.length
+    bufferLength: req.file?.buffer?.length,
+    method: req.method,
+    url: req.url,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length']
+    }
   });
 
   const db = getDb();
   if (!db) {
     return res.status(503).json({
       success: false,
-      message: 'Database connection not available'
+      message: 'Database connection not available',
+      error: 'DATABASE_UNAVAILABLE'
     });
   }
 
@@ -245,67 +620,130 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
   if (!isExcel && !isCSV) {
     return res.status(400).json({
       success: false,
-      message: 'Unsupported file format. Only .xlsx, .xls, and .csv files are allowed'
+      message: 'Unsupported file format. Only .xlsx, .xls, and .csv files are allowed',
+      error: 'INVALID_FILE_FORMAT'
     });
   }
 
-  let headers, rows;
+  let headers, rows, headerMap, matchedColumns, ignoredColumns;
 
   try {
     console.log('📊 Parsing file...', { isExcel, isCSV, fileName: req.file.originalname });
     if (isCSV) {
-      ({ headers, rows } = parseCSVFile(req.file.buffer));
+      ({ headers, rows, headerMap, matchedColumns, ignoredColumns } = parseCSVFile(req.file.buffer));
     } else {
-      ({ headers, rows } = await parseExcelFile(req.file.buffer));
+      ({ headers, rows, headerMap, matchedColumns, ignoredColumns } = await parseExcelFile(req.file.buffer));
     }
     console.log('✅ File parsed successfully:', { 
       headerCount: headers?.length, 
       rowCount: rows?.length,
+      mappedHeaders: Object.keys(headerMap || {}).length,
+      matchedColumns: matchedColumns?.length || 0,
+      ignoredColumns: ignoredColumns?.length || 0,
       firstFewHeaders: headers?.slice(0, 5)
     });
   } catch (error) {
     console.error('❌ File parsing error:', {
       message: error.message,
       stack: error.stack,
-      fileName: req.file.originalname
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      validationErrors: error.validationErrors,
+      missingColumns: error.missingColumns,
+      errorName: error.name,
+      errorCode: error.code
     });
-    return res.status(400).json({
+    
+    // Return JSON error - never HTML
+    // Include validation errors if available
+    const response = {
       success: false,
       message: `File parsing failed: ${error.message}`,
       error: error.message,
-      details: 'Please ensure your Excel file contains all 93 required columns and is not corrupted.'
+      errorCode: 'PARSE_ERROR',
+      details: 'Please check your Excel file format and column names.',
+      fileName: req.file.originalname
+    };
+    
+    // Add validation errors if present
+    if (error.validationErrors && Array.isArray(error.validationErrors)) {
+      response.errors = error.validationErrors;
+    }
+    
+    if (error.missingColumns && Array.isArray(error.missingColumns)) {
+      response.missingColumns = error.missingColumns;
+    }
+    
+    console.log('📤 Sending 400 error response:', response);
+    return res.status(400).json(response);
+  }
+
+  // Validate that we have headers FIRST
+  if (!headers || headers.length === 0) {
+    console.error('❌ No headers found after parsing:', {
+      matchedColumns: matchedColumns?.length || 0,
+      ignoredColumns: ignoredColumns?.length || 0,
+      headerMap: Object.keys(headerMap || {}).length
+    });
+    return res.status(400).json({
+      success: false,
+      message: 'Excel file appears to be empty or missing headers. Please check your file format.',
+      error: 'NO_HEADERS',
+      errorCode: 'NO_HEADERS',
+      details: 'No columns were matched from your Excel file. Please ensure your file contains column headers that match the expected format.',
+      detectedHeaders: matchedColumns?.length > 0 ? matchedColumns.map(m => m.detected) : [],
+      expectedColumns: EXPECTED_COLUMNS.slice(0, 10),
+      matchedCount: matchedColumns?.length || 0
     });
   }
 
   // Validate that we have data rows
   if (!rows || rows.length === 0) {
+    console.error('❌ No data rows found after parsing:', {
+      headersCount: headers.length,
+      matchedColumns: matchedColumns?.length || 0
+    });
     return res.status(400).json({
       success: false,
       message: 'Excel file contains no data rows. Please ensure your file has data below the header row.',
-      error: 'NO_DATA_ROWS'
+      error: 'NO_DATA_ROWS',
+      errorCode: 'NO_DATA_ROWS',
+      details: `Found ${headers.length} matched columns but no data rows. Please add data below the header row.`,
+      matchedColumns: headers.length
     });
   }
 
-  // Validate that we have headers
-  if (!headers || headers.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Excel file appears to be empty or missing headers. Please check your file format.',
-      error: 'NO_HEADERS'
-    });
-  }
+  console.log('✅ Validation passed:', {
+    headersCount: headers.length,
+    rowsCount: rows.length,
+    matchedColumns: matchedColumns?.length || 0,
+    ignoredColumns: ignoredColumns?.length || 0
+  });
 
   let importedCount = 0;
   let errorCount = 0;
   const errors = [];
 
-  // Process rows in transaction
+  console.log('🔄 Starting data import process...', {
+    totalRows: rows.length,
+    matchedColumns: matchedColumns?.length || 0,
+    ignoredColumns: ignoredColumns?.length || 0,
+    headerMapKeys: Object.keys(headerMap || {}).length,
+    sampleRow: rows[0] ? Object.keys(rows[0]).slice(0, 5) : []
+  });
+
+  // Process rows with transaction support
+  console.log('🔄 Starting database transaction...');
+  const trx = await db.transaction();
+  console.log('✅ Transaction started');
+  
+  try {
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     const rowData = rows[rowIndex];
     const rowNum = rowIndex + 2;
 
     try {
-      // Extract all 93 columns
+        // Extract all 93 columns using smart header matching
       const invoiceData = {
         key_id: getColumnValue(rowData, 'Key ID')?.toString().trim() || null,
         gst_tax_invoice_no: getColumnValue(rowData, 'GST Tax Invoice No')?.toString().trim() || null,
@@ -406,32 +844,48 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
       };
 
       // Validate required fields
-      if (!invoiceData.gst_tax_invoice_no && !invoiceData.internal_invoice_no) {
-        errors.push(`Row ${rowNum}: Missing GST Tax Invoice No or Internal Invoice No`);
+      // CRITICAL: Database requires gst_tax_invoice_no to be NOT NULL
+      // So we must ensure it's present, even if we have internal_invoice_no
+      if (!invoiceData.gst_tax_invoice_no) {
+        // If we have internal_invoice_no but no gst_tax_invoice_no, use it as fallback
+        if (invoiceData.internal_invoice_no) {
+          invoiceData.gst_tax_invoice_no = invoiceData.internal_invoice_no;
+          console.log(`⚠️ Row ${rowNum}: Using Internal Invoice No as GST Tax Invoice No`);
+        } else {
+          errors.push(`Row ${rowNum}: Missing GST Tax Invoice No (required by database)`);
+        errorCount++;
+        continue;
+        }
+      }
+
+      if (!invoiceData.customer_name) {
+        errors.push(`Row ${rowNum}: Missing Customer Name (required by database)`);
         errorCount++;
         continue;
       }
 
-      if (!invoiceData.customer_name) {
-        errors.push(`Row ${rowNum}: Missing Customer Name`);
-        errorCount++;
-        continue;
-      }
+      console.log(`📝 Row ${rowNum}: Processing invoice - GST: ${invoiceData.gst_tax_invoice_no}, Customer: ${invoiceData.customer_name}`);
 
       // Check if invoice already exists
       let existingInvoice = null;
       try {
         if (invoiceData.gst_tax_invoice_no) {
-          existingInvoice = await db('sales_invoice_master')
+          existingInvoice = await trx('sales_invoice_master')
             .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
             .first();
         }
         if (!existingInvoice && invoiceData.internal_invoice_no) {
-          existingInvoice = await db('sales_invoice_master')
+          existingInvoice = await trx('sales_invoice_master')
             .where('internal_invoice_no', invoiceData.internal_invoice_no)
             .first();
         }
       } catch (dbError) {
+        console.error(`❌ Row ${rowNum}: Database query error:`, {
+          error: dbError.message,
+          code: dbError.code,
+          sqlState: dbError.sqlState,
+          sqlMessage: dbError.sqlMessage
+        });
         errors.push(`Row ${rowNum}: Database query error - ${dbError.message}`);
         errorCount++;
         continue;
@@ -440,20 +894,44 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
       try {
         if (existingInvoice) {
           // Update existing invoice
-          await db('sales_invoice_master')
+          console.log(`🔄 Row ${rowNum}: Updating existing invoice ID ${existingInvoice.id}`);
+          const updateResult = await trx('sales_invoice_master')
             .where('id', existingInvoice.id)
             .update({
               ...invoiceData,
               updated_at: new Date()
             });
+            
+          if (updateResult > 0) {
           importedCount++;
+            console.log(`✅ Row ${rowNum}: Successfully updated invoice ID ${existingInvoice.id}`);
+          } else {
+            console.warn(`⚠️ Row ${rowNum}: Update returned 0 rows affected`);
+            errors.push(`Row ${rowNum}: Update failed - no rows affected`);
+            errorCount++;
+          }
         } else {
           // Insert new invoice
-          await db('sales_invoice_master').insert(invoiceData);
+          console.log(`➕ Row ${rowNum}: Inserting new invoice`);
+          const insertResult = await trx('sales_invoice_master').insert(invoiceData);
+          const insertedId = Array.isArray(insertResult) ? insertResult[0] : insertResult;
           importedCount++;
+          console.log(`✅ Row ${rowNum}: Successfully inserted new invoice with ID ${insertedId || 'unknown'}`);
         }
       } catch (dbError) {
         // Handle database errors (constraints, data type issues, etc.)
+        console.error(`❌ Row ${rowNum}: Database operation error:`, {
+          error: dbError.message,
+          code: dbError.code,
+          sqlState: dbError.sqlState,
+          sqlMessage: dbError.sqlMessage,
+          invoiceData: {
+            gst_tax_invoice_no: invoiceData.gst_tax_invoice_no,
+            customer_name: invoiceData.customer_name,
+            hasAllFields: Object.keys(invoiceData).length
+          }
+        });
+          
         const errorMsg = dbError.code === 'ER_DUP_ENTRY' 
           ? 'Duplicate invoice entry'
           : dbError.message || 'Database error';
@@ -462,9 +940,42 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
       }
 
     } catch (error) {
+        console.error(`❌ Row ${rowNum}: Processing error:`, {
+          error: error.message,
+          stack: error.stack
+        });
       errors.push(`Row ${rowNum}: ${error.message}`);
       errorCount++;
     }
+    }
+
+    // Commit transaction if we have any successful imports
+    if (importedCount > 0) {
+      await trx.commit();
+      console.log('✅ Transaction committed successfully');
+    } else {
+      await trx.rollback();
+      console.log('⚠️ No records imported, transaction rolled back');
+    }
+  } catch (transactionError) {
+    await trx.rollback();
+    console.error('❌ Transaction error, rolling back:', {
+      error: transactionError.message,
+      stack: transactionError.stack,
+      importedCount,
+      errorCount
+    });
+    
+    // Return error response instead of throwing to prevent HTML error page
+    return res.status(500).json({
+      success: false,
+      message: `Import failed: ${transactionError.message}`,
+      error: transactionError.message,
+      errorCode: 'TRANSACTION_ERROR',
+      importedCount: importedCount || 0,
+      errorCount: errorCount || 0,
+      details: 'Database transaction failed. Please check the logs for details.'
+    });
   }
 
   // Broadcast update via Socket.io
@@ -479,16 +990,43 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
     fs.unlinkSync(req.file.path);
   }
 
-  console.log('✅ Import completed:', { importedCount, errorCount, totalRows: rows.length });
+  console.log('✅ Import completed:', { 
+    importedCount, 
+    errorCount, 
+    totalRows: rows.length,
+    success: importedCount > 0,
+    matchedColumns: matchedColumns?.length || 0,
+    ignoredColumns: ignoredColumns?.length || 0
+  });
 
-  res.json({
+  // Always return JSON with matched/ignored columns summary
+  // Use importedCount as requested by user
+  const response = {
     success: true,
     message: `Import completed: ${importedCount} records imported, ${errorCount} errors`,
+    importedCount: importedCount, // Main field for frontend
     data: {
-      imported: importedCount,
+      imported: importedCount, // Keep for backward compatibility
+      importedCount: importedCount, // Explicit count
       errors: errorCount,
-      errorDetails: errors.slice(0, 20)
+      errorCount: errorCount,
+      errorDetails: errors.slice(0, 20),
+      totalRows: rows.length,
+      columnMapping: {
+        matched: matchedColumns || [],
+        ignored: ignoredColumns || [],
+        matchedCount: matchedColumns?.length || 0,
+        ignoredCount: ignoredColumns?.length || 0,
+        totalDetected: (matchedColumns?.length || 0) + (ignoredColumns?.length || 0)
+      }
     }
-  });
-});
+  };
 
+  console.log('📤 Sending response to frontend:', {
+    success: response.success,
+    importedCount: response.importedCount,
+    errorCount: response.data.errorCount
+  });
+
+  return res.json(response);
+});

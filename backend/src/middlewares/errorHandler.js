@@ -90,6 +90,8 @@ const errorHandler = (err, req, res, next) => {
     error = { message, statusCode: 401 };
   }
 
+  // Ensure we always return JSON, never HTML
+  res.setHeader('Content-Type', 'application/json');
   res.status(error.statusCode || 500).json({
     success: false,
     message: error.message || 'Server Error',

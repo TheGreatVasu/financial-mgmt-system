@@ -23,14 +23,21 @@ export default function SalesInvoiceDashboard() {
   const fetchDashboardData = async () => {
     try {
       setError(null);
+      console.log('📊 Fetching dashboard data...');
       const response = await getSalesInvoiceDashboard(token);
+      console.log('📊 Dashboard data received:', {
+        success: response.success,
+        hasData: response.data?.hasData,
+        invoiceCount: response.data?.invoices?.length || 0
+      });
       if (response.success) {
         setDashboardData(response.data);
+        console.log('✅ Dashboard data updated in state');
       } else {
         throw new Error(response.message || 'Failed to fetch dashboard data');
       }
     } catch (err) {
-      console.error('Error fetching dashboard:', err);
+      console.error('❌ Error fetching dashboard:', err);
       setError(err.message || 'Failed to load dashboard data');
       toast.error(err.message || 'Failed to load dashboard data');
     } finally {
@@ -48,10 +55,13 @@ export default function SalesInvoiceDashboard() {
   // Auto-refresh when import completes (refreshTrigger changes)
   useEffect(() => {
     if (token && refreshTrigger > 0) {
+      console.log('🔄 Dashboard refresh triggered by import:', { refreshTrigger });
+      setIsRefreshing(true);
       // Small delay to ensure database has updated
       const timer = setTimeout(() => {
+        console.log('🔄 Fetching dashboard data after import...');
         fetchDashboardData();
-      }, 1000);
+      }, 1500); // Slightly longer delay to ensure DB commit
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

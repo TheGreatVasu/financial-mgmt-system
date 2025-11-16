@@ -43,33 +43,61 @@ router.post('/excel', upload.single('file'), importExcel);
 
 // POST /api/import/sales-invoice - Upload and import Sales Invoice Excel (93 columns)
 router.post('/sales-invoice', (req, res, next) => {
+  console.log('📥 Route: /sales-invoice - Multer processing file upload...', {
+    hasFile: !!req.file,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length']
+  });
+  
   upload.single('file')(req, res, (err) => {
     if (err) {
+      console.error('❌ Multer error in route:', {
+        error: err.message,
+        code: err.code,
+        name: err.name,
+        isMulterError: err instanceof multer.MulterError
+      });
+      
       // Handle multer errors
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({
             success: false,
-            message: 'File size exceeds the maximum limit of 10MB'
+            message: 'File size exceeds the maximum limit of 10MB',
+            error: 'FILE_TOO_LARGE',
+            errorCode: 'LIMIT_FILE_SIZE'
           });
         }
         if (err.code === 'LIMIT_UNEXPECTED_FILE') {
           return res.status(400).json({
             success: false,
-            message: 'Unexpected file field. Please use the field name "file"'
+            message: 'Unexpected file field. Please use the field name "file"',
+            error: 'INVALID_FIELD_NAME',
+            errorCode: 'LIMIT_UNEXPECTED_FILE'
           });
         }
         return res.status(400).json({
           success: false,
-          message: `File upload error: ${err.message}`
+          message: `File upload error: ${err.message}`,
+          error: err.message,
+          errorCode: err.code
         });
       }
       // Handle other errors (like fileFilter errors)
       return res.status(400).json({
         success: false,
-        message: err.message || 'File upload failed'
+        message: err.message || 'File upload failed',
+        error: err.message,
+        errorCode: 'UPLOAD_ERROR'
       });
     }
+    
+    console.log('✅ Multer processed file successfully:', {
+      fileName: req.file?.originalname,
+      fileSize: req.file?.size,
+      hasBuffer: !!req.file?.buffer
+    });
+    
     next();
   });
 }, importSalesInvoice);
