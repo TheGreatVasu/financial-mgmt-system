@@ -6,14 +6,16 @@ export async function importExcelFile(token, file) {
   formData.append('file', file)
 
   try {
-    const { data } = await api.post('/import/excel', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    // Always try sales invoice import first (93 columns format)
+    // This will parse any valid Excel file with the expected 93 columns regardless of filename
+    // Note: Don't set Content-Type header - let browser set it automatically with boundary for FormData
+    const { data } = await api.post('/import/sales-invoice', formData)
     return data
   } catch (error) {
-    throw new Error(error.response?.data?.message || 'Failed to import Excel file')
+    // If sales invoice import fails, provide clear error message
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to import Excel file'
+    const errorDetails = error.response?.data?.details || error.response?.data?.error
+    throw new Error(errorDetails ? `${errorMessage}. ${errorDetails}` : errorMessage)
   }
 }
 

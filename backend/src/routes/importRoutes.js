@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { importExcel, downloadTemplate } = require('../controllers/importController');
+const { importSalesInvoice } = require('../controllers/salesInvoiceImportController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
 // Configure multer for file upload
@@ -12,14 +13,24 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Accept only Excel files
-    if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        file.mimetype === 'application/vnd.ms-excel' ||
-        file.originalname.endsWith('.xlsx') ||
-        file.originalname.endsWith('.xls')) {
+    // Accept Excel and CSV files
+    const allowedMimeTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel', // .xls
+      'text/csv', // .csv
+      'application/csv' // .csv (alternative)
+    ];
+    const allowedExtensions = ['.xlsx', '.xls', '.csv'];
+    
+    const isValidMimeType = allowedMimeTypes.includes(file.mimetype);
+    const isValidExtension = allowedExtensions.some(ext => 
+      file.originalname.toLowerCase().endsWith(ext)
+    );
+    
+    if (isValidMimeType || isValidExtension) {
       cb(null, true);
     } else {
-      cb(new Error('Only Excel files (.xlsx, .xls) are allowed'), false);
+      cb(new Error('Only Excel files (.xlsx, .xls) and CSV files (.csv) are allowed'), false);
     }
   }
 });
@@ -27,8 +38,41 @@ const upload = multer({
 // All routes require authentication
 router.use(authMiddleware);
 
-// POST /api/import/excel - Upload and import Excel file
+// POST /api/import/excel - Upload and import Excel file (legacy format)
 router.post('/excel', upload.single('file'), importExcel);
+
+// POST /api/import/sales-invoice - Upload and import Sales Invoice Excel (93 columns)
+router.post('/sales-invoice', (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      // Handle multer errors
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            success: false,
+            message: 'File size exceeds the maximum limit of 10MB'
+          });
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({
+            success: false,
+            message: 'Unexpected file field. Please use the field name "file"'
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: `File upload error: ${err.message}`
+        });
+      }
+      // Handle other errors (like fileFilter errors)
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload failed'
+      });
+    }
+    next();
+  });
+}, importSalesInvoice);
 
 // GET /api/import/template - Download Excel template
 router.get('/template', downloadTemplate);

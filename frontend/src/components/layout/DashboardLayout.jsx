@@ -2,13 +2,18 @@ import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail, FileSpreadsheet } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
-
+import ImportModal from '../ui/ImportModal.jsx'
+import { useImportContext } from '../../context/ImportContext.jsx'
+import { importExcelFile } from '../../services/importService.js'
 import { useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 
 export default function DashboardLayout({ children }) {
-  const { logout, user } = useAuthContext()
+  const { logout, user, token } = useAuthContext()
   const navigate = useNavigate()
+  const { isImportModalOpen, closeImportModal, triggerRefresh } = useImportContext()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = Number(localStorage.getItem('sidebar_width'))
@@ -81,6 +86,65 @@ export default function DashboardLayout({ children }) {
       setSidebarOpen((s) => !s)
     } else {
       setCollapsed((v) => !v)
+    }
+  }
+
+  // Import handler - available globally
+  async function handleFileImport(files) {
+    if (!token) {
+      toast.error('Please log in to import data')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const filesArray = Array.isArray(files) ? files : [files]
+      let totalImported = 0
+      let totalErrors = 0
+      const errors = []
+
+      // Process files sequentially
+      for (const file of filesArray) {
+        try {
+          const result = await importExcelFile(token, file)
+          if (result?.success) {
+            const { imported, errors: fileErrors } = result.data || {}
+            totalImported += imported || 0
+            totalErrors += fileErrors || 0
+            if (fileErrors > 0) {
+              errors.push(`${file.name}: ${fileErrors} errors`)
+            }
+          } else {
+            errors.push(`${file.name}: ${result?.message || 'Import failed'}`)
+          }
+        } catch (err) {
+          errors.push(`${file.name}: ${err?.message || 'Failed to import'}`)
+        }
+      }
+
+      // Show summary
+      if (errors.length > 0) {
+        toast.success(
+          `Import completed: ${totalImported} records imported from ${filesArray.length} file(s), ${totalErrors} errors`,
+          { duration: 6000 }
+        )
+        if (errors.length <= 3) {
+          errors.forEach(error => toast.error(error, { duration: 4000 }))
+        }
+      } else {
+        toast.success(`Successfully imported ${totalImported} records from ${filesArray.length} file(s)! Dashboard will refresh automatically.`)
+      }
+      
+      closeImportModal()
+      
+      // Trigger dashboard refresh without page reload
+      if (totalImported > 0) {
+        triggerRefresh()
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to import files')
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -179,6 +243,14 @@ export default function DashboardLayout({ children }) {
           {children}
         </div>
       </main>
+
+      {/* Global Import Modal */}
+      <ImportModal
+        open={isImportModalOpen}
+        onClose={closeImportModal}
+        onImport={handleFileImport}
+        isUploading={isUploading}
+      />
     </div>
   )
 }

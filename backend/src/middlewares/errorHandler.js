@@ -16,6 +16,31 @@ const errorHandler = (err, req, res, next) => {
     method: req.method
   });
 
+  // Handle multer errors (file upload errors)
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({
+      success: false,
+      message: 'File size exceeds the maximum limit of 10MB',
+      error: 'FILE_TOO_LARGE'
+    });
+  }
+
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({
+      success: false,
+      message: 'Unexpected file field. Please use the field name "file"',
+      error: 'INVALID_FIELD_NAME'
+    });
+  }
+
+  if (err.message && err.message.includes('Only Excel files')) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+      error: 'INVALID_FILE_TYPE'
+    });
+  }
+
   // MySQL/Database errors
   if (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE') {
     const message = 'Database schema error. Please run migrations: npm run db:migrate';

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuthContext } from './context/AuthContext.jsx'
+import { ImportProvider } from './context/ImportContext.jsx'
 import { Suspense, lazy } from 'react'
 import Dashboard from './pages/dashboard'
 import LoginPage from './pages/index'
@@ -32,6 +33,7 @@ import PerformancePage from './pages/dashboard/performance'
 import OthersPage from './pages/dashboard/others'
 import DatabaseManagementPage from './pages/admin/database'
 import UsersManagementPage from './pages/admin/users'
+import ExcelPage from './pages/excel'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuthContext()
@@ -49,8 +51,9 @@ function RootGate() {
 export default function App() {
   return (
     <AuthProvider>
-      <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
-      <Routes>
+      <ImportProvider>
+        <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
+        <Routes>
         {/* Gate root based on auth */}
         <Route path="/" element={<RootGate />} />
         {/* Loading screen route (used after login) */}
@@ -270,9 +273,19 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/excel"
+          element={
+            <ProtectedRoute>
+              <ExcelPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      </Suspense>
+        </Routes>
+        </Suspense>
+      </ImportProvider>
     </AuthProvider>
   )
 }
