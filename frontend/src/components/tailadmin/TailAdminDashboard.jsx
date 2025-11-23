@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { CalendarRange, Filter, Sparkles, Download, Bell, Star, Zap, TrendingUp, AlertTriangle, RefreshCw, FileText, Upload } from "lucide-react";
+import { CalendarRange, Sparkles, Download, Bell, Star, Zap, TrendingUp, AlertTriangle, RefreshCw, FileText, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "../../context/AuthContext.jsx";
 import { useRealtimeDashboard } from "../../hooks/useRealtimeDashboard.js";
@@ -16,9 +16,8 @@ export default function TailAdminDashboard() {
   const { token } = useAuthContext()
   const { data, loading, error: dashboardError, isLive, connectionStatus, refresh } = useRealtimeDashboard(token)
   const [error, setError] = useState("")
-  const [modal, setModal] = useState(null) // 'Create Invoice'|'Record Payment'|'Add Customer'|'Filter'|'Alerts'|null
+  const [modal, setModal] = useState(null) // 'Create Invoice'|'Record Payment'|'Add Customer'|'Alerts'|null
   const [form, setForm] = useState({})
-  const [filters, setFilters] = useState({})
   const [alerts, setAlerts] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const invApi = useMemo(() => createInvoiceService(token), [token])
@@ -137,7 +136,7 @@ export default function TailAdminDashboard() {
         regionalBreakup: data?.regionalBreakup || [],
         monthlyTrends: data?.monthlyTrends || [],
         topCustomersOverdue: data?.topCustomersOverdue || [],
-        filters: filters
+        filters: {}
       }
 
       const response = await api.post('/reports/pdf', reportData, {
@@ -178,106 +177,6 @@ function Field({ label, children }) {
     <div>
       <label className="label">{label}</label>
       {children}
-    </div>
-  )
-}
-
-function FilterForm({ filters, setFilters }) {
-  const { token } = useAuthContext()
-  const [customers, setCustomers] = useState([])
-  const [regions] = useState(['North', 'South', 'East', 'West', 'Central'])
-
-  useEffect(() => {
-    // Load customers for dropdown
-    if (!token) return
-    
-    async function loadCustomers() {
-      try {
-        const { createApiClient } = await import('../../services/apiClient')
-        const api = createApiClient(token)
-        const { data } = await api.get('/customers?limit=100')
-        setCustomers(data?.data || [])
-      } catch (err) {
-        console.error('Failed to load customers:', err)
-      }
-    }
-    loadCustomers()
-  }, [token])
-
-  const on = (k) => (e) => setFilters({ ...filters, [k]: e.target.value })
-  
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Field label="Date Range From">
-        <input 
-          type="date" 
-          className="input" 
-          value={filters.from||''} 
-          onChange={on('from')}
-          max={filters.to || undefined}
-        />
-      </Field>
-      <Field label="Date Range To">
-        <input 
-          type="date" 
-          className="input" 
-          value={filters.to||''} 
-          onChange={on('to')}
-          min={filters.from || undefined}
-        />
-      </Field>
-      <Field label="Customer">
-        <select 
-          className="input" 
-          value={filters.customer||''} 
-          onChange={on('customer')}
-        >
-          <option value="">All Customers</option>
-          {customers.map((c) => (
-            <option key={c.id || c._id} value={c.id || c._id}>
-              {c.companyName || c.company_name || c.name || 'Unknown'}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Region">
-        <select 
-          className="input" 
-          value={filters.region||''} 
-          onChange={on('region')}
-        >
-          <option value="">All Regions</option>
-          {regions.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Status">
-        <select 
-          className="input" 
-          value={filters.status||''} 
-          onChange={on('status')}
-        >
-          <option value="">Any Status</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="overdue">Overdue</option>
-          <option value="partial">Partial</option>
-        </select>
-      </Field>
-      <Field label="Payment Type">
-        <select 
-          className="input" 
-          value={filters.paymentType||''} 
-          onChange={on('paymentType')}
-        >
-          <option value="">Any Payment Type</option>
-          <option value="upi">UPI</option>
-          <option value="card">Card</option>
-          <option value="bank_transfer">Bank Transfer</option>
-          <option value="cash">Cash</option>
-        </select>
-      </Field>
     </div>
   )
 }

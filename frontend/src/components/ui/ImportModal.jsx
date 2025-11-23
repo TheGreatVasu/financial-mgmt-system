@@ -1,12 +1,21 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { Upload, X, File, Download, AlertTriangle, Trash2 } from 'lucide-react'
 import Modal from './Modal.jsx'
+import { useImportContext } from '../../context/ImportContext.jsx'
+
+const signatureFromFile = (file) => {
+  if (!file) return ''
+  return `${file.name || 'file'}-${file.size || 0}-${file.lastModified || 0}`
+}
 
 export default function ImportModal({ open, onClose, onImport, isUploading = false }) {
-  const [selectedFiles, setSelectedFiles] = useState([])
   const [isDragging, setIsDragging] = useState(false)
   const [dragCounter, setDragCounter] = useState(0)
   const fileInputRef = useRef(null)
+  const { uploadQueue, addFilesToQueue, removeFileFromQueue } = useImportContext()
+
+  const pendingItems = uploadQueue.filter(item => item.status === 'pending' || item.status === 'error')
+  const selectedFiles = pendingItems.map(item => item.file)
 
   const validateFile = (file) => {
     // Validate file type
@@ -78,7 +87,8 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
       const validation = validateFile(file)
       if (validation.valid) {
         // Check if file already exists
-        const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size)
+        const signature = signatureFromFile(file)
+        const exists = uploadQueue.some(item => item.signature === signature)
         if (!exists) {
           validFiles.push(file)
         }
@@ -92,7 +102,7 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
     }
 
     if (validFiles.length > 0) {
-      setSelectedFiles(prev => [...prev, ...validFiles])
+      addFilesToQueue(validFiles)
     }
   }
 
@@ -106,11 +116,14 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
   }
 
   const handleRemoveFile = (index) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+    const item = pendingItems[index]
+    if (item) {
+      removeFileFromQueue(item.signature)
+    }
   }
 
   const handleRemoveAllFiles = () => {
-    setSelectedFiles([])
+    pendingItems.forEach(item => removeFileFromQueue(item.signature))
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -127,14 +140,12 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
   }
 
   const handleImport = () => {
-    if (selectedFiles.length > 0 && onImport) {
-      // Always pass array of files
-      onImport(selectedFiles)
+    if (pendingItems.length > 0 && onImport) {
+      onImport(pendingItems.map(item => item.file))
     }
   }
 
   const handleClose = () => {
-    setSelectedFiles([])
     setDragCounter(0)
     setIsDragging(false)
     if (fileInputRef.current) {
@@ -183,7 +194,7 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
                        inline-flex items-center justify-center gap-2
                        flex-1 sm:flex-initial"
             onClick={handleImport}
-            disabled={selectedFiles.length === 0 || isUploading}
+            disabled={pendingItems.length === 0 || isUploading}
           >
             {isUploading ? (
               <>
@@ -193,7 +204,7 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
             ) : (
               <>
                 <Upload className="h-4 w-4" />
-                <span>Import {selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}</span>
+                <span>Import {pendingItems.length > 0 ? `(${pendingItems.length})` : ''}</span>
               </>
             )}
           </button>
@@ -213,7 +224,7 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
             transition-all duration-200 cursor-pointer
             ${isDragging 
               ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 scale-[1.02]' 
-              : selectedFiles.length > 0
+              : pendingItems.length > 0
               ? 'border-primary-300 bg-primary-50/50 dark:bg-primary-900/10'
               : 'border-secondary-300 dark:border-secondary-700 bg-secondary-50/50 dark:bg-secondary-900/30 hover:border-primary-400 hover:bg-primary-50/30 dark:hover:bg-primary-900/10'
             }
@@ -229,17 +240,17 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
             disabled={isUploading}
           />
 
-          {selectedFiles.length > 0 ? (
+          {pendingItems.length > 0 ? (
             <div className="flex flex-col items-center gap-4">
               <div className="h-16 w-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
                 <File className="h-8 w-8 text-primary-600 dark:text-primary-400" />
               </div>
               <div className="text-center">
                 <p className="text-base font-semibold text-secondary-900 dark:text-secondary-100 mb-1">
-                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                  {pendingItems.length} file{pendingItems.length > 1 ? 's' : ''} selected
                 </p>
                 <p className="text-xs text-secondary-500 dark:text-secondary-400">
-                  {formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))} total
+                  {formatFileSize(pendingItems.reduce((sum, item) => sum + (item.size || 0), 0))} total
                 </p>
               </div>
               <button
@@ -280,11 +291,11 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
         </div>
 
         {/* Selected Files List */}
-        {selectedFiles.length > 0 && (
+        {pendingItems.length > 0 && (
           <div className="space-y-2 max-h-48 overflow-y-auto">
-            {selectedFiles.map((file, index) => (
+            {pendingItems.map((item, index) => (
               <div
-                key={`${file.name}-${file.size}-${index}`}
+                key={item.id}
                 className="flex items-center gap-3 p-3 bg-secondary-50 dark:bg-secondary-900/30 border border-secondary-200 dark:border-secondary-800 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-900/50 transition-colors"
               >
                 <div className="flex-shrink-0 h-10 w-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
@@ -292,10 +303,10 @@ export default function ImportModal({ open, onClose, onImport, isUploading = fal
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-secondary-900 dark:text-secondary-100 truncate">
-                    {file.name}
+                    {item.displayName}
                   </p>
                   <p className="text-xs text-secondary-500 dark:text-secondary-400">
-                    {formatFileSize(file.size)}
+                    {formatFileSize(item.size)}
                   </p>
                 </div>
                 <button

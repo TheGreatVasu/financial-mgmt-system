@@ -285,16 +285,26 @@ export async function updateProfile(token, { firstName, lastName, email, phoneNu
   }
 }
 
-export async function uploadAvatar(token, file) {
+export async function uploadProfileImage(token, file) {
   const api = createApiClient(token)
   try {
     const formData = new FormData()
+    // Use 'avatar' field name as required by backend
     formData.append('avatar', file)
-    const { data } = await api.post('/auth/avatar', formData)
-    if (!data?.success) throw new Error(data?.message || 'Failed to upload avatar')
-    return data.data
+    const { data } = await api.post('/auth/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    if (!data?.success) throw new Error(data?.message || 'Failed to upload profile image')
+    // Return with both avatarUrl and profileImageUrl for compatibility
+    return { 
+      profileImageUrl: data.data.avatarUrl, 
+      avatarUrl: data.data.avatarUrl,
+      ...data.data 
+    }
   } catch (err) {
-    const errorMessage = err.response?.data?.message || err.message || 'Failed to upload avatar'
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to upload profile image'
     throw new Error(errorMessage)
   }
 }

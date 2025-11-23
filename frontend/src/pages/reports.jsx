@@ -1,24 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { fetchDashboard } from '../services/dashboardService.js'
 import MonthlySalesChart from '../components/tailadmin/ecommerce/MonthlySalesChart.jsx'
 import PieChart from '../components/ui/PieChart.jsx'
-import { CalendarRange, Download } from 'lucide-react'
+import { CalendarRange, Download, ChevronDown } from 'lucide-react'
+import { downloadDashboardReport } from '../services/reportService.js'
 
 export default function Reports() {
   const { token } = useAuthContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [range, setRange] = useState('30d')
+  const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [exportError, setExportError] = useState("")
+  const filterRef = useRef(null)
+
+  const rangeOptions = [
+    { value: '15d', label: 'Last 15 days', hint: 'Fast-moving pulse' },
+    { value: '30d', label: 'Last 30 days', hint: 'Monthly snapshot' },
+    { value: '45d', label: 'Last 45 days', hint: 'Extended month' },
+    { value: '60d', label: 'Last 60 days', hint: 'Quarter ramp-up' },
+    { value: '90d', label: 'Last 90 days', hint: 'Quarterly view' },
+  ]
+  const activeRange = rangeOptions.find((opt) => opt.value === range) || rangeOptions[1]
 
   useEffect(() => {
     let mounted = true
     async function load() {
+      if (!token) return
       setLoading(true)
       setError("")
       try {
-        const d = await fetchDashboard(token)
+        const d = await fetchDashboard(token, { range })
         if (mounted) setData(d)
       } catch (e) {
         if (mounted) setError(e?.message || 'Failed to load reports')
@@ -28,29 +44,115 @@ export default function Reports() {
     }
     load()
     return () => { mounted = false }
-  }, [token])
+  }, [token, range])
+
+  useEffect(() => {
+    if (!rangeMenuOpen) return
+    const handleClick = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setRangeMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [rangeMenuOpen])
+
+  const formatDate = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const handleDownloadReport = async () => {
+    if (!token || !data) return
+    setExportError("")
+    setDownloading(true)
+    try {
+      const blob = await downloadDashboardReport(token, {
+        ...data,
+        filters: data?.appliedFilters || { range },
+        generatedAt: new Date().toISOString(),
+      })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const filename = `receivables-report-${(data?.appliedFilters?.range || range)}-${new Date().toISOString().slice(0, 10)}.pdf`
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setExportError(err?.message || 'Failed to generate report')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Reports</h1>
-          <p className="text-sm text-secondary-600 mt-1">Insights and analytics</p>
+          <p className="text-sm text-secondary-600 mt-1">
+            Insights and analytics · {activeRange?.label || 'Last 30 days'}
+          </p>
+          {data?.appliedFilters?.startDate && data?.appliedFilters?.endDate && (
+            <p className="text-xs text-secondary-500 mt-1">
+              Showing data from {formatDate(data.appliedFilters.startDate)} to {formatDate(data.appliedFilters.endDate)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <button className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-secondary-200 text-sm text-secondary-700 hover:bg-secondary-100/80">
-            <CalendarRange className="h-4 w-4" />
-            Last 30 days
-          </button>
-          <button className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary-600 text-white text-sm hover:bg-primary-700 shadow-soft">
+          <div className="relative" ref={filterRef}>
+            <button
+              onClick={() => setRangeMenuOpen((prev) => !prev)}
+              className="inline-flex items-center gap-3 rounded-xl border border-secondary-200/80 bg-white px-3 py-2 shadow-inner hover:border-primary-200"
+            >
+              <CalendarRange className="h-4 w-4 text-primary-600" />
+              <div className="text-left">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-secondary-400">Filter</p>
+                <p className="text-sm font-semibold text-secondary-800">{activeRange?.label || 'Last 30 days'}</p>
+              </div>
+              <ChevronDown className={`h-4 w-4 text-secondary-400 transition ${rangeMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {rangeMenuOpen && (
+              <div className="absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-secondary-200/70 bg-white p-2 shadow-2xl">
+                {rangeOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      setRange(opt.value)
+                      setRangeMenuOpen(false)
+                    }}
+                    className={`w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-secondary-100 ${
+                      range === opt.value ? 'bg-primary-50 text-primary-700 border border-primary-200' : 'text-secondary-700'
+                    }`}
+                  >
+                    <span className="block font-semibold">{opt.label}</span>
+                    <span className="block text-xs text-secondary-500">{opt.hint}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleDownloadReport}
+            disabled={!data || downloading}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <Download className="h-4 w-4" />
-            Export
+            {downloading ? 'Preparing…' : 'Download report'}
           </button>
         </div>
       </div>
 
       {error ? (
         <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3 text-sm mt-4">{error}</div>
+      ) : null}
+      {exportError ? (
+        <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3 text-sm mt-4">{exportError}</div>
       ) : null}
 
       {/* KPIs */}

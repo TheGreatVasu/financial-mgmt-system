@@ -122,15 +122,10 @@ export default function UsersManagementPage() {
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-              <Users className="h-8 w-8 text-primary-600" />
-              User Management
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              View and manage all registered users in the system
-            </p>
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight">User Management</h1>
+            <p className="text-sm text-secondary-600 mt-1">View and manage all registered users in the system</p>
           </div>
           <div className="flex items-center gap-3">
             <button

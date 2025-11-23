@@ -38,23 +38,22 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// Rate limiting - more lenient for development
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 200, // Higher limit for development
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip rate limiting for successful requests in development
-  skip: (req) => {
-    // In development, be more lenient
-    return process.env.NODE_ENV === 'development' && req.path.includes('/health')
-  }
-});
-app.use('/api/', limiter);
+// Rate limiting - disabled outside production to avoid blocking local logins
+if (config.NODE_ENV === 'production') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 300, // allow more requests even in production
+    message: {
+      success: false,
+      message: 'Too many requests from this IP, please try again later.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+  app.use('/api/', limiter);
+} else {
+  console.info('⚠️  Rate limiting is disabled in non-production environments.');
+}
 
 // CORS configuration - Allow both localhost:3000 and localhost:3001
 app.use(cors({

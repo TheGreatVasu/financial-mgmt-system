@@ -8,6 +8,9 @@ export default function SalesInvoiceMasterTable({ invoices = [], loading = false
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [expandedRows, setExpandedRows] = useState(new Set())
+  const [regionFilter, setRegionFilter] = useState('all')
+  const [unitFilter, setUnitFilter] = useState('all')
+  const [overdueOnly, setOverdueOnly] = useState(false)
 
   // Key fields to display in the table
   const keyFields = [
@@ -22,20 +25,41 @@ export default function SalesInvoiceMasterTable({ invoices = [], loading = false
     { key: 'over_due_total', label: 'Overdue', width: 'w-32', type: 'currency' }
   ]
 
+  const uniqueRegions = useMemo(() => {
+    return Array.from(new Set(invoices.map(inv => (inv.region || '').toLowerCase()).filter(Boolean))).sort()
+  }, [invoices])
+
+  const uniqueUnits = useMemo(() => {
+    return Array.from(new Set(invoices.map(inv => (inv.business_unit || '').toLowerCase()).filter(Boolean))).sort()
+  }, [invoices])
+
   // Filtered and sorted data
   const filteredData = useMemo(() => {
-    let filtered = invoices.filter(inv => {
-      if (!searchTerm) return true
-      const search = searchTerm.toLowerCase()
-      return (
-        (inv.gst_tax_invoice_no || '').toLowerCase().includes(search) ||
-        (inv.internal_invoice_no || '').toLowerCase().includes(search) ||
-        (inv.customer_name || '').toLowerCase().includes(search) ||
-        (inv.business_unit || '').toLowerCase().includes(search) ||
-        (inv.region || '').toLowerCase().includes(search) ||
-        (inv.zone || '').toLowerCase().includes(search)
-      )
-    })
+    let filtered = invoices
+      .filter(inv => {
+        if (!searchTerm) return true
+        const search = searchTerm.toLowerCase()
+        return (
+          (inv.gst_tax_invoice_no || '').toLowerCase().includes(search) ||
+          (inv.internal_invoice_no || '').toLowerCase().includes(search) ||
+          (inv.customer_name || '').toLowerCase().includes(search) ||
+          (inv.business_unit || '').toLowerCase().includes(search) ||
+          (inv.region || '').toLowerCase().includes(search) ||
+          (inv.zone || '').toLowerCase().includes(search)
+        )
+      })
+      .filter(inv => {
+        if (regionFilter !== 'all' && (inv.region || '').toLowerCase() !== regionFilter) {
+          return false
+        }
+        if (unitFilter !== 'all' && (inv.business_unit || '').toLowerCase() !== unitFilter) {
+          return false
+        }
+        if (overdueOnly && !(parseFloat(inv.over_due_total || 0) > 0)) {
+          return false
+        }
+        return true
+      })
 
     if (sortConfig.key) {
       filtered.sort((a, b) => {
@@ -102,6 +126,38 @@ export default function SalesInvoiceMasterTable({ invoices = [], loading = false
     }
   }
 
+const buildCsv = (rows) => {
+  const headers = ['GST Invoice', 'Invoice Date', 'Customer', 'Business Unit', 'Region', 'Zone', 'Invoice Value', 'Balance', 'Overdue']
+  const body = rows
+    .map(inv => [
+      inv.gst_tax_invoice_no,
+      inv.gst_tax_invoice_date,
+      inv.customer_name,
+      inv.business_unit,
+      inv.region,
+      inv.zone,
+      inv.total_invoice_value,
+      inv.total_balance,
+      inv.over_due_total
+    ].map(value => JSON.stringify(value ?? '')).join(','))
+    .join('\n')
+  return `${headers.join(',')}\n${body}`
+}
+
+const downloadCsv = (rows) => {
+  if (!rows.length) return
+  const csv = buildCsv(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'invoice-master-table.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-secondary-200/60 bg-white p-6 shadow-soft">
@@ -116,17 +172,25 @@ export default function SalesInvoiceMasterTable({ invoices = [], loading = false
   }
 
   return (
-    <div className="rounded-2xl border border-secondary-200/60 bg-white shadow-soft overflow-hidden">
+    <div className="rounded-3xl border border-secondary-200/60 bg-white shadow-xl shadow-secondary-500/10 overflow-hidden">
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-secondary-200">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="p-4 sm:p-6 border-b border-secondary-200 space-y-4">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-secondary-900">Invoice Master Table</h3>
             <p className="text-sm text-secondary-500 mt-1">
               Showing {paginatedData.length} of {filteredData.length} invoices
             </p>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <button
+              onClick={() => downloadCsv(filteredData)}
+              disabled={!filteredData.length}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-secondary-300 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
             {/* Search */}
             <div className="relative flex-1 sm:flex-initial sm:w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-secondary-400" />
@@ -154,12 +218,56 @@ export default function SalesInvoiceMasterTable({ invoices = [], loading = false
             </select>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={regionFilter}
+            onChange={(e) => {
+              setRegionFilter(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="all">All regions</option>
+            {uniqueRegions.map((region) => (
+              <option key={region} value={region}>
+                {region.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <select
+            value={unitFilter}
+            onChange={(e) => {
+              setUnitFilter(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="all">All business units</option>
+            {uniqueUnits.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-secondary-200 text-sm text-secondary-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={overdueOnly}
+              onChange={(e) => {
+                setOverdueOnly(e.target.checked)
+                setCurrentPage(1)
+              }}
+              className="rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+            />
+            Overdue only
+          </label>
+        </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-secondary-50 border-b border-secondary-200">
+        <table className="w-full text-sm text-secondary-700">
+          <thead className="bg-white border-b border-secondary-200 shadow-sm sticky top-0 z-10">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider w-12">
                 #

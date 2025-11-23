@@ -115,8 +115,15 @@ export default function PaymentsPage() {
 
   return (
     <DashboardLayout>
-      <section className="card p-6">
-        <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Payments</h1>
+          <p className="text-sm text-secondary-600 mt-1">Track and manage payment records</p>
+        </div>
+      </div>
+
+      <section className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Recent Payments</h2>
           <div className="flex items-center gap-2">
             <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1) }} placeholder="Search payments" className="input" />
@@ -166,9 +173,9 @@ export default function PaymentsPage() {
         </div>
       </section>
 
-      <section className="card p-6 mt-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">Meeting MOMs</h3>
+      <section className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Meeting MOMs</h3>
           <div className="flex items-center gap-2">
             <input className="input" placeholder="Search MOM" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
             <select className="input" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
@@ -221,8 +228,8 @@ export default function PaymentsPage() {
         </div>
       </section>
 
-      <section className="card p-6 mt-6">
-        <h3 className="text-base font-semibold">Calendar</h3>
+      <section className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm mb-6">
+        <h3 className="text-lg font-semibold mb-4">Calendar</h3>
         <Calendar events={moms} onSelect={(m) => onEdit(m)} />
       </section>
 
@@ -384,8 +391,8 @@ function Calendar({ events, onSelect }) {
 function Timeline({ moms }) {
   const items = [...moms].sort((a, b) => new Date(a.meetingDate) - new Date(b.meetingDate))
   return (
-    <section className="card p-6 mt-6">
-      <h3 className="text-base font-semibold">Timeline</h3>
+    <section className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold mb-4">Timeline</h3>
       <div className="mt-4 space-y-4">
         {items.map(m => (
           <div key={m._id} className="flex items-start gap-3">

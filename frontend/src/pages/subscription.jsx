@@ -444,11 +444,18 @@ export default function Subscription() {
         </div>
       )}
 
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Subscription</h1>
+          <p className="text-sm text-secondary-600 mt-1">Manage your subscription plan and billing</p>
+        </div>
+      </div>
+
       {/* Hero Section */}
       <div className="mb-12 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 tracking-tight">
           Flexible Pricing Plans Built for Growth
-        </h1>
+        </h2>
         <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
           Simple, scalable, and transparent pricing for every business.
         </p>

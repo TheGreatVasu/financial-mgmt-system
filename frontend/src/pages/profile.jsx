@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
-import { changePasswordApi, uploadAvatar, updatePreferences } from '../services/authService'
+import { changePasswordApi, uploadProfileImage, updatePreferences } from '../services/authService'
 import { useToast } from '../components/ui/Toast.jsx'
 import { Camera, Eye, EyeOff, ShieldCheck, ShieldAlert, Smartphone, Mail, LogOut } from 'lucide-react'
 import { initializeSocket, disconnectSocket, getSocket } from '../services/socketService'
@@ -26,23 +26,23 @@ function getInitials(user) {
   return (f + l).toUpperCase()
 }
 
-// Helper function to get avatar URL
-function getAvatarUrl(avatarUrl, baseUrl = '') {
-  if (!avatarUrl) return null
-  if (avatarUrl.startsWith('http')) return avatarUrl
+// Helper function to get profile image URL
+function getProfileImageUrl(profileImageUrl, baseUrl = '') {
+  if (!profileImageUrl) return null
+  if (profileImageUrl.startsWith('http')) return profileImageUrl
   // If it starts with /, it's already a full path from backend
-  if (avatarUrl.startsWith('/')) {
+  if (profileImageUrl.startsWith('/')) {
     // If baseUrl is set and doesn't end with /, use it as-is
     if (baseUrl && !baseUrl.endsWith('/')) {
-      return `${baseUrl}${avatarUrl}`
+      return `${baseUrl}${profileImageUrl}`
     }
     // Otherwise, if baseUrl ends with / or is empty, construct properly
     const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
-    return cleanBase ? `${cleanBase}${avatarUrl}` : avatarUrl
+    return cleanBase ? `${cleanBase}${profileImageUrl}` : profileImageUrl
   }
   // Fallback: construct path
   const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
-  return cleanBase ? `${cleanBase}/uploads/avatars/${avatarUrl}` : `/uploads/avatars/${avatarUrl}`
+  return cleanBase ? `${cleanBase}/uploads/profile/${profileImageUrl}` : `/uploads/profile/${profileImageUrl}`
 }
 
 export default function Profile() {
@@ -50,11 +50,11 @@ export default function Profile() {
   const toast = useToast()
   const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', phoneNumber: '' })
   const [saving, setSaving] = useState(false)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingProfileImage, setUploadingProfileImage] = useState(false)
   const [pwd, setPwd] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [pwdSaving, setPwdSaving] = useState(false)
   const [showPwd, setShowPwd] = useState({ current: false, next: false, confirm: false })
-  const [avatarUrl, setAvatarUrl] = useState('')
+  const [profileImageUrl, setProfileImageUrl] = useState('')
   const [prefs, setPrefs] = useState({ 
     emailNotifications: true, 
     autoBackups: false, 
@@ -70,7 +70,7 @@ export default function Profile() {
   const [currentToken, setCurrentToken] = useState(null)
   const activityIntervalRef = useRef(null)
 
-  // Get API base URL for avatar
+  // Get API base URL for profile image
   const apiBaseUrl = import.meta?.env?.VITE_API_BASE_URL || ''
 
   // Initialize Socket.io and load sessions
@@ -175,12 +175,13 @@ export default function Profile() {
         phoneNumber: user.phoneNumber || '',
       })
       
-      // Set avatar URL
-      if (user.avatarUrl) {
-        const fullUrl = getAvatarUrl(user.avatarUrl, apiBaseUrl)
-        setAvatarUrl(fullUrl)
+      // Set profile image URL (check both avatarUrl and profileImageUrl for backward compatibility)
+      const imageUrl = user.profileImageUrl || user.avatarUrl
+      if (imageUrl) {
+        const fullUrl = getProfileImageUrl(imageUrl, apiBaseUrl)
+        setProfileImageUrl(fullUrl)
       } else {
-        setAvatarUrl('')
+        setProfileImageUrl('')
       }
 
       // Sync preferences from user data
@@ -280,7 +281,7 @@ export default function Profile() {
     }
   }
 
-  async function onAvatarPick(e) {
+  async function onProfileImagePick(e) {
     const file = e.target.files?.[0]
     if (!file) return
     
@@ -296,21 +297,22 @@ export default function Profile() {
       return
     }
 
-    setUploadingAvatar(true)
+    setUploadingProfileImage(true)
     try {
-      const updatedUser = await uploadAvatar(token, file)
-      // Update avatar URL immediately
-      if (updatedUser.avatarUrl) {
-        const fullUrl = getAvatarUrl(updatedUser.avatarUrl, apiBaseUrl)
-        setAvatarUrl(fullUrl)
+      const updatedUser = await uploadProfileImage(token, file)
+      // Update profile image URL immediately
+      const imageUrl = updatedUser.profileImageUrl || updatedUser.avatarUrl
+      if (imageUrl) {
+        const fullUrl = getProfileImageUrl(imageUrl, apiBaseUrl)
+        setProfileImageUrl(fullUrl)
       }
       // Refresh user data
       await refresh()
-      toast.add('Avatar uploaded successfully', 'success')
+      toast.add('Profile image uploaded successfully', 'success')
     } catch (err) {
-      toast.add(err.message || 'Failed to upload avatar', 'error')
+      toast.add(err.message || 'Failed to upload profile image', 'error')
     } finally {
-      setUploadingAvatar(false)
+      setUploadingProfileImage(false)
       // Reset file input
       if (fileRef.current) {
         fileRef.current.value = ''
@@ -380,26 +382,26 @@ export default function Profile() {
         {/* Left column */}
         <div className="lg:col-span-8 space-y-6">
           {/* Profile header */}
-          <div className="card p-6 flex items-start gap-4">
+          <div className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm flex items-start gap-4">
             <div className="relative">
               <div className="h-20 w-20 rounded-full bg-primary-600 text-white grid place-items-center text-xl font-semibold overflow-hidden">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="avatar" className="h-full w-full object-cover" onError={(e) => {
+                {profileImageUrl ? (
+                  <img src={profileImageUrl} alt="Profile" className="h-full w-full object-cover" onError={(e) => {
                     e.target.style.display = 'none'
                     e.target.nextSibling.style.display = 'grid'
                   }} />
                 ) : null}
-                <div className={`h-full w-full grid place-items-center ${avatarUrl ? 'hidden' : ''}`}>
+                <div className={`h-full w-full grid place-items-center ${profileImageUrl ? 'hidden' : ''}`}>
                   {getInitials(user)}
                 </div>
               </div>
               <button 
                 onClick={() => fileRef.current?.click()} 
-                disabled={uploadingAvatar}
+                disabled={uploadingProfileImage}
                 className="absolute -bottom-2 -right-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-white dark:bg-[#1E293B] border border-secondary-300 dark:border-secondary-700 shadow hover:bg-secondary-50 dark:hover:bg-secondary-800 disabled:opacity-50 disabled:cursor-not-allowed">
-                <Camera className="h-3.5 w-3.5" /> {uploadingAvatar ? 'Uploading...' : 'Change'}
+                <Camera className="h-3.5 w-3.5" /> {uploadingProfileImage ? 'Uploading...' : 'Change'}
               </button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onAvatarPick} />
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onProfileImagePick} />
             </div>
             <div className="flex-1">
               <div className="text-lg font-semibold">{user?.firstName || ''} {user?.lastName || ''}</div>
@@ -411,7 +413,7 @@ export default function Profile() {
           </div>
 
           {/* Personal details */}
-          <form onSubmit={onSave} className="card p-6 space-y-5">
+          <form onSubmit={onSave} className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm space-y-5">
             <div className="text-sm font-medium">Personal Details</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FloatingInput label="First Name" name="firstName" value={profile.firstName} onChange={onChange} required />
@@ -426,7 +428,7 @@ export default function Profile() {
           </form>
 
           {/* Security & Password */}
-          <form onSubmit={onChangePassword} className="card p-6 space-y-5">
+          <form onSubmit={onChangePassword} className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm space-y-5">
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium">Security & Password</div>
             </div>
@@ -475,7 +477,7 @@ export default function Profile() {
           </form>
 
           {/* Preferences & Theme */}
-          <div className="card p-6 space-y-5">
+          <div className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm space-y-5">
             <div className="text-sm font-medium">Account Preferences</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CheckboxRow 
@@ -517,7 +519,7 @@ export default function Profile() {
 
         {/* Right column */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="card p-6">
+          <div className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm">
             <div className="text-sm font-medium">Activity Overview</div>
             {loadingSessions ? (
               <div className="mt-3 text-sm text-secondary-600">Loading sessions...</div>

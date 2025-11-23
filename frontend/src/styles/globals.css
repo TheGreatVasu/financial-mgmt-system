@@ -7,6 +7,23 @@
   body { @apply bg-secondary-50 text-secondary-900 transition-colors duration-300; }
   .dark body { @apply bg-[#0D1117] text-gray-100; }
   :root { --app-header-h: 64px; }
+
+  .modern-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+    background-color: transparent;
+  }
+
+  .modern-select::-ms-expand {
+    display: none;
+  }
+
+  .modern-select:focus {
+    outline: none;
+    box-shadow: none;
+  }
 }
 
 @layer components {
@@ -33,6 +50,48 @@
   /* Shared header height for perfect alignment */
   .app-header { height: var(--app-header-h); }
   .brand { height: var(--app-header-h); }
+
+  /* Sidebar scroll styling */
+  .sidebar-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+  }
+
+  .dark .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.4);
+  }
+
+  .dark .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.6);
+  }
+
+  /* Firefox scrollbar */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  }
+
+  .dark .sidebar-scroll {
+    scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  }
 }
 
 @layer utilities {
@@ -152,10 +211,46 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.8; }
   }
+  @keyframes slide-in-from-bottom {
+    0% { opacity: 0; transform: translateY(16px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in-from-left {
+    0% { opacity: 0; transform: translateX(-16px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slide-in-from-right {
+    0% { opacity: 0; transform: translateX(16px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slide-in-from-top {
+    0% { opacity: 0; transform: translateY(-16px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
   .animate-fade-left { animation: fade-in-left 600ms ease-out both; }
   .animate-fade-right { animation: fade-in-right 600ms ease-out both; }
   .animate-fade-in { animation: fade-in 300ms ease-out both; }
   .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+  
+  /* Animation utilities for dashboard */
+  .animate-in {
+    animation-fill-mode: both;
+  }
+  .fade-in-0 {
+    animation-name: fade-in;
+  }
+  .slide-in-from-bottom-4 {
+    animation-name: slide-in-from-bottom;
+  }
+  .slide-in-from-left-4 {
+    animation-name: slide-in-from-left;
+  }
+  .slide-in-from-right-4 {
+    animation-name: slide-in-from-right;
+  }
+  .slide-in-from-top-4 {
+    animation-name: slide-in-from-top;
+  }
 
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {

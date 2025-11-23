@@ -2,7 +2,19 @@ const { getDb } = require('../config/db');
 
 // Repository layer: uses MySQL via Knex when configured, otherwise returns mock data
 
-async function getKpis(userId = null) {
+function applyDateFilter(query, column, filters = {}) {
+  if (!filters) return query;
+  const { startDate, endDate } = filters;
+  if (startDate) {
+    query = query.where(column, '>=', startDate);
+  }
+  if (endDate) {
+    query = query.where(column, '<=', endDate);
+  }
+  return query;
+}
+
+async function getKpis(userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     return {
@@ -20,9 +32,10 @@ async function getKpis(userId = null) {
     ? db('customers').where('created_by', userId).whereNotNull('created_by')
     : db('customers');
   
-  const invoiceQuery = userId
+  let invoiceQuery = userId
     ? db('invoices').where('created_by', userId).whereNotNull('created_by')
     : db('invoices');
+  invoiceQuery = applyDateFilter(invoiceQuery, 'created_at', filters);
   
   const [customers, invoices, paidSumRow, totalSumRow, overdue] = await Promise.all([
     customerQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
@@ -52,7 +65,7 @@ async function listAlerts(limit = 10, userId = null) {
   return db('alerts').orderBy('created_at', 'desc').limit(limit).select('*');
 }
 
-async function recentInvoices(limit = 6, userId = null) {
+async function recentInvoices(limit = 6, userId = null, filters = {}) {
   const db = getDb();
   if (!db) return [];
   let query = db('invoices as i')
@@ -63,6 +76,7 @@ async function recentInvoices(limit = 6, userId = null) {
   if (userId) {
     query = query.where('i.created_by', userId).whereNotNull('i.created_by');
   }
+  query = applyDateFilter(query, 'i.created_at', filters);
   
   const rows = await query
     .orderBy('i.created_at', 'desc')
@@ -78,7 +92,7 @@ async function recentInvoices(limit = 6, userId = null) {
   }));
 }
 
-async function topCustomersByOutstanding(limit = 5, userId = null) {
+async function topCustomersByOutstanding(limit = 5, userId = null, filters = {}) {
   const db = getDb();
   if (!db) return [];
   let query = db('invoices as i')
@@ -89,6 +103,7 @@ async function topCustomersByOutstanding(limit = 5, userId = null) {
   if (userId) {
     query = query.where('i.created_by', userId).whereNotNull('i.created_by');
   }
+  query = applyDateFilter(query, 'i.created_at', filters);
   
   const rows = await query
     .groupBy('i.customer_id','c.company_name')
@@ -100,7 +115,7 @@ async function topCustomersByOutstanding(limit = 5, userId = null) {
 }
 
 // Aging Analysis: Breakdown of AR balance by time periods
-async function getAgingAnalysis(userId = null) {
+async function getAgingAnalysis(userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     return [
@@ -122,6 +137,7 @@ async function getAgingAnalysis(userId = null) {
     if (userId) {
       q = q.where('i.created_by', userId);
     }
+    q = applyDateFilter(q, 'i.created_at', filters);
     return q;
   };
   
@@ -168,7 +184,7 @@ async function getAgingAnalysis(userId = null) {
 }
 
 // Regional breakdown of overdue balance
-async function getRegionalBreakup(userId = null) {
+async function getRegionalBreakup(userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     return [
@@ -190,6 +206,7 @@ async function getRegionalBreakup(userId = null) {
   if (userId) {
     query = query.where('i.created_by', userId).whereNotNull('i.created_by');
   }
+  query = applyDateFilter(query, 'i.created_at', filters);
   
   const rows = await query
     .groupBy('c.state')
@@ -216,7 +233,7 @@ async function getRegionalBreakup(userId = null) {
 }
 
 // Monthly trends for past 12 months
-async function getMonthlyTrends(userId = null) {
+async function getMonthlyTrends(userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -233,6 +250,13 @@ async function getMonthlyTrends(userId = null) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+
+    if (filters?.startDate && nextMonth <= filters.startDate) {
+      continue;
+    }
+    if (filters?.endDate && date > filters.endDate) {
+      continue;
+    }
     
     // Build base queries with user filtering
     const buildInvoiceQuery = () => {
@@ -267,7 +291,7 @@ async function getMonthlyTrends(userId = null) {
 }
 
 // Top 10 customers by overdue amount
-async function getTopCustomersByOverdue(limit = 10, userId = null) {
+async function getTopCustomersByOverdue(limit = 10, userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     return [];
@@ -283,6 +307,7 @@ async function getTopCustomersByOverdue(limit = 10, userId = null) {
   if (userId) {
     query = query.where('i.created_by', userId).whereNotNull('i.created_by');
   }
+  query = applyDateFilter(query, 'i.created_at', filters);
   
   const rows = await query
     .groupBy('i.customer_id', 'c.company_name')
@@ -301,7 +326,7 @@ async function getTopCustomersByOverdue(limit = 10, userId = null) {
 }
 
 // Cash inflow estimates (actual vs estimated)
-async function getCashInflowComparison(userId = null) {
+async function getCashInflowComparison(userId = null, filters = {}) {
   const db = getDb();
   if (!db) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -318,6 +343,13 @@ async function getCashInflowComparison(userId = null) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+
+    if (filters?.startDate && nextMonth <= filters.startDate) {
+      continue;
+    }
+    if (filters?.endDate && date > filters.endDate) {
+      continue;
+    }
     
     // Build queries with user filtering
     const buildPaymentQuery = () => {

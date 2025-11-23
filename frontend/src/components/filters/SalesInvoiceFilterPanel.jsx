@@ -141,7 +141,7 @@ export default function SalesInvoiceFilterPanel({
             <select
               value={localFilters.customer || ''}
               onChange={(e) => updateFilter('customer', e.target.value || null)}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 modern-select appearance-none"
             >
               <option value="">All Customers</option>
               {customers.map((customer) => (
@@ -161,7 +161,7 @@ export default function SalesInvoiceFilterPanel({
             <select
               value={localFilters.businessUnit || ''}
               onChange={(e) => updateFilter('businessUnit', e.target.value || null)}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 modern-select appearance-none"
             >
               <option value="">All Business Units</option>
               {businessUnits.map((unit) => (
@@ -182,7 +182,7 @@ export default function SalesInvoiceFilterPanel({
               <select
                 value={localFilters.region || ''}
                 onChange={(e) => updateFilter('region', e.target.value || null)}
-                className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 modern-select appearance-none"
               >
                 <option value="">All Regions</option>
                 {regions.map((region) => (
@@ -200,7 +200,7 @@ export default function SalesInvoiceFilterPanel({
               <select
                 value={localFilters.zone || ''}
                 onChange={(e) => updateFilter('zone', e.target.value || null)}
-                className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 modern-select appearance-none"
               >
                 <option value="">All Zones</option>
                 {zones.map((zone) => (
@@ -221,7 +221,7 @@ export default function SalesInvoiceFilterPanel({
             <select
               value={localFilters.invoiceType || ''}
               onChange={(e) => updateFilter('invoiceType', e.target.value || null)}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 modern-select appearance-none"
             >
               <option value="">All Types</option>
               {invoiceTypes.map((type) => (

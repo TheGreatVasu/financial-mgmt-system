@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 export default function DashboardLayout({ children }) {
   const { logout, user, token } = useAuthContext()
   const navigate = useNavigate()
-  const { isImportModalOpen, closeImportModal, triggerRefresh } = useImportContext()
+  const { isImportModalOpen, closeImportModal, triggerRefresh, updateQueueItemByFile } = useImportContext()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1')
@@ -78,7 +78,8 @@ export default function DashboardLayout({ children }) {
   }, [])
 
   const computedSidebarWidth = collapsed ? 72 : sidebarWidth
-  const mainPaddingLeft = viewportWidth < 768 ? 0 : computedSidebarWidth
+  const isMobile = viewportWidth < 768
+  const mainPaddingLeft = isMobile ? 0 : computedSidebarWidth
 
   function handleGlobalSidebarToggle() {
     const width = typeof window !== 'undefined' ? window.innerWidth : 1024
@@ -108,6 +109,7 @@ export default function DashboardLayout({ children }) {
       for (let fileIndex = 0; fileIndex < filesArray.length; fileIndex++) {
         const file = filesArray[fileIndex]
         const isLastFile = fileIndex === filesArray.length - 1
+        updateQueueItemByFile(file, { status: 'uploading', progress: 10, error: null })
         
         try {
           console.log(`📤 Starting import for file: ${file.name}`, { size: file.size, type: file.type })
@@ -132,6 +134,15 @@ export default function DashboardLayout({ children }) {
             
             totalImported += importedCount
             totalErrors += fileErrors
+            updateQueueItemByFile(file, {
+              status: 'completed',
+              progress: 100,
+              meta: {
+                importedCount,
+                fileErrors
+              },
+              error: null
+            })
             
             // Show merge summary if available
             if (mergeSummary && Object.keys(mergeSummary).length > 0) {
@@ -193,6 +204,11 @@ export default function DashboardLayout({ children }) {
             }
           } else {
             errors.push(`${file.name}: ${result?.message || 'Import failed'}`)
+            updateQueueItemByFile(file, {
+              status: 'error',
+              progress: 0,
+              error: result?.message || 'Import failed'
+            })
           }
         } catch (err) {
           console.error(`❌ Import error for ${file.name}:`, {
@@ -263,6 +279,11 @@ export default function DashboardLayout({ children }) {
             errors.push(`${file.name}: ${err?.message || 'Failed to import'}`)
             toast.error(`${file.name}: ${err?.message || 'Failed to import'}`, { duration: 5000 })
           }
+          updateQueueItemByFile(file, {
+            status: 'error',
+            progress: 0,
+            error: err?.message || 'Failed to import'
+          })
         }
       }
 
@@ -321,9 +342,18 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-radial-vignette bg-dots bg-noise bg-aurora transition-colors duration-300">{/* App shell */}
       {/* Mobile backdrop */}
-      <div onClick={() => setSidebarOpen(false)} className={`${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} fixed inset-0 bg-black/30 md:hidden z-40 transition-opacity duration-200`} />
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-50 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200`} style={{ width: computedSidebarWidth }} data-tour="sidebar">{/* Sidebar */}
-        <div className="brand flex items-center px-3 py-3 border-b border-secondary-200/70">
+      <div 
+        onClick={() => setSidebarOpen(false)} 
+        className={`${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} fixed inset-0 bg-black/30 md:hidden z-40 transition-opacity duration-200`}
+        aria-hidden={!sidebarOpen}
+      />
+      <div 
+        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-50 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200 flex flex-col`} 
+        style={{ width: isMobile ? '280px' : computedSidebarWidth }} 
+        data-tour="sidebar"
+        aria-label="Main navigation"
+      >{/* Sidebar */}
+        <div className="brand flex items-center px-3 py-3 border-b border-secondary-200/70 flex-shrink-0">
           <Link 
             to="/dashboard" 
             className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity duration-200"
@@ -358,7 +388,7 @@ export default function DashboardLayout({ children }) {
           </Link>
         </div>
 
-        <nav className="px-3 pt-4 space-y-6 overflow-y-auto h-full pb-6">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-4 space-y-6 pb-6 min-h-0 sidebar-scroll">
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Overview</div>
             <DashboardMenu collapsed={collapsed} />

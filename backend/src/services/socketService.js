@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config/env');
 const { getUserSessions } = require('./sessionRepo');
 const { _buildDashboardPayload: buildDashboardPayload } = require('../controllers/dashboardController');
+const { buildSalesInvoiceDashboardData } = require('../controllers/salesInvoiceDashboardController');
 
 // Store user socket connections: userId -> Set of socketIds
 const userSockets = new Map();
@@ -117,31 +118,29 @@ function getIOInstance() {
 async function broadcastDashboardUpdate() {
   const io = getIOInstance();
   if (!io) return;
-  
-  try {
-    const dashboardData = await buildDashboardPayload();
-    // Broadcast to all connected users
-    io.emit('dashboard:update', dashboardData);
-    
-    // Also broadcast sales invoice dashboard update
-    const { getSalesInvoiceDashboard } = require('../controllers/salesInvoiceDashboardController');
-    // We need to create a mock request object for the controller
-    const mockReq = { query: {} };
-    const mockRes = {
-      json: (data) => {
-        // Broadcast the sales invoice dashboard data
-        io.emit('sales-invoice-dashboard:update', data);
-      }
-    };
-    // Call the controller function directly (it's asyncHandler wrapped)
-    try {
-      await getSalesInvoiceDashboard(mockReq, mockRes);
-    } catch (err) {
-      console.error('Error broadcasting sales invoice dashboard update:', err);
-    }
-  } catch (error) {
-    console.error('Error broadcasting dashboard update:', error);
+
+  const connectedUserIds = Array.from(userSockets.keys());
+  if (connectedUserIds.length === 0) {
+    return;
   }
+
+  await Promise.all(
+    connectedUserIds.map(async (userId) => {
+      try {
+        const dashboardData = await buildDashboardPayload(userId);
+        io.to(`user:${userId}`).emit('dashboard:update', dashboardData);
+
+        const salesInvoiceDashboard = await buildSalesInvoiceDashboardData(userId, {});
+        io.to(`user:${userId}`).emit('sales-invoice-dashboard:update', {
+          success: true,
+          data: salesInvoiceDashboard,
+          userId,
+        });
+      } catch (error) {
+        console.error(`Error broadcasting dashboard update for user ${userId}:`, error);
+      }
+    })
+  );
 }
 
 module.exports = {

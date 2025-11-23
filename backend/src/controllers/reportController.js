@@ -32,15 +32,19 @@ const getAgingReport = asyncHandler(async (req, res) => {
 const generatePDFReport = asyncHandler(async (req, res) => {
   try {
     const reportData = req.body || {};
+    const userId = req.user?.id || null;
+    const filters = reportData.filters || {};
     
     // Generate dashboard data if not provided
-    const dashboardData = reportData.kpis ? reportData : await buildDashboardPayload();
+    const dashboardData = reportData.kpis
+      ? reportData
+      : await buildDashboardPayload(userId, filters);
     
     // Create PDF document
     const doc = pdfService.createDashboardPDF({
       ...dashboardData,
       generatedAt: reportData.generatedAt || new Date().toISOString(),
-      filters: reportData.filters || {}
+      filters: dashboardData.appliedFilters || filters || {}
     });
 
     // Set response headers

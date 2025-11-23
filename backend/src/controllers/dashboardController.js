@@ -7,7 +7,7 @@ const repo = require('../services/repositories');
 // GET /api/dashboard
 // Returns KPIs, chart series, recent invoices, and alerts
 // userId: Optional user ID to filter data by user (for user-specific dashboards)
-async function buildDashboardPayload(userId = null) {
+async function buildDashboardPayload(userId = null, filters = {}) {
   try {
     // CRITICAL: userId is required for user-specific dashboards
     if (!userId) {
@@ -17,13 +17,13 @@ async function buildDashboardPayload(userId = null) {
     
     // Use SQL repository with user filtering - NO fallback to unfiltered Mongoose queries
     // This ensures data isolation between users
-    const kpisFromRepo = await repo.getKpis(userId);
+    const kpisFromRepo = await repo.getKpis(userId, filters);
     const [customerCount, invoiceCount, overdueCount, recentInvoices, topByOutstanding] = await Promise.all([
       Promise.resolve(kpisFromRepo.customers),
       Promise.resolve(kpisFromRepo.invoices),
       Promise.resolve(kpisFromRepo.overdue),
-      repo.recentInvoices(6, userId), // Always pass userId for filtering
-      repo.topCustomersByOutstanding(5, userId), // Always pass userId for filtering
+      repo.recentInvoices(6, userId, filters), // Always pass userId for filtering
+      repo.topCustomersByOutstanding(5, userId, filters), // Always pass userId for filtering
     ]);
 
     // Calculate totals from user-filtered KPIs
@@ -33,11 +33,11 @@ async function buildDashboardPayload(userId = null) {
 
     // Fetch advanced analytics with user filtering
     const [agingAnalysis, regionalBreakup, monthlyTrends, topCustomersOverdue, cashInflowComparison] = await Promise.all([
-      repo.getAgingAnalysis(userId).catch(() => []),
-      repo.getRegionalBreakup(userId).catch(() => []),
-      repo.getMonthlyTrends(userId).catch(() => []),
-      repo.getTopCustomersByOverdue(10, userId).catch(() => []),
-      repo.getCashInflowComparison(userId).catch(() => []),
+      repo.getAgingAnalysis(userId, filters).catch(() => []),
+      repo.getRegionalBreakup(userId, filters).catch(() => []),
+      repo.getMonthlyTrends(userId, filters).catch(() => []),
+      repo.getTopCustomersByOverdue(10, userId, filters).catch(() => []),
+      repo.getCashInflowComparison(userId, filters).catch(() => []),
     ]);
 
     // Monthly series from actual data
@@ -132,6 +132,11 @@ async function buildDashboardPayload(userId = null) {
         topCustomersOverdue: topCustomersOverdue || [],
         cashInflowComparison: cashInflowComparison || [],
         activityTimeline: [],
+        appliedFilters: {
+          range: filters.rangeLabel || '30d',
+          startDate: filters.startDate ? filters.startDate.toISOString?.() || filters.startDate : null,
+          endDate: filters.endDate ? filters.endDate.toISOString?.() || filters.endDate : null,
+        },
     };
   } catch (e) {
     // Return empty data on error
@@ -198,11 +203,40 @@ async function buildDashboardPayload(userId = null) {
           { title: 'Disputes Open', value: 0 }
         ],
         activityTimeline: [],
+        appliedFilters: {
+          range: filters.rangeLabel || '30d',
+          startDate: filters.startDate ? filters.startDate.toISOString?.() || filters.startDate : null,
+          endDate: filters.endDate ? filters.endDate.toISOString?.() || filters.endDate : null,
+        },
     };
   }
 }
 
 // REST endpoint
+function resolveRangeFilters(rangeParam) {
+  const presets = {
+    '15d': 15,
+    '30d': 30,
+    '45d': 45,
+    '60d': 60,
+    '90d': 90,
+  };
+  let days = presets[rangeParam] || presets['30d'];
+  if (!presets[rangeParam] && rangeParam) {
+    const numeric = parseInt(rangeParam, 10);
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      days = numeric;
+    }
+  }
+  const endDate = new Date();
+  const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    rangeLabel: `${days}d`,
+    startDate,
+    endDate,
+  };
+}
+
 exports.getDashboard = asyncHandler(async (req, res) => {
   // Get userId from authenticated user (req.user is set by authMiddleware)
   const userId = req.user?.id || null;
@@ -215,9 +249,11 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     });
   }
   
-  console.log(`📊 Dashboard request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'})`);
+  const filters = resolveRangeFilters(req.query?.range);
+
+  console.log(`📊 Dashboard request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'}) range=${filters.rangeLabel}`);
   
-  const payload = await buildDashboardPayload(userId);
+  const payload = await buildDashboardPayload(userId, filters);
   const hasData = await repo.hasData(userId);
   
   // Log dashboard summary for debugging
@@ -252,9 +288,11 @@ exports.streamDashboard = asyncHandler(async (req, res) => {
   let alive = true;
   req.on('close', () => { alive = false; });
 
+  const filters = resolveRangeFilters(req.query?.range);
+
   async function push() {
     if (!alive) return;
-    const payload = await buildDashboardPayload(userId);
+    const payload = await buildDashboardPayload(userId, filters);
     res.write(`event: update\n`);
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   }
