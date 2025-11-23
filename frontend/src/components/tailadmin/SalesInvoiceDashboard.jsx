@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, TrendingUp, DollarSign, Receipt, AlertTriangle, Package, FileText, BarChart3, History, Download, ClipboardList } from "lucide-react";
+import { RefreshCw, TrendingUp, DollarSign, Receipt, AlertTriangle, Package, FileText, Trash2, Download, ClipboardList } from "lucide-react";
 import { useAuthContext } from "../../context/AuthContext.jsx";
 import { useImportContext } from "../../context/ImportContext.jsx";
 import { getSalesInvoiceDashboard } from "../../services/salesInvoiceService.js";
 import { initializeSocket } from "../../services/socketService.js";
+import { createApiClient } from "../../services/apiClient.js";
 import SalesInvoiceMasterTable from "../tables/SalesInvoiceMasterTable.jsx";
 import PremiumGeoRevenueSection from "../charts/PremiumGeoRevenueSection.jsx";
 import UploadQueueButton from "../dashboard/UploadQueueButton.jsx";
@@ -12,7 +13,7 @@ import MonthlyInvoiceTrendChart from "../charts/MonthlyInvoiceTrendChart.jsx";
 import DeductionComparisonChart from "../charts/DeductionComparisonChart.jsx";
 import toast from "react-hot-toast";
 
-const DASHBOARD_CLEAR_KEY = 'salesInvoiceDashboardCleared';
+// Removed DASHBOARD_CLEAR_KEY - no longer using cleared state
 
 const createEmptyDashboard = () => ({
   hasData: true,
@@ -54,39 +55,52 @@ export default function SalesInvoiceDashboard() {
   
   const [showExceptionDetails, setShowExceptionDetails] = useState(true);
 
-  const [isCleared, setIsCleared] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return window.localStorage.getItem(DASHBOARD_CLEAR_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Removed isCleared state - always show live data
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (showLoading = true) => {
     try {
       setError(null);
-      console.log('📊 Fetching dashboard data');
+      if (showLoading) {
+        setLoading(true);
+      }
+      console.log('📊 Fetching dashboard data from API...');
       const response = await getSalesInvoiceDashboard(token);
       console.log('📊 Dashboard data received:', {
         success: response.success,
         hasData: response.data?.hasData,
-        invoiceCount: response.data?.invoices?.length || 0
+        invoiceCount: response.data?.invoices?.length || 0,
+        totalInvoiceAmount: response.data?.summary?.totalInvoiceAmount || 0
       });
       if (response.success) {
-        if (response.data?.hasData) {
-          setDashboardData({ ...response.data, isPlaceholder: false });
+        const data = response.data || {};
+        const hasInvoices = data.invoices && data.invoices.length > 0;
+        const hasAmount = data.summary && parseFloat(data.summary.totalInvoiceAmount || 0) > 0;
+        const hasDataFlag = data.hasData === true;
+        
+        // Check if we have actual data - either hasData flag is true OR we have invoices/amounts
+        if (hasDataFlag || hasInvoices || hasAmount) {
+          setDashboardData({ ...data, isPlaceholder: false });
+          console.log('✅ Dashboard data updated in state with real data:', {
+            hasDataFlag,
+            invoiceCount: data.invoices?.length || 0,
+            totalAmount: data.summary?.totalInvoiceAmount || 0
+          });
         } else {
           setDashboardData(createEmptyDashboard());
+          console.log('✅ Dashboard data set to empty (no data available)');
         }
-        console.log('✅ Dashboard data updated in state');
       } else {
         throw new Error(response.message || 'Failed to fetch dashboard data');
       }
     } catch (err) {
       console.error('❌ Error fetching dashboard:', err);
       setError(err.message || 'Failed to load dashboard data');
-      toast.error(err.message || 'Failed to load dashboard data');
+      // Only show toast on initial load, not on refresh
+      if (showLoading) {
+        toast.error(err.message || 'Failed to load dashboard data');
+      }
+      // Set empty dashboard on error so UI doesn't break
+      setDashboardData(createEmptyDashboard());
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -95,27 +109,25 @@ export default function SalesInvoiceDashboard() {
 
 
   useEffect(() => {
-    if (!token) return;
-    if (isCleared) {
-      setDashboardData(createEmptyDashboard());
+    if (!token) {
       setLoading(false);
-      setIsRefreshing(false);
       return;
     }
-    fetchDashboardData();
-  }, [token, isCleared, fetchDashboardData]);
+    // Always fetch on mount
+    console.log('🔄 Initial dashboard load triggered', { hasToken: !!token });
+    fetchDashboardData(true);
+  }, [token, fetchDashboardData]);
 
   // Auto-refresh when import completes (refreshTrigger changes)
   useEffect(() => {
-    if (isCleared) return;
     if (token && refreshTrigger > 0) {
       console.log('🔄 Dashboard refresh triggered by import:', { refreshTrigger });
       setIsRefreshing(true);
-      // Small delay to ensure database has updated
+      // Delay to ensure database transaction has fully committed
       const timer = setTimeout(() => {
-        console.log('🔄 Fetching dashboard data after import...');
-        fetchDashboardData();
-      }, 1500); // Slightly longer delay to ensure DB commit
+        console.log('🔄 Fetching dashboard data after import (ensuring DB commit)...');
+        fetchDashboardData(false); // Don't show loading spinner on refresh
+      }, 2000); // Delay to ensure DB commit completes
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,7 +136,7 @@ export default function SalesInvoiceDashboard() {
 
   // Set up real-time socket updates
   useEffect(() => {
-    if (!token || isCleared) return;
+    if (!token) return;
 
     // Initialize socket connection
     const socket = initializeSocket(token);
@@ -132,53 +144,66 @@ export default function SalesInvoiceDashboard() {
     // Listen for sales invoice dashboard updates
     const handleDashboardUpdate = (data) => {
       if (data && data.success && data.data) {
-        console.log('🔄 Real-time dashboard update received');
-        setDashboardData(data.data);
+        console.log('🔄 Real-time dashboard update received via socket:', {
+          hasData: data.data?.hasData,
+          invoiceCount: data.data?.invoices?.length || 0
+        });
+        setDashboardData({ ...data.data, isPlaceholder: false });
+        setIsRefreshing(false);
         toast.success('Dashboard updated with latest data', { duration: 3000 });
       }
     };
 
     socket.on('sales-invoice-dashboard:update', handleDashboardUpdate);
 
+    // Also listen for connection events
+    socket.on('connect', () => {
+      console.log('✅ Socket connected for real-time updates');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('⚠️ Socket disconnected, will use polling fallback');
+    });
+
     // Cleanup on unmount
     return () => {
       socket.off('sales-invoice-dashboard:update', handleDashboardUpdate);
+      socket.off('connect');
+      socket.off('disconnect');
     };
-  }, [token, isCleared]);
+  }, [token]);
 
   const handleRefresh = async () => {
-    if (isCleared) {
-      toast.error('Dashboard is cleared. Use Revert Data to fetch live numbers again.');
+    setIsRefreshing(true);
+    console.log('🔄 Manual refresh triggered');
+    await fetchDashboardData(false); // Don't show loading spinner on manual refresh
+    toast.success('Dashboard refreshed', { duration: 2000 });
+  };
+
+  const handleDeleteAllData = async () => {
+    if (!window.confirm('Are you sure you want to delete ALL invoice data? This action cannot be undone.')) {
       return;
     }
-    setIsRefreshing(true);
-    await fetchDashboardData();
-  };
 
-  const handleResetDashboard = () => {
-    setDashboardData(createEmptyDashboard());
-    setIsCleared(true);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(DASHBOARD_CLEAR_KEY, 'true');
-      } catch {
-        // ignore storage failures
+    try {
+      setIsRefreshing(true);
+      const api = createApiClient(token);
+      const response = await api.delete('/dashboard/sales-invoice/delete-all');
+      
+      if (response.data?.success) {
+        toast.success(`All invoice data deleted successfully (${response.data.deletedCount || 0} records)`, { duration: 3000 });
+        // Refresh dashboard to show empty state
+        setLoading(true);
+        await fetchDashboardData(true);
+      } else {
+        throw new Error(response.data?.message || 'Failed to delete data');
       }
+    } catch (err) {
+      console.error('❌ Error deleting data:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete data');
+    } finally {
+      setIsRefreshing(false);
     }
-    toast.success('Dashboard reset to zero state');
-  };
-
-  const handleRevertDashboard = async () => {
-    setIsCleared(false);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.removeItem(DASHBOARD_CLEAR_KEY);
-      } catch {
-        // ignore storage failures
-      }
-    }
-    setLoading(true);
-    await fetchDashboardData();
   };
 
   const formatCurrency = (value) => {
@@ -273,21 +298,6 @@ export default function SalesInvoiceDashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <UploadQueueButton />
           <button
-            onClick={handleResetDashboard}
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
-          >
-            <BarChart3 className="w-4 h-4" />
-            Delete Data
-          </button>
-          <button
-            onClick={handleRevertDashboard}
-            disabled={!isCleared}
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-sm sm:text-base"
-          >
-            <History className="w-4 h-4" />
-            Revert Data
-          </button>
-          <button
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base animate-in fade-in-0 slide-in-from-right-4 duration-500"
@@ -299,8 +309,31 @@ export default function SalesInvoiceDashboard() {
       </div>
 
       {isPlaceholderDashboard && (
-        <div className="rounded-xl border border-dashed border-secondary-300 bg-secondary-50 text-secondary-700 px-4 py-3 text-sm">
-          Fresh workspace ready. Import your first file or keep exploring with zeroed metrics until data arrives.
+        <div className="rounded-xl border border-dashed border-secondary-300 bg-secondary-50 text-secondary-700 px-4 py-3 text-sm flex items-center justify-between flex-wrap gap-3">
+          <span>Fresh workspace ready. Import your first file or keep exploring with zeroed metrics until data arrives.</span>
+          <button
+            onClick={handleDeleteAllData}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-danger-600 text-white rounded-lg hover:bg-danger-700 active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            title="Delete all invoice data"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Delete All Data</span>
+          </button>
+        </div>
+      )}
+
+      {!isPlaceholderDashboard && dashboardData && dashboardData.invoices && dashboardData.invoices.length > 0 && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={handleDeleteAllData}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-danger-600 text-white rounded-lg hover:bg-danger-700 active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            title="Delete all invoice data"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete All Data</span>
+          </button>
         </div>
       )}
 

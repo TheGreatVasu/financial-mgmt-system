@@ -276,18 +276,20 @@ export default function AdvancedRevenueCharts({
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className={`${filterInputClass} pl-12`}
+                  className={`${filterInputClass} pl-12 pr-4`}
+                  aria-label="Start date"
                 />
-                <CalendarDays className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" />
+                <CalendarDays className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400 dark:text-secondary-500 pointer-events-none z-10" />
               </div>
               <div className="relative flex-1">
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className={`${filterInputClass} pl-12`}
+                  className={`${filterInputClass} pl-12 pr-4`}
+                  aria-label="End date"
                 />
-                <CalendarDays className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" />
+                <CalendarDays className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400 dark:text-secondary-500 pointer-events-none z-10" />
               </div>
             </div>
           </div>

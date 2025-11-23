@@ -116,7 +116,7 @@ export default function DashboardLayout({ children }) {
           const result = await importExcelFile(token, file)
           console.log(`📥 Import response received for ${file.name}:`, result)
           
-          if (result?.success) {
+            if (result?.success) {
             // Support both old and new response formats
             const importedCount = result.importedCount || result.data?.importedCount || result.data?.imported || 0
             const fileErrors = result.data?.errorCount || result.data?.errors || 0
@@ -124,9 +124,10 @@ export default function DashboardLayout({ children }) {
             const columnMapping = result.data?.columnMapping || {}
             const mergeSummary = result.data?.mergeSummary || {}
             
-            console.log(`✅ Import successful for ${file.name}:`, {
+            console.log(`✅ Import response for ${file.name}:`, {
               importedCount,
               fileErrors,
+              errorDetails: errorDetails.length,
               matchedColumns: columnMapping.matchedCount,
               ignoredColumns: columnMapping.ignoredCount,
               mergeSummary
@@ -134,14 +135,32 @@ export default function DashboardLayout({ children }) {
             
             totalImported += importedCount
             totalErrors += fileErrors
+            
+            // If no records imported but there are errors, treat as error
+            const hasErrors = fileErrors > 0 || errorDetails.length > 0
+            const shouldMarkAsError = importedCount === 0 && hasErrors
+            
+            // Build error message from error details
+            let errorMessage = null
+            if (shouldMarkAsError && errorDetails.length > 0) {
+              // Show first few errors
+              const errorPreview = errorDetails.slice(0, 3).join('; ')
+              const moreErrors = errorDetails.length > 3 ? ` and ${errorDetails.length - 3} more errors` : ''
+              errorMessage = `${errorDetails.length} error${errorDetails.length > 1 ? 's' : ''}: ${errorPreview}${moreErrors}`
+            } else if (shouldMarkAsError) {
+              errorMessage = `Import failed: ${fileErrors} error${fileErrors > 1 ? 's' : ''} occurred`
+            }
+            
             updateQueueItemByFile(file, {
-              status: 'completed',
+              status: shouldMarkAsError ? 'error' : 'completed',
               progress: 100,
               meta: {
                 importedCount,
-                fileErrors
+                fileErrors,
+                errorDetails: errorDetails.slice(0, 10), // Store first 10 errors
+                errorCount: errorDetails.length || fileErrors
               },
-              error: null
+              error: errorMessage
             })
             
             // Show merge summary if available
@@ -186,10 +205,21 @@ export default function DashboardLayout({ children }) {
               }
             }
             
-            if (fileErrors > 0) {
-              errors.push(`${file.name}: ${fileErrors} errors`)
-              if (errorDetails && Array.isArray(errorDetails)) {
+            if (fileErrors > 0 || errorDetails.length > 0) {
+              const errorCount = errorDetails.length || fileErrors
+              errors.push(`${file.name}: ${errorCount} error${errorCount > 1 ? 's' : ''}`)
+              if (errorDetails && Array.isArray(errorDetails) && errorDetails.length > 0) {
                 validationErrors.push(...errorDetails.map(e => `${file.name}: ${e}`))
+                // Show first few errors as toast
+                const firstErrors = errorDetails.slice(0, 3)
+                firstErrors.forEach(err => {
+                  toast.error(`${file.name}: ${err}`, { duration: 6000 })
+                })
+                if (errorDetails.length > 3) {
+                  toast.error(`${file.name}: ${errorDetails.length - 3} more errors. Check upload queue for details.`, { duration: 6000 })
+                }
+              } else if (fileErrors > 0) {
+                toast.error(`${file.name}: ${fileErrors} error${fileErrors > 1 ? 's' : ''} occurred during import. Check upload queue for details.`, { duration: 6000 })
               }
             }
             
@@ -287,8 +317,8 @@ export default function DashboardLayout({ children }) {
         }
       }
 
-      // Show summary for successful imports
-      if (errors.length === 0 || totalImported > 0) {
+      // Show summary for imports
+      if (totalImported > 0) {
         if (totalErrors > 0) {
           toast.success(
             `Import completed: ${totalImported} records imported from ${filesArray.length} file(s), ${totalErrors} errors`,
@@ -300,31 +330,53 @@ export default function DashboardLayout({ children }) {
         } else {
           toast.success(`Successfully imported ${totalImported} records from ${filesArray.length} file(s)! Dashboard will refresh automatically.`)
         }
+      } else if (totalErrors > 0 || errors.length > 0) {
+        // No records imported but there are errors
+        const totalErrorCount = totalErrors || errors.length
+        toast.error(
+          `Import failed: 0 records imported, ${totalErrorCount} error${totalErrorCount > 1 ? 's' : ''}. Check the upload queue for details.`,
+          { duration: 8000 }
+        )
+        console.error('❌ Import failed with errors:', {
+          totalImported,
+          totalErrors,
+          errors,
+          validationErrors
+        })
+      } else {
+        toast.warning(`No records were imported from ${filesArray.length} file(s). Please check your file format.`, { duration: 6000 })
       }
       
       // Only close modal if all files are processed
       closeImportModal()
       
       // Trigger dashboard refresh without page reload
-      if (totalImported > 0) {
+      // Always trigger refresh if we imported records OR if there were errors (to show error state)
+      if (totalImported > 0 || (totalErrors > 0 && totalImported === 0)) {
         console.log('🔄 Triggering dashboard refresh after import...', { 
           totalImported, 
           totalErrors,
-          filesProcessed: filesArray.length 
+          filesProcessed: filesArray.length,
+          willRefresh: true
         })
-        // Small delay to ensure database has committed
+        // Delay to ensure database transaction has fully committed
+        // This matches the delay in SalesInvoiceDashboard component
         setTimeout(() => {
-          console.log('🔄 Calling triggerRefresh() now...')
+          console.log('🔄 Calling triggerRefresh() now after import completion...')
           triggerRefresh()
-        }, 1000) // Increased delay to ensure DB commit
+        }, 2000) // Increased delay to ensure DB commit completes
       } else {
         console.warn('⚠️ No records imported, skipping refresh', {
           totalImported,
           totalErrors,
-          errors: errors.length
+          errors: errors.length,
+          validationErrors: validationErrors.length
         })
         if (errors.length > 0) {
           console.error('❌ Import errors:', errors)
+        }
+        if (validationErrors.length > 0) {
+          console.error('❌ Validation errors:', validationErrors)
         }
       }
     } catch (err) {

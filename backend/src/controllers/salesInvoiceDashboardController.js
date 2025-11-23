@@ -115,8 +115,14 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
     throw error;
   }
 
+  if (!userId) {
+    console.warn('⚠️ buildSalesInvoiceDashboardData called without userId');
+    return buildEmptyDashboard();
+  }
+
   const tableExists = await db.schema.hasTable('sales_invoice_master');
   if (!tableExists) {
+    console.warn('⚠️ sales_invoice_master table does not exist');
     return buildEmptyDashboard();
   }
 
@@ -126,22 +132,26 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
     .whereNotNull('created_by');
 
   invoicesQuery = buildFilterQuery(invoicesQuery, filters, db);
-  const invoices = await invoicesQuery.orderBy('gst_tax_invoice_date', 'desc').limit(10000);
+  
+  try {
+    const invoices = await invoicesQuery.orderBy('gst_tax_invoice_date', 'desc').limit(10000);
+    console.log(`📊 Fetched ${invoices.length} invoices for user ${userId}`);
 
-  const allInvoices = await db('sales_invoice_master')
-    .select('customer_name', 'business_unit', 'region', 'zone', 'invoice_type')
-    .where('created_by', userId)
-    .whereNotNull('created_by');
+    const allInvoices = await db('sales_invoice_master')
+      .select('customer_name', 'business_unit', 'region', 'zone', 'invoice_type')
+      .where('created_by', userId)
+      .whereNotNull('created_by');
 
-  const customers = [...new Set(allInvoices.map((inv) => inv.customer_name).filter(Boolean))].sort();
-  const businessUnits = [...new Set(allInvoices.map((inv) => inv.business_unit).filter(Boolean))].sort();
-  const regions = [...new Set(allInvoices.map((inv) => inv.region).filter(Boolean))].sort();
-  const zones = [...new Set(allInvoices.map((inv) => inv.zone).filter(Boolean))].sort();
-  const invoiceTypes = [...new Set(allInvoices.map((inv) => inv.invoice_type).filter(Boolean))].sort();
+    const customers = [...new Set(allInvoices.map((inv) => inv.customer_name).filter(Boolean))].sort();
+    const businessUnits = [...new Set(allInvoices.map((inv) => inv.business_unit).filter(Boolean))].sort();
+    const regions = [...new Set(allInvoices.map((inv) => inv.region).filter(Boolean))].sort();
+    const zones = [...new Set(allInvoices.map((inv) => inv.zone).filter(Boolean))].sort();
+    const invoiceTypes = [...new Set(allInvoices.map((inv) => inv.invoice_type).filter(Boolean))].sort();
 
-  if (invoices.length === 0) {
-    return buildEmptyDashboard({ customers, businessUnits, regions, zones, invoiceTypes });
-  }
+    if (invoices.length === 0) {
+      console.log(`ℹ️ No invoices found for user ${userId}, returning empty dashboard`);
+      return buildEmptyDashboard({ customers, businessUnits, regions, zones, invoiceTypes });
+    }
 
   const summary = {
     totalInvoiceAmount: invoices.reduce((sum, inv) => sum + parseFloat(inv.total_invoice_value || 0), 0),
@@ -273,33 +283,38 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
       })),
   };
 
-  console.log(`📊 Sales Invoice Dashboard data for user ${userId}:`, {
-    totalInvoices: invoices.length,
-    totalInvoiceAmount: summary.totalInvoiceAmount,
-    netReceivables: summary.netReceivables,
-    hasData: invoices.length > 0,
-  });
+    console.log(`📊 Sales Invoice Dashboard data for user ${userId}:`, {
+      totalInvoices: invoices.length,
+      totalInvoiceAmount: summary.totalInvoiceAmount,
+      netReceivables: summary.netReceivables,
+      hasData: invoices.length > 0,
+    });
 
-  return {
-    hasData: true,
-    summary,
-    invoices: invoices.slice(0, 100),
-    totalInvoices: invoices.length,
-    regionWise,
-    businessUnitWise,
-    customerWise,
-    taxBreakup,
-    monthlyTrends,
-    deductionComparison,
-    reconciliation,
-    availableOptions: {
-      customers,
-      businessUnits,
-      regions,
-      zones,
-      invoiceTypes,
-    },
-  };
+    return {
+      hasData: true,
+      summary,
+      invoices: invoices.slice(0, 100),
+      totalInvoices: invoices.length,
+      regionWise,
+      businessUnitWise,
+      customerWise,
+      taxBreakup,
+      monthlyTrends,
+      deductionComparison,
+      reconciliation,
+      availableOptions: {
+        customers,
+        businessUnits,
+        regions,
+        zones,
+        invoiceTypes,
+      },
+    };
+  } catch (error) {
+    console.error(`❌ Error building sales invoice dashboard for user ${userId}:`, error);
+    // Return empty dashboard on error instead of throwing
+    return buildEmptyDashboard();
+  }
 }
 
 exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
@@ -345,6 +360,77 @@ exports.getSalesInvoiceDashboard = asyncHandler(async (req, res) => {
     }
     console.error('Error fetching sales invoice dashboard:', error);
     throw error;
+  }
+});
+
+/**
+ * DELETE /api/dashboard/sales-invoice/delete-all
+ * Delete all sales invoice data for the authenticated user
+ */
+exports.deleteAllSalesInvoiceData = asyncHandler(async (req, res) => {
+  const userId = req.user?.id || null;
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required to delete sales invoice data',
+    });
+  }
+
+  console.log(
+    `🗑️ Delete all sales invoice data request for user ID: ${userId} (Email: ${req.user?.email || 'N/A'})`
+  );
+
+  const db = getDb();
+  if (!db) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not available',
+    });
+  }
+
+  const tableExists = await db.schema.hasTable('sales_invoice_master');
+  if (!tableExists) {
+    return res.json({
+      success: true,
+      message: 'No data to delete - table does not exist',
+      deletedCount: 0,
+    });
+  }
+
+  try {
+    // Delete all invoices for this user only
+    const deletedCount = await db('sales_invoice_master')
+      .where('created_by', userId)
+      .whereNotNull('created_by')
+      .delete();
+
+    console.log(`✅ Deleted ${deletedCount} invoices for user ${userId}`);
+
+    // Broadcast update via Socket.io
+    const { getIOInstance, broadcastDashboardUpdate } = require('../services/socketService');
+    const io = getIOInstance();
+    if (io) {
+      try {
+        await broadcastDashboardUpdate(userId);
+        console.log('✅ Socket broadcast completed after delete');
+      } catch (socketError) {
+        console.error('⚠️ Socket broadcast error (non-fatal):', socketError.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} invoice record${deletedCount !== 1 ? 's' : ''}`,
+      deletedCount,
+      userId,
+    });
+  } catch (error) {
+    console.error('❌ Error deleting sales invoice data:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Failed to delete data: ${error.message}`,
+      error: error.message,
+    });
   }
 });
 

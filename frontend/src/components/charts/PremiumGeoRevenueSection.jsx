@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ResponsiveContainer,
   BarChart,
@@ -638,8 +639,13 @@ export default function PremiumGeoRevenueSection({
                 ? "max-h-[660px] overflow-visible"
                 : "max-h-[0] overflow-hidden lg:max-h-full lg:overflow-visible"
             )}
+            style={{ 
+              overflow: filtersOpen ? 'visible' : 'hidden',
+              position: 'relative',
+              zIndex: filtersOpen ? 1 : 'auto'
+            }}
           >
-            <FilterField label="Date Range" className="col-span-1">
+            <FilterField label="Date Range" className="col-span-1" style={{ position: 'relative', zIndex: filtersOpen ? 99999 : 'auto' }}>
               <ModernDateRangePicker
                 startDate={filters.startDate}
                 endDate={filters.endDate}
@@ -934,19 +940,19 @@ function ModernDateRangePicker({ startDate, endDate, onChange }) {
     return (
       <div
         key={monthDate.toISOString()}
-        className="space-y-3 rounded-2xl border border-secondary-100/80 bg-secondary-50/40 p-4 dark:border-secondary-800/70 dark:bg-secondary-900/40"
+        className="space-y-3 rounded-2xl border border-secondary-100/80 bg-secondary-50/40 dark:border-secondary-800/70 dark:bg-secondary-900/40 p-3 sm:p-4"
       >
-        <p className="text-sm font-semibold text-secondary-700 dark:text-secondary-200">
+        <p className="text-sm font-semibold text-secondary-700 dark:text-secondary-200 text-center sm:text-left">
           {format(monthDate, "MMMM yyyy")}
         </p>
-        <div className="grid grid-cols-7 gap-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-secondary-400">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-secondary-400 dark:text-secondary-500">
           {weekDays.map((day) => (
-            <span key={day} className="text-center">
+            <span key={day} className="text-center py-1">
               {day}
             </span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
           {days.map((day) => {
             const isEdge =
               (draftRange.start && isSameDay(day, draftRange.start)) ||
@@ -959,20 +965,24 @@ function ModernDateRangePicker({ startDate, endDate, onChange }) {
                 end: draftRange.end,
               });
             const isMuted = !isSameMonth(day, monthDate);
+            const isToday = isSameDay(day, new Date());
             return (
               <button
                 type="button"
                 key={day.toISOString()}
                 onClick={() => handleDayClick(day)}
                 className={clsx(
-                  "aspect-square w-full rounded-xl text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
+                  "aspect-square w-full rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all duration-150",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1",
                   isEdge
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-600 text-white shadow-md scale-105 z-10"
                     : isBetween
                       ? "bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-100"
-                      : "text-secondary-700 dark:text-secondary-200 hover:bg-secondary-100 dark:hover:bg-secondary-800/60",
-                  isMuted && "text-secondary-400/80"
+                      : "text-secondary-700 dark:text-secondary-200 hover:bg-secondary-100 dark:hover:bg-secondary-800/60 hover:scale-105",
+                  isMuted && "text-secondary-400/60 dark:text-secondary-500/60",
+                  isToday && !isEdge && "ring-2 ring-primary-400/50 dark:ring-primary-500/50"
                 )}
+                aria-label={`Select ${format(day, "EEEE, MMMM d, yyyy")}`}
               >
                 {format(day, "d")}
               </button>
@@ -991,35 +1001,168 @@ function ModernDateRangePicker({ startDate, endDate, onChange }) {
         )}`
       : "dd-mm-yyyy";
 
+  // Calculate position to prevent overflow
+  const [position, setPosition] = useState('bottom');
+  const [calendarStyle, setCalendarStyle] = useState({});
+  
+  useEffect(() => {
+    if (!open || !pickerRef.current) return;
+    
+    const updatePosition = () => {
+      const rect = pickerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const calendarHeight = 550; // Approximate calendar height
+      const isMobile = window.innerWidth < 640;
+      
+      if (isMobile) {
+        // On mobile, use fixed positioning with calculated top
+        const top = Math.min(rect.bottom + 8, window.innerHeight - calendarHeight - 16);
+        setCalendarStyle({
+          top: `${Math.max(16, top)}px`,
+          left: '8px',
+          right: '8px',
+          width: 'auto'
+        });
+        setPosition('bottom');
+      } else {
+        // On desktop, position relative to button using fixed positioning
+        const calendarWidth = 560;
+        const spaceRight = window.innerWidth - rect.right;
+        const spaceLeft = rect.left;
+        
+        // Calculate center position below button
+        const buttonCenterX = rect.left + rect.width / 2;
+        const leftPosition = Math.max(
+          16, // Minimum margin from left
+          Math.min(
+            buttonCenterX - calendarWidth / 2, // Center on button
+            window.innerWidth - calendarWidth - 16 // Don't go off right edge
+          )
+        );
+        
+        // Check if we need to flip vertically
+        if (spaceBelow < calendarHeight && spaceAbove > calendarHeight) {
+          setPosition('top');
+          setCalendarStyle({
+            top: `${rect.top - calendarHeight - 8}px`,
+            left: `${leftPosition}px`,
+            width: `${calendarWidth}px`
+          });
+        } else {
+          setPosition('bottom');
+          setCalendarStyle({
+            top: `${rect.bottom + 8}px`,
+            left: `${leftPosition}px`,
+            width: `${calendarWidth}px`
+          });
+        }
+      }
+    };
+    
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(updatePosition, 10);
+    updatePosition();
+    
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
+
   return (
-    <div className="relative" ref={pickerRef}>
+    <div 
+      className="relative w-full" 
+      ref={pickerRef} 
+      style={{ 
+        zIndex: open ? 99999 : 'auto',
+        position: 'relative',
+        isolation: open ? 'isolate' : 'auto'
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-secondary-200/70 dark:border-secondary-700 bg-white dark:bg-secondary-900/60 px-4 py-3 text-left shadow-inner focus:outline-none focus:ring-2 focus:ring-primary-500"
+        className={clsx(
+          "flex w-full items-center justify-between gap-3 rounded-2xl border transition-all duration-200",
+          "bg-white dark:bg-secondary-900/60 px-4 py-3 text-left shadow-sm",
+          "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+          open 
+            ? "border-primary-500 dark:border-primary-500 shadow-md ring-2 ring-primary-500/20" 
+            : "border-secondary-200/70 dark:border-secondary-700 hover:border-secondary-300 dark:hover:border-secondary-600"
+        )}
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-primary-50 dark:bg-primary-900/30 p-2">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="rounded-xl bg-primary-50 dark:bg-primary-900/30 p-2 flex-shrink-0">
             <CalendarDays className="h-4 w-4 text-primary-600 dark:text-primary-300" />
           </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-secondary-400">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-secondary-400 dark:text-secondary-500">
               Invoice date range
             </p>
-            <p className="text-sm font-medium text-secondary-800 dark:text-secondary-100">
+            <p className="text-sm font-medium text-secondary-800 dark:text-secondary-100 truncate">
               {displayValue}
             </p>
           </div>
         </div>
         <ChevronDown
           className={clsx(
-            "h-4 w-4 text-secondary-400 transition-transform",
+            "h-4 w-4 text-secondary-400 dark:text-secondary-500 transition-transform duration-200 flex-shrink-0",
             open && "rotate-180"
           )}
         />
       </button>
-      {open && (
-        <div className="absolute left-1/2 top-full z-50 mt-4 w-[560px] max-w-[90vw] -translate-x-1/2 rounded-3xl border border-secondary-200/80 bg-white/95 backdrop-blur-2xl p-5 shadow-2xl dark:border-secondary-700 dark:bg-secondary-900/95">
+      {open && typeof document !== 'undefined' && createPortal(
+        <>
+          {/* Backdrop overlay for mobile */}
+          <div 
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm sm:hidden"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+            style={{ 
+              zIndex: 99998,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0
+            }}
+          />
+          <div 
+            className={clsx(
+              "rounded-3xl border border-secondary-200/80 bg-white dark:bg-secondary-900",
+              "shadow-2xl dark:border-secondary-700 p-4 sm:p-5",
+              "animate-in fade-in-0 slide-in-from-top-2 duration-200",
+              // Mobile: full width with margins, Desktop: fixed width
+              "left-2 right-2 sm:left-auto sm:right-auto sm:w-[560px] sm:max-w-[calc(100vw-2rem)]",
+              // Ensure it doesn't go off-screen
+              "max-h-[85vh] sm:max-h-[90vh] overflow-y-auto",
+              // Smooth scrollbar
+              "scrollbar-thin scrollbar-thumb-secondary-300 scrollbar-track-transparent"
+            )}
+            style={{
+              // CRITICAL: Very high z-index to ensure it's above everything
+              zIndex: 99999,
+              // Always use fixed positioning when portaled to body
+              position: 'fixed',
+              // Prevent clipping
+              isolation: 'isolate',
+              // Apply calculated styles (includes top, left, etc.)
+              ...calendarStyle
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select date range"
+            onClick={(e) => e.stopPropagation()}
+          >
           <div className="flex items-center justify-between text-secondary-700 dark:text-secondary-200">
             <button
               type="button"
@@ -1043,7 +1186,7 @@ function ModernDateRangePicker({ startDate, endDate, onChange }) {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-4 grid gap-6 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
             {renderMonth(visibleMonth)}
             {renderMonth(addMonths(visibleMonth, 1))}
           </div>
@@ -1061,7 +1204,9 @@ function ModernDateRangePicker({ startDate, endDate, onChange }) {
                 : "Pick two dates to apply"}
             </span>
           </div>
-        </div>
+          </div>
+        </>,
+        document.body
       )}
     </div>
   );

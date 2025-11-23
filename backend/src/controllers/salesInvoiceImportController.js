@@ -739,6 +739,9 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
   let updatedRecordsCount = 0;
   const updatedInvoiceNos = [];
   const newInvoiceNos = [];
+  
+  // Track invoices processed in current batch to detect duplicates within the file
+  const processedInvoicesInBatch = new Map(); // invoiceNo -> { rowNum, invoiceData }
 
   console.log('🔄 Starting data import process...', {
     totalRows: rows.length,
@@ -882,23 +885,98 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
 
       console.log(`📝 Row ${rowNum}: Processing invoice - GST: ${invoiceData.gst_tax_invoice_no}, Customer: ${invoiceData.customer_name}`);
 
-      // CRITICAL: Check if invoice already exists FOR THIS USER ONLY
+      // Check for duplicates within the current import batch first
+      const invoiceKey = invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no;
+      const isDuplicateInBatch = invoiceKey && processedInvoicesInBatch.has(invoiceKey);
+      
+      if (isDuplicateInBatch) {
+        const previousRow = processedInvoicesInBatch.get(invoiceKey);
+        // This is a duplicate within the file - we'll update the existing database record with latest data
+        console.log(`⚠️ Row ${rowNum}: Duplicate invoice in file (${invoiceKey}). Previous occurrence at row ${previousRow.rowNum}. Will update existing record with latest data.`);
+        // Update the tracked data to use the latest occurrence
+        processedInvoicesInBatch.set(invoiceKey, { rowNum, invoiceData });
+        // Continue processing - this will update the database record instead of inserting
+      } else if (invoiceKey) {
+        // Track this invoice in the batch (first occurrence)
+        processedInvoicesInBatch.set(invoiceKey, { rowNum, invoiceData });
+      }
+
+      // CRITICAL: Check if invoice already exists in database FOR THIS USER ONLY
       // Users can have invoices with the same invoice number, but they belong to different users
       let existingInvoice = null;
       try {
-        if (invoiceData.gst_tax_invoice_no) {
+        // Normalize invoice numbers for comparison (trim whitespace)
+        const normalizedGstNo = invoiceData.gst_tax_invoice_no ? invoiceData.gst_tax_invoice_no.trim() : null;
+        const normalizedInternalNo = invoiceData.internal_invoice_no ? invoiceData.internal_invoice_no.trim() : null;
+        
+        // Check by GST Tax Invoice No first (most common)
+        if (normalizedGstNo) {
+          // Try exact match first
           existingInvoice = await trx('sales_invoice_master')
-            .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
+            .where('gst_tax_invoice_no', normalizedGstNo)
             .where('created_by', userId) // CRITICAL: Only check within user's own invoices
             .whereNotNull('created_by')
             .first();
+          
+          // If not found, try with LIKE to handle potential whitespace differences
+          if (!existingInvoice) {
+            existingInvoice = await trx('sales_invoice_master')
+              .where('created_by', userId)
+              .whereNotNull('created_by')
+              .whereRaw('TRIM(gst_tax_invoice_no) = ?', [normalizedGstNo])
+              .first();
+          }
+          
+          if (existingInvoice) {
+            console.log(`🔍 Row ${rowNum}: Found existing invoice by GST Tax Invoice No: ${normalizedGstNo} (ID: ${existingInvoice.id})`);
+          }
         }
-        if (!existingInvoice && invoiceData.internal_invoice_no) {
+        
+        // If not found, check by Internal Invoice No
+        if (!existingInvoice && normalizedInternalNo) {
+          // Try exact match first
           existingInvoice = await trx('sales_invoice_master')
-            .where('internal_invoice_no', invoiceData.internal_invoice_no)
+            .where('internal_invoice_no', normalizedInternalNo)
             .where('created_by', userId) // CRITICAL: Only check within user's own invoices
             .whereNotNull('created_by')
             .first();
+          
+          // If not found, try with LIKE to handle potential whitespace differences
+          if (!existingInvoice) {
+            existingInvoice = await trx('sales_invoice_master')
+              .where('created_by', userId)
+              .whereNotNull('created_by')
+              .whereRaw('TRIM(internal_invoice_no) = ?', [normalizedInternalNo])
+              .first();
+          }
+          
+          if (existingInvoice) {
+            console.log(`🔍 Row ${rowNum}: Found existing invoice by Internal Invoice No: ${normalizedInternalNo} (ID: ${existingInvoice.id})`);
+          }
+        }
+        
+        // If still not found, check if we've already processed this in the current batch
+        if (!existingInvoice && invoiceKey && processedInvoicesInBatch.has(invoiceKey)) {
+          const batchEntry = processedInvoicesInBatch.get(invoiceKey);
+          // Try to find the invoice we just inserted in this transaction
+          if (invoiceData.gst_tax_invoice_no) {
+            existingInvoice = await trx('sales_invoice_master')
+              .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
+              .where('created_by', userId)
+              .whereNotNull('created_by')
+              .first();
+          }
+          if (!existingInvoice && invoiceData.internal_invoice_no) {
+            existingInvoice = await trx('sales_invoice_master')
+              .where('internal_invoice_no', invoiceData.internal_invoice_no)
+              .where('created_by', userId)
+              .whereNotNull('created_by')
+              .first();
+          }
+          
+          if (existingInvoice) {
+            console.log(`🔍 Row ${rowNum}: Found invoice from current batch: ${invoiceKey} (ID: ${existingInvoice.id})`);
+          }
         }
       } catch (dbError) {
         console.error(`❌ Row ${rowNum}: Database query error:`, {
@@ -922,13 +1000,17 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
           }
           
           console.log(`🔄 Row ${rowNum}: Updating existing invoice ID ${existingInvoice.id} for user ${userId}`);
+          
+          // Prepare update data - exclude id and preserve created_by
+          const { id, created_by, ...updateData } = invoiceData;
+          
           const updateResult = await trx('sales_invoice_master')
             .where('id', existingInvoice.id)
             .where('created_by', userId) // CRITICAL: Ensure user can only update their own invoices
             .update({
-              ...invoiceData,
-              created_by: userId, // Ensure created_by is preserved
+              ...updateData,
               updated_at: new Date()
+              // Don't update created_by - preserve original
             });
             
           if (updateResult > 0) {
@@ -937,12 +1019,55 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
             updatedInvoiceNos.push(invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no);
             console.log(`✅ Row ${rowNum}: Successfully updated invoice ID ${existingInvoice.id}`);
           } else {
-            console.warn(`⚠️ Row ${rowNum}: Update returned 0 rows affected`);
-            errors.push(`Row ${rowNum}: Update failed - no rows affected`);
+            console.warn(`⚠️ Row ${rowNum}: Update returned 0 rows affected - invoice might have been deleted`);
+            // Try to re-fetch to see if it still exists
+            const stillExists = await trx('sales_invoice_master')
+              .where('id', existingInvoice.id)
+              .where('created_by', userId)
+              .first();
+            
+            if (!stillExists) {
+              errors.push(`Row ${rowNum}: Invoice was deleted during import. Cannot update.`);
+            } else {
+              errors.push(`Row ${rowNum}: Update failed - no rows affected (possible permission issue)`);
+            }
             errorCount++;
           }
         } else {
           // Insert new invoice - ensure created_by is set
+          // But first check if this is a duplicate within the batch that we already processed
+          if (isDuplicateInBatch) {
+            // This shouldn't happen if logic is correct, but handle it gracefully
+            console.log(`⚠️ Row ${rowNum}: Attempting to insert duplicate from batch. This should have been caught earlier.`);
+            // Try to find the record we might have just inserted
+            let justInserted = null;
+            if (invoiceData.gst_tax_invoice_no) {
+              justInserted = await trx('sales_invoice_master')
+                .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
+                .where('created_by', userId)
+                .whereNotNull('created_by')
+                .first();
+            }
+            if (justInserted) {
+              // Update the record we just inserted
+              const updateResult = await trx('sales_invoice_master')
+                .where('id', justInserted.id)
+                .where('created_by', userId)
+                .update({
+                  ...invoiceData,
+                  created_by: userId,
+                  updated_at: new Date()
+                });
+              if (updateResult > 0) {
+                importedCount++;
+                updatedRecordsCount++;
+                updatedInvoiceNos.push(invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no);
+                console.log(`✅ Row ${rowNum}: Updated invoice from duplicate in batch (ID ${justInserted.id})`);
+                continue;
+              }
+            }
+          }
+          
           console.log(`➕ Row ${rowNum}: Inserting new invoice for user ${userId}`);
           // Ensure created_by is explicitly set (it should already be in invoiceData, but double-check)
           invoiceData.created_by = userId;
@@ -967,10 +1092,75 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
           }
         });
           
-        const errorMsg = dbError.code === 'ER_DUP_ENTRY' 
-          ? 'Duplicate invoice entry'
-          : dbError.message || 'Database error';
-        errors.push(`Row ${rowNum}: ${errorMsg}`);
+        // Handle duplicate entry errors more gracefully
+        if (dbError.code === 'ER_DUP_ENTRY' || dbError.code === 1062) {
+          // Try to find and update the existing record
+          console.log(`🔄 Row ${rowNum}: Duplicate entry detected (${dbError.code}), attempting to update existing record...`);
+          try {
+            let duplicateInvoice = null;
+            
+            // Try to find by GST Tax Invoice No
+            if (invoiceData.gst_tax_invoice_no) {
+              duplicateInvoice = await trx('sales_invoice_master')
+                .where('gst_tax_invoice_no', invoiceData.gst_tax_invoice_no)
+                .where('created_by', userId)
+                .whereNotNull('created_by')
+                .first();
+            }
+            
+            // If not found, try Internal Invoice No
+            if (!duplicateInvoice && invoiceData.internal_invoice_no) {
+              duplicateInvoice = await trx('sales_invoice_master')
+                .where('internal_invoice_no', invoiceData.internal_invoice_no)
+                .where('created_by', userId)
+                .whereNotNull('created_by')
+                .first();
+            }
+            
+            if (duplicateInvoice) {
+              console.log(`🔄 Row ${rowNum}: Found duplicate invoice (ID: ${duplicateInvoice.id}), updating...`);
+              
+              // Prepare update data (exclude id and created_by from update to preserve them)
+              const { id, created_by, ...updateData } = invoiceData;
+              
+              // Update the existing record
+              const updateResult = await trx('sales_invoice_master')
+                .where('id', duplicateInvoice.id)
+                .where('created_by', userId) // Ensure we can only update our own invoices
+                .update({
+                  ...updateData,
+                  updated_at: new Date()
+                  // Don't update created_by - preserve original
+                });
+              
+              if (updateResult > 0) {
+                importedCount++;
+                updatedRecordsCount++;
+                updatedInvoiceNos.push(invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no);
+                console.log(`✅ Row ${rowNum}: Successfully updated duplicate invoice ID ${duplicateInvoice.id}`);
+                continue; // Skip error, continue to next row
+              } else {
+                console.warn(`⚠️ Row ${rowNum}: Update returned 0 rows - invoice might have been deleted or access denied`);
+              }
+            } else {
+              console.warn(`⚠️ Row ${rowNum}: Duplicate entry error but couldn't find existing invoice in database`);
+            }
+          } catch (updateError) {
+            console.error(`❌ Row ${rowNum}: Failed to update duplicate invoice:`, {
+              error: updateError.message,
+              code: updateError.code,
+              stack: updateError.stack
+            });
+            // Fall through to error handling
+          }
+          
+          // If update failed, report as error but with helpful message
+          const invoiceNo = invoiceData.gst_tax_invoice_no || invoiceData.internal_invoice_no || 'Unknown';
+          errors.push(`Row ${rowNum}: Duplicate invoice entry (${invoiceNo}). Invoice already exists in database.`);
+        } else {
+          const errorMsg = dbError.message || 'Database error';
+          errors.push(`Row ${rowNum}: ${errorMsg}`);
+        }
         errorCount++;
       }
 
@@ -987,13 +1177,55 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
     // Commit transaction if we have any successful imports
     if (importedCount > 0) {
       await trx.commit();
-      console.log('✅ Transaction committed successfully');
+      console.log('✅ Transaction committed successfully', {
+        importedCount,
+        newRecords: newRecordsCount,
+        updatedRecords: updatedRecordsCount,
+        userId
+      });
+      
+      // Verify data was actually saved by querying the database
+      try {
+        const db = getDb();
+        if (db) {
+          const verifyCount = await db('sales_invoice_master')
+            .where('created_by', userId)
+            .whereNotNull('created_by')
+            .count('* as count')
+            .first();
+          console.log(`✅ Verification: Database now contains ${verifyCount?.count || 0} invoices for user ${userId}`);
+        }
+      } catch (verifyError) {
+        console.warn('⚠️ Could not verify saved data:', verifyError.message);
+      }
+      
+      // Wait a brief moment to ensure commit is fully processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Broadcast update via Socket.io AFTER commit - target the importing user
+      const { getIOInstance, broadcastDashboardUpdate } = require('../services/socketService');
+      const io = getIOInstance();
+      if (io) {
+        console.log(`📡 Broadcasting dashboard update via Socket.io for user ${userId}...`);
+        try {
+          // Broadcast to all users, but the socket service will filter by user rooms
+          await broadcastDashboardUpdate(userId);
+          console.log('✅ Socket broadcast completed');
+        } catch (socketError) {
+          console.error('⚠️ Socket broadcast error (non-fatal):', socketError.message);
+          // Don't fail the import if socket broadcast fails
+        }
+      } else {
+        console.warn('⚠️ Socket.io not available, skipping real-time update');
+      }
     } else {
       await trx.rollback();
       console.log('⚠️ No records imported, transaction rolled back');
     }
   } catch (transactionError) {
-    await trx.rollback();
+    if (trx && trx.isCompleted && !trx.isCompleted()) {
+      await trx.rollback();
+    }
     console.error('❌ Transaction error, rolling back:', {
       error: transactionError.message,
       stack: transactionError.stack,
@@ -1011,13 +1243,6 @@ exports.importSalesInvoice = asyncHandler(async (req, res) => {
       errorCount: errorCount || 0,
       details: 'Database transaction failed. Please check the logs for details.'
     });
-  }
-
-  // Broadcast update via Socket.io
-  const { getIOInstance, broadcastDashboardUpdate } = require('../services/socketService');
-  const io = getIOInstance();
-  if (io) {
-    await broadcastDashboardUpdate();
   }
 
   // Clean up uploaded file

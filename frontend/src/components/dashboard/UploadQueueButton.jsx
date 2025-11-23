@@ -131,9 +131,21 @@ export default function UploadQueueButton() {
                     </div>
 
                     {item.error && (
-                      <p className="text-[11px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-2 py-1">
-                        {item.error}
-                      </p>
+                      <div className="text-[11px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-2 py-1.5 space-y-1">
+                        <p className="font-semibold">{item.error}</p>
+                        {item.meta?.errorDetails && item.meta.errorDetails.length > 0 && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[10px] hover:text-rose-700 dark:hover:text-rose-300">
+                              View {item.meta.errorDetails.length} error detail{item.meta.errorDetails.length > 1 ? 's' : ''}
+                            </summary>
+                            <ul className="mt-1 space-y-0.5 pl-2 list-disc list-inside text-[10px] max-h-32 overflow-y-auto">
+                              {item.meta.errorDetails.map((err, idx) => (
+                                <li key={idx} className="break-words">{err}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
                     )}
 
                     <div className="flex items-center justify-between text-xs text-secondary-600 dark:text-secondary-400">
@@ -145,17 +157,31 @@ export default function UploadQueueButton() {
                           {item.status === 'uploading'
                             ? 'Uploading...'
                             : item.status === 'completed'
-                              ? 'Uploaded successfully'
+                              ? item.meta?.importedCount > 0
+                                ? 'Uploaded successfully'
+                                : 'Completed with errors'
                               : item.status === 'error'
-                                ? 'Needs attention'
+                                ? 'Import failed'
                                 : 'Ready to upload'}
                         </span>
                       </div>
-                      {item.meta?.importedCount != null && (
-                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                          {item.meta.importedCount} imported
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {item.meta?.importedCount != null && item.meta.importedCount > 0 && (
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                            {item.meta.importedCount} imported
+                          </span>
+                        )}
+                        {item.meta?.errorCount != null && item.meta.errorCount > 0 && (
+                          <span className="text-[11px] text-rose-600 dark:text-rose-400">
+                            {item.meta.errorCount} error{item.meta.errorCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {item.meta?.importedCount === 0 && item.meta?.errorCount === 0 && (
+                          <span className="text-[11px] text-secondary-500 dark:text-secondary-400">
+                            No data imported
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2">

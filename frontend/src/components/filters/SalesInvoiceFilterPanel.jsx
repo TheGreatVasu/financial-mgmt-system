@@ -99,24 +99,26 @@ export default function SalesInvoiceFilterPanel({
               <Calendar className="w-4 h-4" />
               Invoice Date Range
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="relative">
                 <input
                   type="date"
                   value={localFilters.dateFrom || ''}
                   onChange={(e) => updateFilter('dateFrom', e.target.value)}
-                  className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2.5 border border-secondary-300 dark:border-secondary-700 rounded-lg text-sm bg-white dark:bg-secondary-900/60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  aria-label="Date from"
                 />
-                <p className="text-xs text-secondary-500 mt-1">From</p>
+                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1.5">From</p>
               </div>
-              <div>
+              <div className="relative">
                 <input
                   type="date"
                   value={localFilters.dateTo || ''}
                   onChange={(e) => updateFilter('dateTo', e.target.value)}
-                  className="w-full px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2.5 border border-secondary-300 dark:border-secondary-700 rounded-lg text-sm bg-white dark:bg-secondary-900/60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  aria-label="Date to"
                 />
-                <p className="text-xs text-secondary-500 mt-1">To</p>
+                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1.5">To</p>
               </div>
             </div>
             {(localFilters.dateFrom || localFilters.dateTo) && (

@@ -115,32 +115,53 @@ function getIOInstance() {
 }
 
 // Broadcast dashboard update to all connected users
-async function broadcastDashboardUpdate() {
+async function broadcastDashboardUpdate(targetUserId = null) {
   const io = getIOInstance();
-  if (!io) return;
-
-  const connectedUserIds = Array.from(userSockets.keys());
-  if (connectedUserIds.length === 0) {
+  if (!io) {
+    console.warn('⚠️ Socket.io instance not available for broadcast');
     return;
   }
+
+  const connectedUserIds = targetUserId 
+    ? [targetUserId] 
+    : Array.from(userSockets.keys());
+    
+  if (connectedUserIds.length === 0) {
+    console.log('ℹ️ No connected users to broadcast to');
+    return;
+  }
+
+  console.log(`📡 Broadcasting dashboard update to ${connectedUserIds.length} user(s):`, connectedUserIds);
 
   await Promise.all(
     connectedUserIds.map(async (userId) => {
       try {
+        // Build main dashboard data
         const dashboardData = await buildDashboardPayload(userId);
         io.to(`user:${userId}`).emit('dashboard:update', dashboardData);
 
+        // Build sales invoice dashboard data
         const salesInvoiceDashboard = await buildSalesInvoiceDashboardData(userId, {});
+        console.log(`📊 Broadcasting sales invoice dashboard for user ${userId}:`, {
+          hasData: salesInvoiceDashboard?.hasData,
+          invoiceCount: salesInvoiceDashboard?.invoices?.length || 0,
+          totalAmount: salesInvoiceDashboard?.summary?.totalInvoiceAmount || 0
+        });
+        
         io.to(`user:${userId}`).emit('sales-invoice-dashboard:update', {
           success: true,
           data: salesInvoiceDashboard,
           userId,
         });
+        
+        console.log(`✅ Successfully broadcasted to user ${userId}`);
       } catch (error) {
-        console.error(`Error broadcasting dashboard update for user ${userId}:`, error);
+        console.error(`❌ Error broadcasting dashboard update for user ${userId}:`, error);
       }
     })
   );
+  
+  console.log('✅ Dashboard broadcast completed');
 }
 
 module.exports = {
