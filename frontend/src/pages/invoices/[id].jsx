@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Edit, Trash2, Download, ArrowLeft, FileText, Calendar, User, DollarSign, AlertCircle } from 'lucide-react';
+import { Edit, Trash2, Download, ArrowLeft, FileText, Calendar, User, DollarSign, AlertCircle, Loader2, X } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import { useAuthContext } from '../../context/AuthContext.jsx';
 import { createInvoiceService } from '../../services/invoiceService.js';
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx';
 import Modal from '../../components/ui/Modal.jsx';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -19,11 +20,13 @@ export default function InvoiceDetail() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
-  const invoiceService = createInvoiceService(token);
+  const invoiceService = useMemo(() => createInvoiceService(token), [token]);
 
   useEffect(() => {
-    loadInvoice();
-  }, [id, token]);
+    if (token && id) {
+      loadInvoice();
+    }
+  }, [id, token, invoiceService]);
 
   async function loadInvoice() {
     if (!token || !id) return;
@@ -34,7 +37,9 @@ export default function InvoiceDetail() {
       const response = await invoiceService.get(id);
       setInvoice(response?.data || response);
     } catch (err) {
-      setError(err?.message || 'Failed to load invoice');
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load invoice';
+      setError(errorMsg);
+      toast.error(errorMsg);
       console.error('Failed to load invoice:', err);
     } finally {
       setLoading(false);
@@ -43,12 +48,13 @@ export default function InvoiceDetail() {
 
   async function handleUpdate(payload) {
     try {
-      const response = await invoiceService.update(id, payload);
-      // Reload to get updated data with all fields
+      await invoiceService.update(id, payload);
+      toast.success('Invoice updated successfully!');
       await loadInvoice();
       setIsEditing(false);
     } catch (err) {
-      setError(err?.message || 'Failed to update invoice');
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to update invoice';
+      toast.error(errorMsg);
       throw err;
     }
   }
@@ -57,9 +63,11 @@ export default function InvoiceDetail() {
     setIsDeleting(true);
     try {
       await invoiceService.remove(id);
+      toast.success('Invoice deleted successfully!');
       navigate('/invoices');
     } catch (err) {
-      setError(err?.message || 'Failed to delete invoice');
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete invoice';
+      toast.error(errorMsg);
       setIsDeleting(false);
     }
   }
@@ -75,23 +83,23 @@ export default function InvoiceDetail() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `invoice-${invoice?.invoiceNumber || id}-${Date.now()}.pdf`);
+      link.setAttribute('download', `invoice-${invoice?.invoiceNumber || invoice?.invoice_number || id}-${Date.now()}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully!');
     } catch (err) {
       console.error('Failed to export PDF:', err);
-      alert('PDF export is not available. Please try again later.');
+      toast.error('PDF export is not available. Please try again later.');
     }
   }
 
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="space-y-4">
-          <div className="h-8 bg-secondary-100 rounded animate-pulse" />
-          <div className="h-64 bg-secondary-100 rounded animate-pulse" />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
         </div>
       </DashboardLayout>
     );
@@ -100,13 +108,22 @@ export default function InvoiceDetail() {
   if (error && !invoice) {
     return (
       <DashboardLayout>
-        <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3">
-          {error}
+        <div className="space-y-4">
+          <div className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-danger-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-danger-800">Error</p>
+              <p className="text-sm text-danger-700 mt-0.5">{error}</p>
+            </div>
+          </div>
+          <Link
+            to="/invoices"
+            className="inline-flex items-center gap-2 text-primary-700 hover:text-primary-900 hover:underline transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Invoices
+          </Link>
         </div>
-        <Link to="/invoices" className="inline-flex items-center gap-2 text-primary-700 hover:underline mt-4">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Invoices
-        </Link>
       </DashboardLayout>
     );
   }
@@ -210,11 +227,28 @@ export default function InvoiceDetail() {
           </div>
         </div>
 
-        {error && (
-          <div className="rounded-md border border-danger-200 bg-danger-50 text-danger-700 px-4 py-3 text-sm">
-            {error}
-          </div>
-        )}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 flex items-start gap-3"
+            >
+              <AlertCircle className="h-5 w-5 text-danger-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-danger-800">Error</p>
+                <p className="text-sm text-danger-700 mt-0.5">{error}</p>
+              </div>
+              <button
+                onClick={() => setError('')}
+                className="text-danger-600 hover:text-danger-800 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Invoice Information */}
         <motion.div
@@ -435,11 +469,18 @@ export default function InvoiceDetail() {
               Cancel
             </button>
             <button
-              className="btn btn-danger"
+              className="btn btn-primary bg-danger-600 hover:bg-danger-700"
               onClick={handleDelete}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Deleting...' : 'Delete'}
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
             </button>
           </>
         )}

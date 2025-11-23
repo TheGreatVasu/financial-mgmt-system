@@ -3,10 +3,29 @@ import { createApiClient } from './apiClient'
 export async function fetchDashboard(token, params = {}) {
   const api = createApiClient(token)
   try {
-    const { data } = await api.get('/dashboard', { params })
-    if (!data?.success) throw new Error(data?.message || 'Failed to load dashboard')
-    return { ...data.data, hasData: data.hasData !== false }
+    const response = await api.get('/dashboard', { params })
+    console.log('📊 Dashboard API response:', response)
+    const { data } = response
+    if (!data?.success) {
+      console.error('❌ Dashboard API error:', data?.message)
+      throw new Error(data?.message || 'Failed to load dashboard')
+    }
+    
+    // Ensure we have the correct data structure
+    const dashboardData = data.data || {}
+    console.log('📊 Dashboard data structure:', {
+      hasKpis: !!dashboardData.kpis,
+      hasSeries: !!dashboardData.series,
+      kpis: dashboardData.kpis,
+      series: dashboardData.series
+    })
+    
+    return { 
+      ...dashboardData, 
+      hasData: data.hasData !== false 
+    }
   } catch (e) {
+    console.error('❌ Dashboard fetch error:', e)
     // Return empty data on error
     const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     return {

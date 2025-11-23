@@ -7,6 +7,7 @@ export function createCustomerService(token) {
     get: (id) => api.get(`/customers/${id}`).then(r => r.data),
     create: (payload) => api.post('/customers', payload).then(r => r.data),
     update: (id, payload) => api.put(`/customers/${id}`, payload).then(r => r.data),
+    remove: (id) => api.delete(`/customers/${id}`).then(r => r.data),
   }
 }
 

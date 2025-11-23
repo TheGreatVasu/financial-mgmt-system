@@ -32,26 +32,67 @@ async function getKpis(userId = null, filters = {}) {
     ? db('customers').where('created_by', userId).whereNotNull('created_by')
     : db('customers');
   
-  let invoiceQuery = userId
+  // For invoice count: filter by created_at (invoices created in date range)
+  let invoiceCountQuery = userId
     ? db('invoices').where('created_by', userId).whereNotNull('created_by')
     : db('invoices');
-  invoiceQuery = applyDateFilter(invoiceQuery, 'created_at', filters);
+  invoiceCountQuery = applyDateFilter(invoiceCountQuery, 'created_at', filters);
   
-  const [customers, invoices, paidSumRow, totalSumRow, overdue] = await Promise.all([
+  // For outstanding calculation: ALL invoices (not filtered by date) - we want current outstanding
+  let allInvoicesQuery = userId
+    ? db('invoices').where('created_by', userId).whereNotNull('created_by')
+    : db('invoices');
+  
+  // For overdue count: filter by created_at (invoices created in date range that are overdue)
+  let overdueQuery = userId
+    ? db('invoices').where('created_by', userId).whereNotNull('created_by')
+    : db('invoices');
+  overdueQuery = applyDateFilter(overdueQuery, 'created_at', filters);
+  
+  // For payments, filter by payment_date within the date range if filters are provided
+  let paymentQuery = userId
+    ? db('payments').where('processed_by', userId).whereNotNull('processed_by')
+    : db('payments');
+  
+  // Apply date filter to payments based on payment_date (not created_at)
+  if (filters.startDate || filters.endDate) {
+    if (filters.startDate) {
+      paymentQuery = paymentQuery.where('payment_date', '>=', filters.startDate);
+    }
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999); // Include entire end date
+      paymentQuery = paymentQuery.where('payment_date', '<=', endDate);
+    }
+  }
+  
+  const [customers, invoices, allInvoicesTotal, allInvoicesPaid, overdue, collectedAmount] = await Promise.all([
     customerQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-    invoiceQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
-    invoiceQuery.clone().sum({ paid: 'paid_amount' }).first().catch(() => ({ paid: 0 })),
-    invoiceQuery.clone().sum({ total: 'total_amount' }).first().catch(() => ({ total: 0 })),
-    invoiceQuery.clone().where({ status: 'overdue' }).count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    invoiceCountQuery.clone().count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    // Get total from ALL invoices (for outstanding calculation)
+    allInvoicesQuery.clone().sum({ total: 'total_amount' }).first().catch(() => ({ total: 0 })),
+    allInvoicesQuery.clone().sum({ paid: 'paid_amount' }).first().catch(() => ({ paid: 0 })),
+    overdueQuery.clone().where({ status: 'overdue' }).count({ c: '*' }).first().then(r => Number(r?.c || 0)).catch(() => 0),
+    // Calculate collected amount from payments table (actual payments made in the date range)
+    paymentQuery.clone().sum({ collected: 'amount' }).first().catch(() => ({ collected: 0 })),
   ]);
-  const paid = Number(paidSumRow?.paid || 0);
-  const total = Number(totalSumRow?.total || 0);
+  const total = Number(allInvoicesTotal?.total || 0);
+  const paid = Number(allInvoicesPaid?.paid || 0);
+  const collected = Number(collectedAmount?.collected || 0);
+  
+  // Use collected from payments table if date filter is applied, otherwise use paid_amount from invoices
+  const collectedThisMonth = (filters.startDate || filters.endDate) ? collected : paid;
+  
+  // Outstanding = total invoice amount - paid amount (from ALL invoices, not just date range)
+  const outstanding = Math.max(total - paid, 0);
+  
   return {
     customers,
     invoices,
-    outstanding: Math.max(total - paid, 0),
+    outstanding,
     overdue,
-    collectedThisMonth: paid,
+    collectedThisMonth,
+    totalInvoiceAmount: total, // Include total for DSO calculation
   };
 }
 
@@ -132,12 +173,15 @@ async function getAgingAnalysis(userId = null, filters = {}) {
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   
   // Helper to build base query with user filter
+  // NOTE: Aging analysis should show ALL outstanding invoices, not filtered by created_at
+  // The date filter is for "collected this month" only, not for outstanding amounts
   const buildQuery = () => {
     let q = db('invoices as i');
     if (userId) {
-      q = q.where('i.created_by', userId);
+      q = q.where('i.created_by', userId).whereNotNull('i.created_by');
     }
-    q = applyDateFilter(q, 'i.created_at', filters);
+    // Don't apply date filter to aging - we want ALL outstanding invoices
+    // q = applyDateFilter(q, 'i.created_at', filters);
     return q;
   };
   
