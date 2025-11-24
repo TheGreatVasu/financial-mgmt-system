@@ -126,12 +126,6 @@ exports.updateSettings = asyncHandler(async (req, res) => {
         // If preferences column doesn't exist, log and continue
         console.warn('Preferences column not found, update skipped:', updateError.message)
       }
-    } else {
-      // Mongoose fallback
-      const User = require('../models/User')
-      await User.findByIdAndUpdate(userId, {
-        preferences
-      })
     }
 
     // Build response with updated settings

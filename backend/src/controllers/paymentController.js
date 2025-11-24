@@ -1,7 +1,5 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
-const Invoice = require('../models/Invoice');
-const Payment = require('../models/Payment');
 const { broadcastDashboardUpdate } = require('../services/socketService');
 
 const getPayments = asyncHandler(async (req, res) => {
@@ -34,17 +32,10 @@ const getPayments = asyncHandler(async (req, res) => {
     const [{ c }] = await qb.clone().count({ c: '*' });
     return res.json({ success: true, data: rows, meta: { page: Number(page), limit: Number(limit), total: Number(c) } });
   }
-  const filter = {};
-  if (method) filter.paymentMethod = method;
-  if (status) filter.status = status;
-  if (from || to) {
-    filter.paymentDate = {};
-    if (from) filter.paymentDate.$gte = new Date(from);
-    if (to) filter.paymentDate.$lte = new Date(to);
-  }
-  const docs = await Payment.find(filter).sort({ paymentDate: -1 }).skip((page-1)*limit).limit(Number(limit));
-  const count = await Payment.countDocuments(filter);
-  res.json({ success: true, data: docs, meta: { page: Number(page), limit: Number(limit), total: count } });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const createPayment = asyncHandler(async (req, res) => {
@@ -85,26 +76,10 @@ const createPayment = asyncHandler(async (req, res) => {
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.status(201).json({ success: true, data: { id: pid, ...paymentRow } });
   }
-  // Mongoose fallback
-  const inv = await Invoice.findOne({ invoiceNumber: payload.invoiceNumber });
-  if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found' });
-  const paymentDoc = await Payment.create({
-    invoice: inv._id,
-    customer: inv.customer,
-    amount: Number(payload.amount || 0),
-    paymentDate: payload.paymentDate || now,
-    paymentMethod: payload.method || 'upi',
-    reference: payload.reference || 'manual',
-    status: 'completed',
-    processedBy: req.user?._id,
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
   });
-  const newPaid = Number(inv.paidAmount || 0) + Number(payload.amount || 0);
-  inv.paidAmount = newPaid;
-  inv.status = newPaid >= Number(inv.totalAmount || 0) ? 'paid' : 'partial';
-  await inv.save();
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.status(201).json({ success: true, data: paymentDoc });
 });
 
 module.exports = { getPayments, createPayment };

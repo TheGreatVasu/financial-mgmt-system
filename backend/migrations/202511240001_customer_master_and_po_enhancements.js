@@ -8,6 +8,10 @@ const TABLES = {
 }
 
 async function ensureColumn(knex, tableName, columnName, callback) {
+  const tableExists = await knex.schema.hasTable(tableName)
+  if (!tableExists) {
+    return // Table doesn't exist, skip column addition
+  }
   const exists = await knex.schema.hasColumn(tableName, columnName)
   if (!exists) {
     await knex.schema.alterTable(tableName, callback)
@@ -165,6 +169,10 @@ exports.down = async function down(knex) {
   }
 
   const dropColumn = async (tableName, columnName) => {
+    const tableExists = await knex.schema.hasTable(tableName)
+    if (!tableExists) {
+      return // Table doesn't exist, skip column removal
+    }
     const exists = await knex.schema.hasColumn(tableName, columnName)
     if (exists) {
       await knex.schema.alterTable(tableName, (table) => {

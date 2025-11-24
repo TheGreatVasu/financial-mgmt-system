@@ -51,12 +51,10 @@ router.get('/:id/pdf', asyncHandler(async (req, res) => {
       // PDF service will parse it itself to ensure consistency
     invoiceData = row;
   } else {
-    const Invoice = require('../models/Invoice');
-      const doc = await Invoice.findById(invoiceId).populate('customer', 'companyName');
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
-    invoiceData = doc.toObject ? doc.toObject() : doc;
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not available'
+    });
   }
   
     // Generate PDF with fresh data

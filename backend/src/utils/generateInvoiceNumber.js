@@ -47,26 +47,9 @@ async function generateInvoiceNumber(issueDate = new Date()) {
     const nextSequence = maxSequence + 1;
     return `${yearPrefix}${String(nextSequence).padStart(4, '0')}`;
   } else {
-    // Fallback for Mongoose or when DB is not available
-    const Invoice = require('../models/Invoice');
-    
-    // Find all invoices with matching prefix
-    const invoices = await Invoice.find({
-      invoiceNumber: { $regex: `^${yearPrefix}\\d{4}$` }
-    }).sort({ invoiceNumber: -1 }).limit(1);
-    
-    let maxSequence = 0;
-    if (invoices.length > 0) {
-      const lastInvoiceNum = invoices[0].invoiceNumber || '';
-      const sequencePart = lastInvoiceNum.substring(yearPrefix.length);
-      const sequence = parseInt(sequencePart, 10);
-      if (!isNaN(sequence)) {
-        maxSequence = sequence;
-      }
-    }
-    
-    const nextSequence = maxSequence + 1;
-    return `${yearPrefix}${String(nextSequence).padStart(4, '0')}`;
+    // Database not available - return a timestamp-based number
+    const timestamp = Date.now();
+    return `${yearPrefix}${String(timestamp % 10000).padStart(4, '0')}`;
   }
 }
 

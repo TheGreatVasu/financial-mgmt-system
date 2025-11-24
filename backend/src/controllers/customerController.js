@@ -1,6 +1,5 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
-const Customer = require('../models/Customer');
 const { broadcastDashboardUpdate } = require('../services/socketService');
 const excelService = require('../services/excelService');
 const path = require('path');
@@ -334,10 +333,10 @@ const getCustomers = asyncHandler(async (req, res) => {
     const [{ c }] = await qb.clone().count({ c: '*' });
     return res.json({ success: true, data: hydratedRows, meta: { page: Number(page), limit: Number(limit), total: Number(c) } });
   }
-  const filter = q ? { companyName: new RegExp(q, 'i') } : {};
-  const docs = await Customer.find(filter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(Number(limit));
-  const count = await Customer.countDocuments(filter);
-  res.json({ success: true, data: docs, meta: { page: Number(page), limit: Number(limit), total: count } });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const getCustomerMasterOptions = asyncHandler(async (req, res) => {
@@ -442,9 +441,10 @@ const getCustomer = asyncHandler(async (req, res) => {
     }
     return res.json({ success: true, data: customer });
   }
-  const doc = await Customer.findById(id);
-  if (!doc) return res.status(404).json({ success: false, message: 'Customer not found' });
-  res.json({ success: true, data: doc });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const createCustomer = asyncHandler(async (req, res) => {
@@ -487,10 +487,10 @@ const createCustomer = asyncHandler(async (req, res) => {
       throw error;
     }
   }
-  const doc = await Customer.create({ name: p.name, companyName: p.companyName, email: p.email, phone: p.phone, gstNumber: p.gstNumber });
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.status(201).json({ success: true, data: doc });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const updateCustomer = asyncHandler(async (req, res) => {
@@ -546,11 +546,10 @@ const updateCustomer = asyncHandler(async (req, res) => {
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true, data: customer });
   }
-  const doc = await Customer.findByIdAndUpdate(id, { name: p.name, companyName: p.companyName, email: p.email, phone: p.phone, gstNumber: p.gstNumber }, { new: true });
-  if (!doc) return res.status(404).json({ success: false, message: 'Customer not found' });
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.json({ success: true, data: doc });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const deleteCustomer = asyncHandler(async (req, res) => {
@@ -583,10 +582,10 @@ const deleteCustomer = asyncHandler(async (req, res) => {
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true });
   }
-  await Customer.findByIdAndDelete(id);
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.json({ success: true });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 // @desc    Export PO Entry to Excel

@@ -1,7 +1,4 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
-const Invoice = require('../models/Invoice');
-const Customer = require('../models/Customer');
-const Payment = require('../models/Payment');
 const repo = require('../services/repositories');
 
 // Helper function to calculate quarterly data from monthly collections

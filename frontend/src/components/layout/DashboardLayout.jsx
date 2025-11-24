@@ -5,6 +5,7 @@ import DashboardHeader from './DashboardHeader.jsx'
 import ImportModal from '../ui/ImportModal.jsx'
 import { useImportContext } from '../../context/ImportContext.jsx'
 import { importExcelFile } from '../../services/importService.js'
+import { fetchUsageStats } from '../../services/subscriptionService.js'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 
@@ -21,6 +22,8 @@ export default function DashboardLayout({ children }) {
   })
   const isDraggingRef = useRef(false)
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
+  const [usageStats, setUsageStats] = useState({ storageGb: 0, storageLimitGb: 5, usagePercent: 0 })
+  const usageIntervalRef = useRef(null)
 
   function handleLogout() {
     logout()
@@ -76,6 +79,34 @@ export default function DashboardLayout({ children }) {
       window.removeEventListener('resize', onResize)
     }
   }, [])
+
+  // Fetch usage stats on mount and set up auto-refresh
+  useEffect(() => {
+    if (!token) return
+
+    // Initial fetch
+    const loadUsageStats = async () => {
+      try {
+        const stats = await fetchUsageStats(token, false)
+        setUsageStats(stats)
+      } catch (error) {
+        console.error('Error loading usage stats:', error)
+      }
+    }
+
+    loadUsageStats()
+
+    // Set up auto-refresh every 60 seconds
+    usageIntervalRef.current = setInterval(() => {
+      loadUsageStats()
+    }, 60000) // Refresh every minute
+
+    return () => {
+      if (usageIntervalRef.current) {
+        clearInterval(usageIntervalRef.current)
+      }
+    }
+  }, [token])
 
   const computedSidebarWidth = collapsed ? 72 : sidebarWidth
   const isMobile = viewportWidth < 768
@@ -472,10 +503,19 @@ export default function DashboardLayout({ children }) {
 
           <div className="mt-4 p-3 rounded-lg border border-primary-200/60 bg-primary-50 dark:border-secondary-700 dark:bg-[#1E293B]" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>
             <div className="text-xs text-secondary-600">Usage</div>
-            <div className="mt-2 h-2 rounded-full bg-secondary-200">
-              <div className="h-2 rounded-full bg-primary-500" style={{ width: '62%' }} />
+            <div className="mt-2 h-2 rounded-full bg-secondary-200 dark:bg-secondary-800">
+              <div 
+                className={`h-2 rounded-full transition-all duration-500 ${
+                  usageStats.usagePercent >= 90 ? 'bg-red-500' :
+                  usageStats.usagePercent >= 70 ? 'bg-yellow-500' :
+                  'bg-primary-500'
+                }`}
+                style={{ width: `${Math.min(100, usageStats.usagePercent)}%` }} 
+              />
             </div>
-            <div className="mt-1 text-[11px] text-secondary-500">62% of 5GB</div>
+            <div className="mt-1 text-[11px] text-secondary-500">
+              {usageStats.usagePercent}% of {usageStats.storageLimitGb >= 999999 ? 'Unlimited' : `${usageStats.storageLimitGb}GB`}
+            </div>
           </div>
 
           <button onClick={handleLogout} className="mt-6 w-full inline-flex items-center justify-center gap-3 px-3 py-2.5 rounded-md text-sm text-white bg-primary-600 hover:bg-primary-700 transition-colors" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>

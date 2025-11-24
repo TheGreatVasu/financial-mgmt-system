@@ -68,6 +68,25 @@ export async function fetchSubscription(token) {
   }
 }
 
+// Get quick usage stats (lightweight for frequent polling)
+export async function fetchUsageStats(token, recalculate = false) {
+  const api = createApiClient(token)
+  try {
+    const { data } = await api.get(`/billing/usage${recalculate ? '?recalculate=true' : ''}`)
+    if (!data?.success) throw new Error(data?.message || 'Failed to load usage stats')
+    return data.data
+  } catch (err) {
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch usage stats'
+    console.error('Error fetching usage stats:', errorMessage)
+    // Return default values on error
+    return {
+      storageGb: 0,
+      storageLimitGb: 5,
+      usagePercent: 0
+    }
+  }
+}
+
 export async function changePlan(token, planId) {
   const api = createApiClient(token)
   try {

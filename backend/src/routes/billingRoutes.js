@@ -6,7 +6,9 @@ const {
   changePlan,
   cancelSubscription,
   resumeSubscription,
-  updatePaymentMethod
+  updatePaymentMethod,
+  getUsageStats,
+  recalculateStorage
 } = require('../controllers/billingController')
 
 // All billing routes require authentication
@@ -26,6 +28,12 @@ router.post('/resume', resumeSubscription)
 
 // Update payment method
 router.put('/payment-method', updatePaymentMethod)
+
+// Get quick usage stats (for dashboard/widgets)
+router.get('/usage', getUsageStats)
+
+// Recalculate storage usage
+router.post('/recalculate-storage', recalculateStorage)
 
 module.exports = router
 

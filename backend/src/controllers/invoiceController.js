@@ -1,6 +1,5 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
-const Invoice = require('../models/Invoice');
 const { broadcastDashboardUpdate } = require('../services/socketService');
 const { generateInvoiceNumber } = require('../utils/generateInvoiceNumber');
 
@@ -59,19 +58,10 @@ const getInvoices = asyncHandler(async (req, res) => {
     const [{ c }] = await qb.clone().count({ c: '*' });
     return res.json({ success: true, data: parsedRows, meta: { page: Number(page), limit: Number(limit), total: Number(c) } });
   }
-  // Mongoose fallback
-  const filter = {};
-  if (status) filter.status = status;
-  if (customer) filter.customer = customer;
-  if (from || to) {
-    filter.createdAt = {};
-    if (from) filter.createdAt.$gte = new Date(from);
-    if (to) filter.createdAt.$lte = new Date(to);
-  }
-  if (q) filter.invoiceNumber = new RegExp(q, 'i');
-  const docs = await Invoice.find(filter).populate('customer', 'companyName').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
-  const count = await Invoice.countDocuments(filter);
-  res.json({ success: true, data: docs, meta: { page: Number(page), limit: Number(limit), total: count } });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const getInvoice = asyncHandler(async (req, res) => {
@@ -110,9 +100,10 @@ const getInvoice = asyncHandler(async (req, res) => {
     
     return res.json({ success: true, data: row });
   }
-  const doc = await Invoice.findById(invoiceId).populate('customer', 'companyName');
-  if (!doc) return res.status(404).json({ success: false, message: 'Invoice not found' });
-  res.json({ success: true, data: doc });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 const createInvoice = asyncHandler(async (req, res) => {
@@ -427,59 +418,10 @@ const createInvoice = asyncHandler(async (req, res) => {
         });
       }
   } else {
-    // Mongoose fallback
-    try {
-      const doc = await Invoice.create({
-        invoiceNumber: invoiceNumber,
-        customer: payload.customerId,
-        issueDate: issueDate,
-        dueDate: dueDate,
-        poRef: payload.poRef,
-        paymentTerms: payload.paymentTerms,
-        taxRate: taxRate,
-        items: items.map(item => ({
-          description: item.description.trim(),
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          total: Number(item.quantity) * Number(item.unitPrice),
-        })),
-        subtotal: subtotal,
-        taxAmount: taxAmount,
-        totalAmount: total,
-        paidAmount: 0,
-        status: payload.status || 'draft',
-        notes: payload.notes,
-      });
-      
-      // Emit dashboard update
-      broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-      return res.status(201).json({ success: true, data: doc });
-    } catch (mongooseError) {
-      console.error('Mongoose error creating invoice:', mongooseError);
-      
-      // Handle validation errors
-      if (mongooseError.name === 'ValidationError') {
-        const validationErrors = Object.values(mongooseError.errors).map(err => err.message);
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Validation failed',
-          errors: validationErrors
-        });
-      }
-      
-      // Handle duplicate key errors
-      if (mongooseError.code === 11000) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invoice number already exists' 
-        });
-      }
-      
-      return res.status(500).json({ 
-        success: false, 
-        message: mongooseError.message || 'Failed to create invoice' 
-      });
-    }
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not available'
+    });
   }
   } catch (error) {
     console.error('Error creating invoice:', error);
@@ -744,41 +686,10 @@ const updateInvoice = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: row });
   }
   
-  // Mongoose fallback
-    const existing = await Invoice.findById(invoiceId);
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
-    
-    const items = Array.isArray(payload.items) ? payload.items : (existing.items || []);
-  
-    if (items.length > 0) {
-    const subtotal = items.reduce((sum, item) => {
-      const qty = Number(item.quantity || 0);
-      const price = Number(item.unitPrice || 0);
-      return sum + (qty * price);
-    }, 0);
-      const taxRate = payload.taxRate !== undefined ? Number(payload.taxRate || 0) : Number(existing.taxRate || 0);
-      const taxAmount = Math.round((subtotal * taxRate) / 100 * 100) / 100;
-      const total = Math.round((subtotal + taxAmount) * 100) / 100;
-    
-    payload.subtotal = subtotal;
-    payload.taxAmount = taxAmount;
-    payload.totalAmount = total;
-    payload.items = items.map(item => ({
-        description: item.description.trim(),
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice),
-        total: Number(item.quantity) * Number(item.unitPrice),
-    }));
-  }
-  
-    const doc = await Invoice.findByIdAndUpdate(invoiceId, payload, { new: true, runValidators: true });
-  if (!doc) return res.status(404).json({ success: false, message: 'Invoice not found' });
-  
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.json({ success: true, data: doc });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
   } catch (error) {
     console.error('Error updating invoice:', error);
     console.error('Error stack:', error.stack);
@@ -857,10 +768,10 @@ const deleteInvoice = asyncHandler(async (req, res) => {
     broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
     return res.json({ success: true });
   }
-  await Invoice.findByIdAndDelete(invoiceId);
-  // Emit dashboard update
-  broadcastDashboardUpdate().catch(err => console.error('Error broadcasting dashboard update:', err));
-  res.json({ success: true });
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection not available'
+  });
 });
 
 // Get next invoice number for preview (doesn't reserve it, just shows what it would be)

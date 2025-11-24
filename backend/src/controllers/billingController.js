@@ -1,6 +1,7 @@
 const { asyncHandler } = require('../middlewares/errorHandler')
 const { getDb } = require('../config/db')
 const { findById } = require('../services/userRepo')
+const { getUserUsageStats, updateUserStorageUsage } = require('../services/storageUsageService')
 
 // Get subscription details for current user
 exports.getSubscription = asyncHandler(async (req, res) => {
@@ -40,6 +41,9 @@ exports.getSubscription = asyncHandler(async (req, res) => {
       invoiceLimit = 'Unlimited'
     }
 
+    // Calculate real-time storage usage
+    const usageStats = await getUserUsageStats(userId, false)
+    
     // Default subscription data structure
     const subscription = {
       currentPlan: {
@@ -49,8 +53,9 @@ exports.getSubscription = asyncHandler(async (req, res) => {
         interval: user.plan_interval || user.planInterval || 'mo'
       },
       usage: {
-        storageGb: user.storage_used || user.storageUsed || 0,
-        storageLimitGb: user.storage_limit || user.storageLimit || storageLimit,
+        storageGb: usageStats.storageGb,
+        storageLimitGb: usageStats.storageLimitGb,
+        usagePercent: usageStats.usagePercent,
         invoicesThisMonth: user.invoices_this_month || user.invoicesThisMonth || 0,
         invoiceLimit: user.invoice_limit || user.invoiceLimit || invoiceLimit
       },
@@ -162,20 +167,6 @@ exports.changePlan = asyncHandler(async (req, res) => {
         // If columns don't exist, just log and continue (plan change still "succeeds" for frontend)
         console.warn('Subscription columns not found in database, update skipped:', updateError.message)
       }
-    } else {
-      // Mongoose fallback
-      try {
-        const User = require('../models/User')
-        await User.findByIdAndUpdate(userId, {
-          planId,
-          planName: selectedPlan.name,
-          planPrice: selectedPlan.price,
-          storageLimit: selectedPlan.storageLimit,
-          invoiceLimit: selectedPlan.invoiceLimit
-        })
-      } catch (updateError) {
-        console.warn('Failed to update plan in database:', updateError.message)
-      }
     }
 
     // Return updated subscription
@@ -234,11 +225,6 @@ exports.cancelSubscription = asyncHandler(async (req, res) => {
         billing_status: 'cancelled',
         updated_at: new Date()
       })
-    } else {
-      const User = require('../models/User')
-      await User.findByIdAndUpdate(userId, {
-        billingStatus: 'cancelled'
-      })
     }
 
     res.json({
@@ -273,11 +259,6 @@ exports.resumeSubscription = asyncHandler(async (req, res) => {
         billing_status: 'active',
         updated_at: new Date()
       })
-    } else {
-      const User = require('../models/User')
-      await User.findByIdAndUpdate(userId, {
-        billingStatus: 'active'
-      })
     }
 
     res.json({
@@ -309,5 +290,65 @@ exports.updatePaymentMethod = asyncHandler(async (req, res) => {
     success: true,
     message: 'Payment method update will be available soon'
   })
+})
+
+// Get quick usage stats (lightweight endpoint for frequent polling)
+exports.getUsageStats = asyncHandler(async (req, res) => {
+  const userId = req.user?.id || req.user?._id
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'User not authenticated'
+    })
+  }
+
+  try {
+    // Force recalculation if requested
+    const forceRecalculate = req.query.recalculate === 'true'
+    
+    const usageStats = await getUserUsageStats(userId, forceRecalculate)
+
+    res.json({
+      success: true,
+      data: usageStats
+    })
+  } catch (error) {
+    console.error('Error fetching usage stats:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch usage stats'
+    })
+  }
+})
+
+// Recalculate and update storage usage
+exports.recalculateStorage = asyncHandler(async (req, res) => {
+  const userId = req.user?.id || req.user?._id
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'User not authenticated'
+    })
+  }
+
+  try {
+    const storageGb = await updateUserStorageUsage(userId)
+    
+    res.json({
+      success: true,
+      message: 'Storage usage recalculated',
+      data: {
+        storageGb
+      }
+    })
+  } catch (error) {
+    console.error('Error recalculating storage:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to recalculate storage usage'
+    })
+  }
 })
 
