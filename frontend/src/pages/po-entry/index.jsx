@@ -1,626 +1,609 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
-import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
-import { Download, Loader2, Upload } from 'lucide-react'
+import { useAuthContext } from '../../context/AuthContext.jsx'
+import { createCustomerService } from '../../services/customerService'
+import { createPOEntryService } from '../../services/poEntryService'
 import toast from 'react-hot-toast'
-import * as XLSX from 'xlsx'
+import { ArrowLeft, CheckCircle2, ExternalLink, Info, Loader2 } from 'lucide-react'
 
-// Memoized column letter calculation - supports unlimited columns (AA, AB, AC, etc.)
-const getColumnLetter = (colIndex) => {
-  let result = ''
-  let index = colIndex
-  while (index >= 0) {
-    result = String.fromCharCode(65 + (index % 26)) + result
-    index = Math.floor(index / 26) - 1
-  }
-  return result
+const initialForm = {
+  poNo: '',
+  poDate: '',
+  customerName: '',
+  customerAddress: '',
+  country: '',
+  state: '',
+  zone: '',
+  segment: '',
+  businessType: '',
+  salesManager: '',
+  salesHead: '',
+  agentName: '',
+  agentCommission: '',
+  gstNo: '',
+  gst: '',
+  totalExWorks: '',
+  freightAmount: '',
+  totalPOValue: '',
+  paymentType: '',
+  paymentTerms: '',
+  deliverySchedule: '',
+  description: '',
+  tenderReferenceNo: '',
+  tenderDate: '',
+  contractAgreementNo: '',
+  caDate: '',
+  poSignedConcernName: '',
+  performanceBankGuaranteeNo: '',
+  pbgDate: '',
+  advanceBankGuaranteeNo: '',
+  abgDate: '',
+  boqAsPerPO: ''
 }
 
-// Default column width
-const DEFAULT_COLUMN_WIDTH = 100
-const MIN_COLUMN_WIDTH = 50
-const MAX_COLUMN_WIDTH = 500
-const DEFAULT_ROW_HEIGHT = 25
-const MIN_ROW_HEIGHT = 20
-const MAX_ROW_HEIGHT = 200
-const ROW_BLOCK_SIZE = 100
-const COL_BLOCK_SIZE = 50
-const INITIAL_VISIBLE_ROWS = ROW_BLOCK_SIZE
-const INITIAL_VISIBLE_COLUMNS = COL_BLOCK_SIZE
-// Upper bounds to protect the UI. Tune as needed.
-const MAX_ALLOWED_ROWS = 10000
-const MAX_ALLOWED_COLUMNS = 5000
+const numericFields = ['agentCommission', 'gst', 'totalExWorks', 'freightAmount', 'totalPOValue']
+const requiredFields = [
+  'poNo',
+  'poDate',
+  'customerName',
+  'customerAddress',
+  'country',
+  'state',
+  'paymentType',
+  'paymentTerms',
+  'totalPOValue'
+]
+
+const fallbackMasterSeeds = {
+  segments: ['Infrastructure', 'Industrial', 'Residential', 'Government', 'Retail'],
+  zones: ['North', 'South', 'East', 'West', 'Central'],
+  businessTypes: ['EPC', 'OEM', 'Dealer', 'Direct', 'Distributor'],
+  paymentTerms: ['Advance', 'Milestone Based', 'Net 30', 'Net 45', 'Net 60'],
+  paymentTypes: ['Supply', 'Service', 'Turnkey', 'AMC', 'Custom'],
+  countries: ['India']
+}
+
+function Section({ title, description, children, badge }) {
+  return (
+    <div className="rounded-2xl border border-secondary-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between bg-secondary-50 px-6 py-4">
+        <div>
+          <h2 className="text-lg font-semibold text-secondary-900">{title}</h2>
+          {description ? <p className="text-sm text-secondary-600 mt-1">{description}</p> : null}
+        </div>
+        {badge ? <span className="text-xs font-semibold uppercase tracking-wider text-secondary-500">{badge}</span> : null}
+      </div>
+      <div className="p-6">{children}</div>
+    </div>
+  )
+}
+
+function Field({ label, required, children, hint }) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-secondary-800">
+        {label}
+        {required ? <span className="text-danger-600 ml-1">*</span> : null}
+      </span>
+      {children}
+      {hint ? <span className="text-xs text-secondary-500">{hint}</span> : null}
+    </label>
+  )
+}
 
 export default function POEntry() {
-  const [excelData, setExcelData] = useState([])
-  const [workbook, setWorkbook] = useState(null)
-  const [activeSheet, setActiveSheet] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const [visibleRows, setVisibleRows] = useState(INITIAL_VISIBLE_ROWS)
-  const [visibleCols, setVisibleCols] = useState(INITIAL_VISIBLE_COLUMNS)
-  const [editingCell, setEditingCell] = useState(null) // { row, col }
-  const [columnWidths, setColumnWidths] = useState({}) // Store custom column widths { colIndex: width }
-  const [rowHeights, setRowHeights] = useState({}) // Store custom row heights { rowIndex: height }
-  const [resizingColumn, setResizingColumn] = useState(null) // Track which column is being resized
-  const [resizingRow, setResizingRow] = useState(null) // Track which row is being resized
-  const [resizeStartX, setResizeStartX] = useState(0)
-  const [resizeStartY, setResizeStartY] = useState(0)
-  const [resizeStartWidth, setResizeStartWidth] = useState(0)
-  const [resizeStartHeight, setResizeStartHeight] = useState(0)
-  const fileInputRef = useRef(null)
-  const tableRef = useRef(null)
+  const { token } = useAuthContext()
+  const customerService = useMemo(() => createCustomerService(token), [token])
+  const poEntryService = useMemo(() => createPOEntryService(token), [token])
+  const [form, setForm] = useState(initialForm)
+  const [errors, setErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [masterOptions, setMasterOptions] = useState({
+    customers: [],
+    segments: fallbackMasterSeeds.segments,
+    zones: fallbackMasterSeeds.zones,
+    businessTypes: fallbackMasterSeeds.businessTypes,
+    paymentTerms: fallbackMasterSeeds.paymentTerms,
+    paymentTypes: fallbackMasterSeeds.paymentTypes,
+    countries: fallbackMasterSeeds.countries,
+    salesContacts: []
+  })
 
-  const processFile = useCallback((file) => {
-    if (!file) return
-    setIsLoading(true)
-    const reader = new FileReader()
+  useEffect(() => {
+    if (!token) return
+    loadMasterData()
+  }, [token, customerService])
 
-    reader.onload = (event) => {
-      try {
-        if (!event.target?.result) {
-          throw new Error('File read result is empty')
-        }
+  async function loadMasterData() {
+    try {
+      const response = await customerService.list({ limit: 200 })
+      const rows = response?.data || []
 
-        const data = new Uint8Array(event.target.result)
-        const wb = XLSX.read(data, { type: 'array' })
+      const customers = rows
+        .map((row) => ({
+          id: row.id,
+          name: row.company_name || row.companyName || row.name,
+          address:
+            row.customer_address ||
+            row.address ||
+            row.corporate_office ||
+            row.companyAddress ||
+            row.city ||
+            '',
+          country: row.country || 'India',
+          state: row.state || row.region || '',
+          zone: row.zone || '',
+          segment: row.segment || row.industry || '',
+          businessType: row.businessType || row.business_type || '',
+          gstNo: row.gst_number || row.gstNumber || '',
+          paymentTerms: row.paymentTerms || '',
+          salesManager: row.salesManager || '',
+          salesHead: row.salesHead || ''
+        }))
+        .filter((c) => c.name)
         
-        if (!wb.SheetNames || wb.SheetNames.length === 0) {
-          throw new Error('No sheets found in the Excel file')
-        }
-        
-        setWorkbook(wb)
-        const sheetName = wb.SheetNames[0]
-        setActiveSheet(sheetName)
-        
-        const sheetData = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { 
-          header: 1, 
-          defval: '',
-          raw: false 
-        })
-        
-        setExcelData(sheetData)
+      const segments = uniqueList(customers.map((c) => c.segment), fallbackMasterSeeds.segments)
+      const zones = uniqueList(customers.map((c) => c.zone), fallbackMasterSeeds.zones)
+      const businessTypes = uniqueList(customers.map((c) => c.businessType), fallbackMasterSeeds.businessTypes)
+      const paymentTerms = uniqueList(customers.map((c) => c.paymentTerms), fallbackMasterSeeds.paymentTerms)
+      const salesContacts = uniqueList(
+        customers.flatMap((c) => [c.salesManager, c.salesHead].filter(Boolean)),
+        []
+      )
 
-        // Adjust visible window up to the next block for rows/cols based on loaded data
-        const dataRows = sheetData.length
-        const dataCols = sheetData.reduce((m, r) => Math.max(m, r?.length || 0), 0)
-        const rowsBlocks = Math.ceil(Math.max(dataRows, INITIAL_VISIBLE_ROWS) / ROW_BLOCK_SIZE)
-        const colsBlocks = Math.ceil(Math.max(dataCols, INITIAL_VISIBLE_COLUMNS) / COL_BLOCK_SIZE)
-        setVisibleRows(Math.min(rowsBlocks * ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS))
-        setVisibleCols(Math.min(colsBlocks * COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS))
-        toast.success(`Excel file loaded! ${sheetData.length} rows`)
+      setMasterOptions((prev) => ({
+        ...prev,
+        customers,
+        segments,
+        zones,
+        businessTypes,
+        paymentTerms,
+        salesContacts
+      }))
       } catch (error) {
-        console.error('Error reading file:', error)
-        toast.error(`Failed to read Excel file: ${error.message || 'Unknown error'}`)
-        setWorkbook(null)
-        setExcelData([])
-      } finally {
-        setIsLoading(false)
+      console.error('Failed to load master data', error)
+      toast.error('Unable to load master data. Continue manually.')
       }
     }
 
-    reader.onerror = () => {
-      toast.error('Error reading file. Please try again.')
-      setIsLoading(false)
-      setWorkbook(null)
-      setExcelData([])
+  function uniqueList(values = [], fallback = []) {
+    const filtered = values.filter((v) => typeof v === 'string' && v.trim().length > 0)
+    return Array.from(new Set([...filtered, ...fallback])).filter(Boolean)
+  }
+
+  function handleChange({ target: { name, value } }) {
+    setForm((prev) => ({ ...prev, [name]: value }))
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
     }
+  }
 
-    reader.readAsArrayBuffer(file)
-  }, [])
+  function handleCustomerSelect(value) {
+    const selected = masterOptions.customers.find((c) => c.name === value)
+    setForm((prev) => ({
+      ...prev,
+      customerName: value,
+      customerAddress: selected?.address || prev.customerAddress,
+      country: selected?.country || prev.country,
+      state: selected?.state || prev.state,
+      zone: selected?.zone || prev.zone,
+      segment: selected?.segment || prev.segment,
+      businessType: selected?.businessType || prev.businessType,
+      gstNo: selected?.gstNo || prev.gstNo,
+      paymentTerms: prev.paymentTerms || selected?.paymentTerms || '',
+      salesManager: prev.salesManager || selected?.salesManager || '',
+      salesHead: prev.salesHead || selected?.salesHead || ''
+    }))
+  }
 
-  const handleFile = useCallback((e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    processFile(file)
-  }, [processFile])
+  function validateForm() {
+    const nextErrors = {}
+    requiredFields.forEach((field) => {
+      if (!form[field]?.toString().trim()) {
+        nextErrors[field] = 'Required'
+      }
+    })
 
-  // Drag & drop handlers
-  const onDragOver = useCallback((e) => {
+    if (form.gst && Number(form.gst) < 0) nextErrors.gst = 'Must be positive'
+    if (form.totalExWorks && Number(form.totalExWorks) < 0) nextErrors.totalExWorks = 'Must be positive'
+    if (form.freightAmount && Number(form.freightAmount) < 0) nextErrors.freightAmount = 'Must be positive'
+    if (form.totalPOValue && Number(form.totalPOValue) <= 0) nextErrors.totalPOValue = 'Must be greater than 0'
+
+    setErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault()
-    e.stopPropagation()
-    if (!isDragging) setIsDragging(true)
-  }, [isDragging])
-
-  const onDragEnter = useCallback((e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(true)
-  }, [])
-
-  const onDragLeave = useCallback((e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
-  }, [])
-
-  const onDrop = useCallback((e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
-    const file = e.dataTransfer?.files?.[0]
-    if (!file) return
-    const name = file.name?.toLowerCase() || ''
-    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
-      toast.error('Please drop a .xlsx or .xls file')
+    if (!validateForm()) {
+      toast.error('Please resolve validation errors.')
       return
     }
-    processFile(file)
-  }, [processFile])
-
-  const handleSheetChange = useCallback((e) => {
-    const sheetName = e.target.value
-    setActiveSheet(sheetName)
-    
-    if (workbook?.Sheets[sheetName]) {
-      const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' })
-      setExcelData(sheetData)
-    }
-  }, [workbook])
-
-  // Update cell value in both state and workbook
-  const updateCellValue = useCallback((rowIndex, colIndex, value) => {
-    // Update state
-    setExcelData(prev => {
-      const newData = [...prev]
-      if (!newData[rowIndex]) {
-        newData[rowIndex] = []
-      }
-      newData[rowIndex] = [...newData[rowIndex]]
-      newData[rowIndex][colIndex] = value
-      return newData
-    })
-
-    // Update workbook
-    if (workbook && activeSheet) {
-      const ws = workbook.Sheets[activeSheet]
-      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })
-      
-      if (value === '' || value === null) {
-        // Remove cell if empty
-        delete ws[cellAddress]
-      } else {
-        // Update or create cell
-        if (!ws[cellAddress]) {
-          ws[cellAddress] = { t: 's', v: value }
-        } else {
-          ws[cellAddress].v = value
-          ws[cellAddress].t = 's' // String type
-        }
-      }
-
-      // Update workbook reference
-      setWorkbook({ ...workbook })
-    }
-
-    // Auto-expand visible window in blocks when user reaches current edges
-    setVisibleRows(prev => {
-      if (rowIndex >= prev - 1 && prev < MAX_ALLOWED_ROWS) {
-        return Math.min(prev + ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS)
-      }
-      return prev
-    })
-    setVisibleCols(prev => {
-      if (colIndex >= prev - 1 && prev < MAX_ALLOWED_COLUMNS) {
-        return Math.min(prev + COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS)
-      }
-      return prev
-    })
-  }, [workbook, activeSheet])
-
-  const handleCellBlur = useCallback((rowIndex, colIndex, value) => {
-    updateCellValue(rowIndex, colIndex, value)
-    setEditingCell(null)
-  }, [updateCellValue])
-
-  // Memoized cell value getter
-  const getCellValue = useCallback((rowIndex, colIndex) => {
-    const row = excelData[rowIndex]
-    if (!row || row[colIndex] === undefined || row[colIndex] === null) {
-      return ''
-    }
-    return String(row[colIndex])
-  }, [excelData])
-
-  // Get column width for a specific column
-  const getColumnWidth = useCallback((colIndex) => {
-    return columnWidths[colIndex] || DEFAULT_COLUMN_WIDTH
-  }, [columnWidths])
-
-  // Get row height for a specific row
-  const getRowHeight = useCallback((rowIndex) => {
-    return rowHeights[rowIndex] || DEFAULT_ROW_HEIGHT
-  }, [rowHeights])
-
-  // Memoized calculations - grid grows in blocks based on data and interaction
-  const maxColumns = useMemo(() => {
-    if (excelData.length === 0) return visibleCols
-    const maxDataColumns = Math.max(...excelData.map(row => row?.length || 0), 0)
-    // Always show at least INITIAL_VISIBLE_COLUMNS, but expand if data requires more
-    // Also check if user is editing beyond current max
-    const editingCol = editingCell?.col ?? -1
-    const desired = Math.max(maxDataColumns, visibleCols, editingCol + 1)
-    return Math.min(desired, MAX_ALLOWED_COLUMNS)
-  }, [excelData, editingCell, visibleCols])
-
-  const maxRows = useMemo(() => {
-    const dataRows = excelData.length
-    const editingRow = editingCell?.row ?? -1
-    // Always show at least INITIAL_VISIBLE_ROWS, but expand if data requires more
-    const desired = Math.max(dataRows, visibleRows, editingRow + 1)
-    return Math.min(desired, MAX_ALLOWED_ROWS)
-  }, [excelData.length, editingCell, visibleRows])
-
-  // If a full current block becomes filled (non-empty last row/col), advance to next block
-  useEffect(() => {
-    // Check last visible row for any non-empty cell
-    const lastRowIdx = visibleRows - 1
-    const lastColIdx = visibleCols - 1
-
-    // Expand rows if the last visible row has any non-empty cell
-    if (excelData[lastRowIdx]?.some(v => v !== undefined && v !== null && String(v) !== '') && visibleRows < MAX_ALLOWED_ROWS) {
-      setVisibleRows(v => Math.min(v + ROW_BLOCK_SIZE, MAX_ALLOWED_ROWS))
-    }
-
-    // Expand columns if any row has non-empty cell in the last visible column
-    let hasDataAtLastCol = false
-    for (let r = 0; r < excelData.length; r++) {
-      const val = excelData[r]?.[lastColIdx]
-      if (val !== undefined && val !== null && String(val) !== '') {
-        hasDataAtLastCol = true
-        break
-      }
-    }
-    if (hasDataAtLastCol && visibleCols < MAX_ALLOWED_COLUMNS) {
-      setVisibleCols(c => Math.min(c + COL_BLOCK_SIZE, MAX_ALLOWED_COLUMNS))
-    }
-  }, [excelData, visibleRows, visibleCols])
-
-  // Column resizing handlers
-  const handleColumnResizeStart = useCallback((e, colIndex) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setResizingColumn(colIndex)
-    setResizeStartX(e.clientX)
-    setResizeStartWidth(getColumnWidth(colIndex))
-  }, [getColumnWidth])
-
-  const handleRowResizeStart = useCallback((e, rowIndex) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setResizingRow(rowIndex)
-    setResizeStartY(e.clientY)
-    setResizeStartHeight(getRowHeight(rowIndex))
-  }, [getRowHeight])
-
-  // Global mouse move handler for resizing
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (resizingColumn !== null) {
-        const diff = e.clientX - resizeStartX
-        const newWidth = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, resizeStartWidth + diff))
-        setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }))
-      }
-      if (resizingRow !== null) {
-        const diff = e.clientY - resizeStartY
-        const newHeight = Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, resizeStartHeight + diff))
-        setRowHeights(prev => ({ ...prev, [resizingRow]: newHeight }))
-      }
-    }
-
-    const handleMouseUp = () => {
-      setResizingColumn(null)
-      setResizingRow(null)
-    }
-
-    if (resizingColumn !== null || resizingRow !== null) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-      }
-    }
-  }, [resizingColumn, resizingRow, resizeStartX, resizeStartY, resizeStartWidth, resizeStartHeight])
-
-  const handleCellKeyDown = useCallback((e, rowIndex, colIndex) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const value = e.target.textContent || ''
-      updateCellValue(rowIndex, colIndex, value)
-      setEditingCell(null)
-      
-      // Move to next row - unlimited, will expand dynamically
-      setTimeout(() => {
-        setEditingCell({ row: rowIndex + 1, col: colIndex })
-      }, 10)
-    } else if (e.key === 'Tab') {
-      e.preventDefault()
-      const value = e.target.textContent || ''
-      updateCellValue(rowIndex, colIndex, value)
-      setEditingCell(null)
-      
-      // Move to next column - unlimited, will expand dynamically
-      setTimeout(() => {
-        const nextCol = colIndex + 1
-        setEditingCell({ row: rowIndex, col: nextCol })
-      }, 10)
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setEditingCell(null)
-      // Restore original value
-      const originalValue = getCellValue(rowIndex, colIndex)
-      if (e.target) {
-        e.target.textContent = originalValue
-      }
-    } else if (e.key === 'ArrowRight') {
-      const selection = window.getSelection()
-      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-      const isAtEnd = range && range.endOffset === e.target.textContent.length
-      
-      if (isAtEnd) {
-        e.preventDefault()
-        const value = e.target.textContent || ''
-        updateCellValue(rowIndex, colIndex, value)
-        // Unlimited columns - will expand dynamically
-        setEditingCell({ row: rowIndex, col: colIndex + 1 })
-      }
-    } else if (e.key === 'ArrowLeft') {
-      const selection = window.getSelection()
-      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-      const isAtStart = range && range.startOffset === 0
-      
-      if (isAtStart && colIndex > 0) {
-        e.preventDefault()
-        const value = e.target.textContent || ''
-        updateCellValue(rowIndex, colIndex, value)
-        setEditingCell({ row: rowIndex, col: colIndex - 1 })
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      const value = e.target.textContent || ''
-      updateCellValue(rowIndex, colIndex, value)
-      // Unlimited rows - will expand dynamically
-      setEditingCell({ row: rowIndex + 1, col: colIndex })
-    } else if (e.key === 'ArrowUp') {
-      if (rowIndex > 0) {
-        e.preventDefault()
-        const value = e.target.textContent || ''
-        updateCellValue(rowIndex, colIndex, value)
-        setEditingCell({ row: rowIndex - 1, col: colIndex })
-      }
-    }
-  }, [updateCellValue, getCellValue])
-
-  const handleCellClick = useCallback((rowIndex, colIndex) => {
-    // Allow clicking anywhere - will expand dynamically
-    setEditingCell({ row: rowIndex, col: colIndex })
-  }, [])
-
-  const handleCellFocus = useCallback((e) => {
-    // Select all text when cell is focused
-    if (e.target) {
-      const range = document.createRange()
-      range.selectNodeContents(e.target)
-      const selection = window.getSelection()
-      selection.removeAllRanges()
-      selection.addRange(range)
-    }
-  }, [])
-
-  const handleExport = useCallback(() => {
     try {
-      let wb = workbook
-      
-      if (!wb) {
-        // Create new workbook if none exists
-        wb = XLSX.utils.book_new()
-        const ws = XLSX.utils.aoa_to_sheet(excelData)
-        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+      setIsSubmitting(true)
+      const payload = { ...form }
+      numericFields.forEach((field) => {
+        payload[field] = form[field] ? Number(form[field]) : null
+      })
+      const response = await poEntryService.create(payload)
+      if (response?.success) {
+        toast.success('Purchase Order entry saved successfully!')
       } else {
-        // Update workbook with current data
-        const ws = XLSX.utils.aoa_to_sheet(excelData)
-        wb.Sheets[activeSheet || wb.SheetNames[0]] = ws
+        toast.success('Purchase Order entry created')
       }
-      
-      const fileName = `PO_Entry_${new Date().toISOString().split('T')[0]}.xlsx`
-      XLSX.writeFile(wb, fileName)
-      toast.success('Excel file exported successfully!')
+      setForm(initialForm)
+      setErrors({})
     } catch (error) {
-      console.error('Error exporting file:', error)
-      toast.error('Failed to export Excel file')
+      const message = error?.response?.data?.message || error?.message || 'Failed to save PO entry'
+      toast.error(message)
+    } finally {
+      setIsSubmitting(false)
     }
-  }, [workbook, excelData, activeSheet])
-
-  // Memoized column letters array
-  const columnLetters = useMemo(() => {
-    return Array.from({ length: maxColumns }, (_, i) => getColumnLetter(i))
-  }, [maxColumns])
-
-  const hasMultipleSheets = workbook && workbook.SheetNames.length > 1
-  const rowCount = excelData.length
+  }
 
   return (
-    <ErrorBoundary message="An error occurred while loading the Purchase Order Entry page. Please try refreshing.">
       <DashboardLayout>
-        <div className="flex flex-col h-full w-full">
-          {/* Minimal Header */}
-          <div className="flex items-center justify-between mb-4 px-1">
+      <div className="space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-secondary-900 dark:text-gray-100">
-                Purchase Order Entry
-              </h1>
+            <div className="flex items-center gap-2 text-sm text-secondary-600 mb-2">
+              <ArrowLeft className="h-4 w-4" />
+              Structured Master Linked Form
             </div>
-            <div className="flex items-center gap-2">
-              {workbook && hasMultipleSheets && (
-                <select
-                  value={activeSheet}
-                  onChange={handleSheetChange}
-                  className="px-3 py-2 rounded-lg border border-secondary-300 dark:border-secondary-700 bg-white dark:bg-[#111827] text-secondary-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {workbook.SheetNames.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              )}
-              <button
-                onClick={handleExport}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFile}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Import
-                  </>
-                )}
-              </button>
-            </div>
+            <h1 className="text-2xl font-semibold text-secondary-900">Customer PO Entry</h1>
+            <p className="text-sm text-secondary-600 mt-1">
+              Capture Purchase Orders using the exact structure from your Excel master.
+            </p>
           </div>
-
-          {/* Full Page Excel Spreadsheet with drag & drop */}
-          <div
-            className={`relative flex-1 rounded-lg shadow-sm overflow-hidden ${
-              isDragging
-                ? 'border-2 border-dashed border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/20'
-                : 'border border-secondary-200 dark:border-secondary-800 bg-white dark:bg-[#1E293B]'
-            }`}
-            onDragOver={onDragOver}
-            onDragEnter={onDragEnter}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            role="region"
-            aria-label="Drop Excel file to import"
-          >
-            {isDragging && (
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-                <div className="rounded-xl px-6 py-3 bg-white/90 dark:bg-[#0b1220]/80 text-emerald-700 dark:text-emerald-300 text-sm font-semibold border border-emerald-300">
-                  Drop your .xlsx or .xls file to import
-                </div>
-              </div>
-            )}
-            <div className="h-full overflow-auto">
-              <div className="inline-block min-w-full">
-                <table className="border-collapse select-none" style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
-                  <thead>
-                    <tr>
-                      <th 
-                        className="sticky top-0 left-0 z-20 bg-[#f8f9fa] dark:bg-[#1f2937] border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-center text-xs font-semibold text-[#5f6368] dark:text-gray-400"
-                        style={{ minWidth: '50px', width: '50px' }}
-                      >
-                      </th>
-                      {columnLetters.map((letter, colIndex) => {
-                        const colWidth = getColumnWidth(colIndex)
-                        return (
-                          <th
-                            key={colIndex}
-                            className="sticky top-0 z-10 bg-[#f8f9fa] dark:bg-[#1f2937] border border-[#dadce0] dark:border-[#374151] px-0 py-1.5 text-center text-xs font-semibold text-[#5f6368] dark:text-gray-400 relative group"
-                            style={{ minWidth: `${colWidth}px`, width: `${colWidth}px` }}
-                          >
-                            <div className="px-2">{letter}</div>
-                            {/* Column resize handle */}
-                            <div
-                              onMouseDown={(e) => handleColumnResizeStart(e, colIndex)}
-                              className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${
-                                resizingColumn === colIndex ? 'bg-blue-500' : 'hover:bg-blue-400/50'
-                              }`}
-                              style={{ zIndex: 15 }}
-                            />
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: maxRows }, (_, rowIndex) => {
-                      const isEmptyRow = rowIndex >= rowCount
-                      const rowHeight = getRowHeight(rowIndex)
-                      return (
-                        <tr 
-                          key={rowIndex} 
-                          className="hover:bg-[#f8f9fa] dark:hover:bg-[#1e293b] relative group"
-                          style={{ height: `${rowHeight}px` }}
-                        >
-                          <td 
-                            className="sticky left-0 z-10 bg-white dark:bg-[#111827] border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-center text-xs font-medium text-[#5f6368] dark:text-gray-400 relative"
-                            style={{ minWidth: '50px', width: '50px' }}
-                          >
-                            {rowIndex + 1}
-                            {/* Row resize handle */}
-                            <div
-                              onMouseDown={(e) => handleRowResizeStart(e, rowIndex)}
-                              className={`absolute bottom-0 left-0 w-full h-1 cursor-row-resize transition-colors ${
-                                resizingRow === rowIndex ? 'bg-blue-500' : 'hover:bg-blue-400/50'
-                              }`}
-                              style={{ zIndex: 15 }}
-                            />
-                          </td>
-                          {Array.from({ length: maxColumns }, (_, colIndex) => {
-                            const cellValue = isEmptyRow ? '' : getCellValue(rowIndex, colIndex)
-                            const isEmpty = !cellValue && isEmptyRow
-                            const isEditing = editingCell?.row === rowIndex && editingCell?.col === colIndex
-                            const colWidth = getColumnWidth(colIndex)
-                            
-                            return (
-                              <td
-                                key={colIndex}
-                                onClick={() => handleCellClick(rowIndex, colIndex)}
-                                className={`border border-[#dadce0] dark:border-[#374151] px-2 py-1.5 text-left text-[#202124] dark:text-gray-200 cursor-cell ${
-                                  isEmpty 
-                                    ? 'bg-[#f8f9fa] dark:bg-[#0f172a]' 
-                                    : 'bg-white dark:bg-[#111827] hover:bg-[#f1f3f4] dark:hover:bg-[#1e293b]'
-                                } ${isEditing ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                                style={{ minWidth: `${colWidth}px`, width: `${colWidth}px`, height: `${rowHeight}px` }}
-                              >
-                                {isEditing ? (
-                                  <div
-                                    contentEditable
-                                    suppressContentEditableWarning
-                                    onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.textContent || '')}
-                                    onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
-                                    onFocus={handleCellFocus}
-                                    className="outline-none min-h-[20px]"
-                                    style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                                  >
-                                    {cellValue}
-                                  </div>
-                                ) : (
-                                  <span className="block truncate" title={cellValue}>
-                                    {cellValue || '\u00A0'}
-                                  </span>
-                                )}
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/customers/new"
+              className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Manage Master Data
+            </Link>
+            <div className="rounded-lg border border-secondary-200 px-4 py-2 text-xs text-secondary-600">
+              Missing a master entry? Create it first and refresh this screen.
             </div>
           </div>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Section
+            title="Customer Details"
+            description="Pull customer metadata directly from the master data module."
+            badge="Customer Master"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field label="Customer Name" required>
+                <select
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={(e) => handleCustomerSelect(e.target.value)}
+                  className={`input ${errors.customerName ? 'border-danger-400' : ''}`}
+                >
+                  <option value="">Select from Master Data</option>
+                  {masterOptions.customers.map((customer) => (
+                    <option key={customer.id ?? customer.name} value={customer.name}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.customerName ? <span className="text-xs text-danger-600">{errors.customerName}</span> : null}
+              </Field>
+              <Field label="Customer Address" required>
+                <textarea
+                  name="customerAddress"
+                  value={form.customerAddress}
+                  onChange={handleChange}
+                  rows={3}
+                  className={`input min-h-[88px] ${errors.customerAddress ? 'border-danger-400' : ''}`}
+                  placeholder="Full postal address"
+                />
+                {errors.customerAddress ? (
+                  <span className="text-xs text-danger-600">{errors.customerAddress}</span>
+                ) : null}
+              </Field>
+              <Field label="Country" required>
+                <select
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                  className={`input ${errors.country ? 'border-danger-400' : ''}`}
+                >
+                  <option value="">Select Country</option>
+                  {masterOptions.countries.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+                {errors.country ? <span className="text-xs text-danger-600">{errors.country}</span> : null}
+              </Field>
+              <Field label="State" required>
+                <input
+                  name="state"
+                  value={form.state}
+                  onChange={handleChange}
+                  className={`input ${errors.state ? 'border-danger-400' : ''}`}
+                />
+                {errors.state ? <span className="text-xs text-danger-600">{errors.state}</span> : null}
+              </Field>
+              <Field label="Zone">
+                <select name="zone" value={form.zone} onChange={handleChange} className="input">
+                  <option value="">Select Zone</option>
+                  {masterOptions.zones.map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Segment">
+                <select name="segment" value={form.segment} onChange={handleChange} className="input">
+                  <option value="">Select Segment</option>
+                  {masterOptions.segments.map((segment) => (
+                    <option key={segment} value={segment}>
+                      {segment}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Business Type">
+                <select name="businessType" value={form.businessType} onChange={handleChange} className="input">
+                  <option value="">Select Business Type</option>
+                  {masterOptions.businessTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="GST No">
+                <input name="gstNo" value={form.gstNo} onChange={handleChange} className="input" placeholder="27ABCDE1234F1Z5" />
+              </Field>
+              <Field label="Sales Manager">
+                <select name="salesManager" value={form.salesManager} onChange={handleChange} className="input">
+                  <option value="">Select Manager</option>
+                  {masterOptions.salesContacts.map((name) => (
+                    <option key={`mgr-${name}`} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Sales Head">
+                <select name="salesHead" value={form.salesHead} onChange={handleChange} className="input">
+                  <option value="">Select Sales Head</option>
+                  {masterOptions.salesContacts.map((name) => (
+                    <option key={`head-${name}`} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Agent Name">
+                <input name="agentName" value={form.agentName} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="Agent Commission">
+              <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="agentCommission"
+                  value={form.agentCommission}
+                  onChange={handleChange}
+                  className="input"
+                  placeholder="In percentage or value"
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="PO Details" description="Exact PO header fields from the excel template." badge="Mandatory">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field label="PO No" required>
+                <input
+                  name="poNo"
+                  value={form.poNo}
+                  onChange={handleChange}
+                  className={`input ${errors.poNo ? 'border-danger-400' : ''}`}
+                  placeholder="PO-0001"
+                />
+                {errors.poNo ? <span className="text-xs text-danger-600">{errors.poNo}</span> : null}
+              </Field>
+              <Field label="PO Date" required>
+                <input
+                  type="date"
+                  name="poDate"
+                  value={form.poDate}
+                  onChange={handleChange}
+                  className={`input ${errors.poDate ? 'border-danger-400' : ''}`}
+                />
+                {errors.poDate ? <span className="text-xs text-danger-600">{errors.poDate}</span> : null}
+              </Field>
+              <Field label="Payment Type" required>
+                <select
+                  name="paymentType"
+                  value={form.paymentType}
+                  onChange={handleChange}
+                  className={`input ${errors.paymentType ? 'border-danger-400' : ''}`}
+                >
+                  <option value="">Select Payment Type</option>
+                  {masterOptions.paymentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                {errors.paymentType ? <span className="text-xs text-danger-600">{errors.paymentType}</span> : null}
+              </Field>
+              <Field label="Payment Terms" required hint="Sourced from payment-term master.">
+                <select
+                  name="paymentTerms"
+                  value={form.paymentTerms}
+                  onChange={handleChange}
+                  className={`input ${errors.paymentTerms ? 'border-danger-400' : ''}`}
+                >
+                  <option value="">Select Payment Terms</option>
+                  {masterOptions.paymentTerms.map((term) => (
+                    <option key={term} value={term}>
+                      {term}
+                    </option>
+                  ))}
+                </select>
+                {errors.paymentTerms ? <span className="text-xs text-danger-600">{errors.paymentTerms}</span> : null}
+              </Field>
+              <Field label="Delivery Schedule">
+                <textarea
+                  name="deliverySchedule"
+                  value={form.deliverySchedule}
+                  onChange={handleChange}
+                  rows={3}
+                  className="input min-h-[88px]"
+                />
+              </Field>
+              <Field label="Description">
+                <textarea name="description" value={form.description} onChange={handleChange} rows={3} className="input min-h-[88px]" />
+              </Field>
+                </div>
+          </Section>
+
+          <Section title="Tender & Agreement" description="Legal references tied to the PO.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field label="Tender Reference No">
+                <input name="tenderReferenceNo" value={form.tenderReferenceNo} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="Tender Date">
+                <input type="date" name="tenderDate" value={form.tenderDate} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="Contract Agreement No">
+                <input name="contractAgreementNo" value={form.contractAgreementNo} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="CA Date">
+                <input type="date" name="caDate" value={form.caDate} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="PO Signed Concern Name">
+                <input name="poSignedConcernName" value={form.poSignedConcernName} onChange={handleChange} className="input" />
+              </Field>
+              </div>
+          </Section>
+
+          <Section title="Bank Guarantee" description="Track ABG and PBG instruments against this PO.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field label="Performance Bank Guarantee No">
+                <input
+                  name="performanceBankGuaranteeNo"
+                  value={form.performanceBankGuaranteeNo}
+                  onChange={handleChange}
+                  className="input"
+                />
+              </Field>
+              <Field label="PBG Date">
+                <input type="date" name="pbgDate" value={form.pbgDate} onChange={handleChange} className="input" />
+              </Field>
+              <Field label="Advance Bank Guarantee No">
+                <input
+                  name="advanceBankGuaranteeNo"
+                  value={form.advanceBankGuaranteeNo}
+                  onChange={handleChange}
+                  className="input"
+                />
+              </Field>
+              <Field label="ABG Date">
+                <input type="date" name="abgDate" value={form.abgDate} onChange={handleChange} className="input" />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="Financial Details" description="Exact numbers from the PO excel sheet." badge="Finance">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field label="GST No">
+                <input name="gstNo" value={form.gstNo} onChange={handleChange} className="input" placeholder="27ABCDE1234F1Z5" />
+              </Field>
+              <Field label="GST (%)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="gst"
+                  value={form.gst}
+                  onChange={handleChange}
+                  className={`input ${errors.gst ? 'border-danger-400' : ''}`}
+                />
+                {errors.gst ? <span className="text-xs text-danger-600">{errors.gst}</span> : null}
+              </Field>
+              <Field label="Total Ex Works">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="totalExWorks"
+                  value={form.totalExWorks}
+                  onChange={handleChange}
+                  className={`input ${errors.totalExWorks ? 'border-danger-400' : ''}`}
+                            />
+                {errors.totalExWorks ? <span className="text-xs text-danger-600">{errors.totalExWorks}</span> : null}
+              </Field>
+              <Field label="Freight Amount">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="freightAmount"
+                  value={form.freightAmount}
+                  onChange={handleChange}
+                  className={`input ${errors.freightAmount ? 'border-danger-400' : ''}`}
+                />
+                {errors.freightAmount ? <span className="text-xs text-danger-600">{errors.freightAmount}</span> : null}
+              </Field>
+              <Field label="Total PO Value" required>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="totalPOValue"
+                  value={form.totalPOValue}
+                  onChange={handleChange}
+                  className={`input ${errors.totalPOValue ? 'border-danger-400' : ''}`}
+                />
+                {errors.totalPOValue ? <span className="text-xs text-danger-600">{errors.totalPOValue}</span> : null}
+              </Field>
+              <Field label="BOQ as per PO">
+                <textarea name="boqAsPerPO" value={form.boqAsPerPO} onChange={handleChange} rows={3} className="input min-h-[88px]" />
+              </Field>
+                                  </div>
+          </Section>
+
+          {Object.keys(errors).length > 0 ? (
+            <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700 flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Some required fields are missing or invalid. Please review the sections highlighted above.
+            </div>
+          ) : null}
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-secondary-200 pt-4">
+            <span className="text-sm text-secondary-500 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-success-500" />
+              All entries are stored against the authenticated user and can be exported later.
+            </span>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 px-8 py-3 text-base font-semibold text-white shadow-[0_15px_30px_-10px_rgba(15,23,42,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_25px_45px_-15px_rgba(15,23,42,0.55)] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isSubmitting ? 'Saving PO Entry...' : 'Save PO Entry'}
+            </button>
+          </div>
+        </form>
+        </div>
       </DashboardLayout>
-    </ErrorBoundary>
   )
 }

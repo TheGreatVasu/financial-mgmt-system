@@ -1,5 +1,6 @@
 import DashboardLayout from '../components/layout/DashboardLayout'
 import React, { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Modal from '../components/ui/Modal.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { createMOMService } from '../services/momService'
@@ -12,6 +13,7 @@ export default function PaymentsPage() {
   const { token } = useAuthContext()
   const momApi = useMemo(() => createMOMService(token), [token])
   const paymentApi = useMemo(() => createPaymentService(token), [token])
+  const [searchParams, setSearchParams] = useSearchParams()
   
   const [momOpen, setMomOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -76,6 +78,15 @@ export default function PaymentsPage() {
       loadPayments()
     }
   }, [token, debounced.q, debounced.status, debounced.from, debounced.to])
+
+  useEffect(() => {
+    if (searchParams.get('createMom')) {
+      setMomOpen(true)
+      const params = new URLSearchParams(searchParams)
+      params.delete('createMom')
+      setSearchParams(params, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   async function submitMOM(e) {
     e?.preventDefault?.()
