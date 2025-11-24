@@ -117,59 +117,24 @@ export default function POEntry() {
 
   async function loadMasterData() {
     try {
-      const response = await customerService.list({ limit: 200 })
-      const rows = response?.data || []
-
-      const customers = rows
-        .map((row) => ({
-          id: row.id,
-          name: row.company_name || row.companyName || row.name,
-          address:
-            row.customer_address ||
-            row.address ||
-            row.corporate_office ||
-            row.companyAddress ||
-            row.city ||
-            '',
-          country: row.country || 'India',
-          state: row.state || row.region || '',
-          zone: row.zone || '',
-          segment: row.segment || row.industry || '',
-          businessType: row.businessType || row.business_type || '',
-          gstNo: row.gst_number || row.gstNumber || '',
-          paymentTerms: row.paymentTerms || '',
-          salesManager: row.salesManager || '',
-          salesHead: row.salesHead || ''
-        }))
-        .filter((c) => c.name)
-        
-      const segments = uniqueList(customers.map((c) => c.segment), fallbackMasterSeeds.segments)
-      const zones = uniqueList(customers.map((c) => c.zone), fallbackMasterSeeds.zones)
-      const businessTypes = uniqueList(customers.map((c) => c.businessType), fallbackMasterSeeds.businessTypes)
-      const paymentTerms = uniqueList(customers.map((c) => c.paymentTerms), fallbackMasterSeeds.paymentTerms)
-      const salesContacts = uniqueList(
-        customers.flatMap((c) => [c.salesManager, c.salesHead].filter(Boolean)),
-        []
-      )
+      const response = await customerService.masterOptions()
+      const data = response?.data || {}
 
       setMasterOptions((prev) => ({
         ...prev,
-        customers,
-        segments,
-        zones,
-        businessTypes,
-        paymentTerms,
-        salesContacts
+        customers: data.customers || [],
+        segments: data.segments?.length ? data.segments : fallbackMasterSeeds.segments,
+        zones: data.zones?.length ? data.zones : fallbackMasterSeeds.zones,
+        businessTypes: data.businessTypes?.length ? data.businessTypes : fallbackMasterSeeds.businessTypes,
+        paymentTerms: data.paymentTerms?.length ? data.paymentTerms : fallbackMasterSeeds.paymentTerms,
+        paymentTypes: prev.paymentTypes,
+        countries: data.countries?.length ? data.countries : fallbackMasterSeeds.countries,
+        salesContacts: data.salesContacts || []
       }))
       } catch (error) {
       console.error('Failed to load master data', error)
       toast.error('Unable to load master data. Continue manually.')
-      }
     }
-
-  function uniqueList(values = [], fallback = []) {
-    const filtered = values.filter((v) => typeof v === 'string' && v.trim().length > 0)
-    return Array.from(new Set([...filtered, ...fallback])).filter(Boolean)
   }
 
   function handleChange({ target: { name, value } }) {
@@ -184,20 +149,26 @@ export default function POEntry() {
   }
 
   function handleCustomerSelect(value) {
-    const selected = masterOptions.customers.find((c) => c.name === value)
+    const selected = masterOptions.customers.find(
+      (c) => (c.companyName || c.name) === value
+    )
+    const paymentTerm = selected?.paymentTerms?.[0]?.title || ''
+    const contactByRole = (role) =>
+      selected?.contacts?.find((contact) => contact.contact_role === role)?.name || ''
+
     setForm((prev) => ({
       ...prev,
       customerName: value,
-      customerAddress: selected?.address || prev.customerAddress,
-      country: selected?.country || prev.country,
-      state: selected?.state || prev.state,
-      zone: selected?.zone || prev.zone,
-      segment: selected?.segment || prev.segment,
-      businessType: selected?.businessType || prev.businessType,
-      gstNo: selected?.gstNo || prev.gstNo,
-      paymentTerms: prev.paymentTerms || selected?.paymentTerms || '',
-      salesManager: prev.salesManager || selected?.salesManager || '',
-      salesHead: prev.salesHead || selected?.salesHead || ''
+      customerAddress: selected?.customerAddress || selected?.address || prev.customerAddress,
+      country: selected?.country || prev.country || 'India',
+      state: selected?.state || prev.state || '',
+      zone: selected?.zone || prev.zone || '',
+      segment: selected?.segment || prev.segment || '',
+      businessType: selected?.businessType || prev.businessType || '',
+      gstNo: selected?.gstNumber || prev.gstNo,
+      paymentTerms: prev.paymentTerms || paymentTerm,
+      salesManager: prev.salesManager || selected?.salesManager || contactByRole('sales_manager'),
+      salesHead: prev.salesHead || selected?.salesHead || contactByRole('sales_head')
     }))
   }
 
@@ -289,11 +260,14 @@ export default function POEntry() {
                   className={`input ${errors.customerName ? 'border-danger-400' : ''}`}
                 >
                   <option value="">Select from Master Data</option>
-                  {masterOptions.customers.map((customer) => (
-                    <option key={customer.id ?? customer.name} value={customer.name}>
-                      {customer.name}
-                    </option>
-                  ))}
+                  {masterOptions.customers.map((customer) => {
+                    const optionLabel = customer.companyName || customer.name || 'Unnamed Customer'
+                    return (
+                      <option key={customer.id ?? optionLabel} value={optionLabel}>
+                        {optionLabel}
+                      </option>
+                    )
+                  })}
                 </select>
                 {errors.customerName ? <span className="text-xs text-danger-600">{errors.customerName}</span> : null}
               </Field>

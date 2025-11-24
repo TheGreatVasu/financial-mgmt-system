@@ -10,6 +10,9 @@ router.use(authMiddleware);
 router.post('/po-entry/export', ctrl.exportPOEntry);
 router.get('/po-entry/template', ctrl.downloadPOEntryTemplate);
 
+// Master data options
+router.get('/master/options', ctrl.getCustomerMasterOptions);
+
 // Customer CRUD routes
 router.get('/', ctrl.getCustomers);
 router.get('/:id', ctrl.getCustomer);
