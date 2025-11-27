@@ -5,7 +5,7 @@ import Modal from '../components/ui/Modal.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { createMOMService } from '../services/momService'
 import { createPaymentService } from '../services/paymentService'
-import { Plus, Search, Filter, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText } from 'lucide-react'
+import { Plus, Search, Filter, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 
@@ -39,6 +39,26 @@ export default function PaymentsPage() {
     return { totalPayable: amount + computedInterest, pendingDues: amount, computedInterest }
   }, [form.paymentAmount, form.interestRate, form.dueDate])
 
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const totalAmount = moms.reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
+    const paidAmount = moms.filter(m => m.status === 'paid').reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
+    const pendingAmount = moms.filter(m => ['planned', 'due'].includes(m.status)).reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
+    const overdueAmount = moms.filter(m => m.status === 'overdue').reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
+    const overdueCount = moms.filter(m => m.status === 'overdue').length
+    const dueCount = moms.filter(m => m.status === 'due').length
+    
+    return {
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+      overdueAmount,
+      overdueCount,
+      dueCount,
+      totalCount: moms.length
+    }
+  }, [moms])
+
   const debounced = useDebounce(filters, 400)
 
   async function loadPayments() {
@@ -49,7 +69,6 @@ export default function PaymentsPage() {
       setPayments(response?.data || [])
     } catch (err) {
       console.error('Failed to load payments:', err)
-      // Don't show error toast for payments if it's not critical
     } finally {
       setPaymentsLoading(false)
     }
@@ -164,31 +183,65 @@ export default function PaymentsPage() {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      planned: { bg: 'bg-secondary-100', text: 'text-secondary-700', border: 'border-secondary-200', icon: Clock },
-      due: { bg: 'bg-warning-100', text: 'text-warning-700', border: 'border-warning-200', icon: Clock },
-      paid: { bg: 'bg-success-100', text: 'text-success-700', border: 'border-success-200', icon: CheckCircle2 },
-      overdue: { bg: 'bg-danger-100', text: 'text-danger-700', border: 'border-danger-200', icon: AlertTriangle },
-      cancelled: { bg: 'bg-secondary-100', text: 'text-secondary-700', border: 'border-secondary-200', icon: X }
+      planned: { 
+        bg: 'bg-gradient-to-r from-blue-50 to-blue-100', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200', 
+        icon: Clock,
+        dot: 'bg-blue-500'
+      },
+      due: { 
+        bg: 'bg-gradient-to-r from-amber-50 to-amber-100', 
+        text: 'text-amber-700', 
+        border: 'border-amber-200', 
+        icon: Clock,
+        dot: 'bg-amber-500'
+      },
+      paid: { 
+        bg: 'bg-gradient-to-r from-green-50 to-green-100', 
+        text: 'text-green-700', 
+        border: 'border-green-200', 
+        icon: CheckCircle2,
+        dot: 'bg-green-500'
+      },
+      overdue: { 
+        bg: 'bg-gradient-to-r from-red-50 to-red-100', 
+        text: 'text-red-700', 
+        border: 'border-red-200', 
+        icon: AlertTriangle,
+        dot: 'bg-red-500'
+      },
+      cancelled: { 
+        bg: 'bg-gradient-to-r from-gray-50 to-gray-100', 
+        text: 'text-gray-700', 
+        border: 'border-gray-200', 
+        icon: X,
+        dot: 'bg-gray-500'
+      }
     }
     return statusMap[status] || statusMap.planned
   }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 pb-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-secondary-900">Payments</h1>
-            <p className="text-sm text-secondary-600 mt-1.5">Track and manage payment records and MOMs</p>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              Payments
+            </h1>
+            <p className="text-sm text-gray-600 mt-2">Track and manage payment records and MOMs</p>
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setMomOpen(true)}
-            className="btn btn-primary btn-md inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-5 w-5" />
             Create Payment MOM
-          </button>
+          </motion.button>
         </div>
 
         {/* Error Alert */}
@@ -198,16 +251,16 @@ export default function PaymentsPage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 flex items-start gap-3"
+              className="rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 px-5 py-4 flex items-start gap-3 shadow-sm"
             >
-              <AlertCircle className="h-5 w-5 text-danger-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-danger-800">Error</p>
-                <p className="text-sm text-danger-700 mt-0.5">{error}</p>
+                <p className="text-sm font-semibold text-red-800">Error</p>
+                <p className="text-sm text-red-700 mt-0.5">{error}</p>
               </div>
               <button
                 onClick={() => setError('')}
-                className="text-danger-600 hover:text-danger-800 transition-colors"
+                className="text-red-600 hover:text-red-800 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -215,169 +268,245 @@ export default function PaymentsPage() {
           )}
         </AnimatePresence>
 
-        {/* Filters */}
-        <div className="card">
-          <div className="card-content">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
-                <input
-                  className="input pl-10 w-full"
-                  placeholder="Search MOMs..."
-                  value={filters.q}
-                  onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-                />
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/25"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Wallet className="h-6 w-6" />
               </div>
-              <select
-                className="input w-full lg:w-auto lg:min-w-[180px]"
-                value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              >
-                <option value="">All Status</option>
-                <option value="planned">Planned</option>
-                <option value="due">Due</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-              </select>
+              <ArrowUpRight className="h-5 w-5 opacity-80" />
+            </div>
+            <p className="text-blue-100 text-sm font-medium mb-1">Total Amount</p>
+            <p className="text-2xl font-bold">₹{stats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-blue-100 text-xs mt-2">{stats.totalCount} MOMs</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg shadow-green-500/25"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <TrendingUp className="h-5 w-5 opacity-80" />
+            </div>
+            <p className="text-green-100 text-sm font-medium mb-1">Paid</p>
+            <p className="text-2xl font-bold">₹{stats.paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-green-100 text-xs mt-2">Completed payments</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-6 text-white shadow-lg shadow-amber-500/25"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Clock className="h-6 w-6" />
+              </div>
+              <AlertCircle className="h-5 w-5 opacity-80" />
+            </div>
+            <p className="text-amber-100 text-sm font-medium mb-1">Pending</p>
+            <p className="text-2xl font-bold">₹{stats.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-amber-100 text-xs mt-2">{stats.dueCount} due soon</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-500/25"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <TrendingDown className="h-5 w-5 opacity-80" />
+            </div>
+            <p className="text-red-100 text-sm font-medium mb-1">Overdue</p>
+            <p className="text-2xl font-bold">₹{stats.overdueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-red-100 text-xs mt-2">{stats.overdueCount} require attention</p>
+          </motion.div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
-                type="date"
-                className="input w-full lg:w-auto"
-                value={filters.from}
-                onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-                placeholder="From Date"
-              />
-              <input
-                type="date"
-                className="input w-full lg:w-auto"
-                value={filters.to}
-                onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-                placeholder="To Date"
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="Search MOMs by title, participants, or notes..."
+                value={filters.q}
+                onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               />
             </div>
+            <select
+              className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all w-full lg:w-auto lg:min-w-[200px]"
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            >
+              <option value="">All Status</option>
+              <option value="planned">Planned</option>
+              <option value="due">Due</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+            <input
+              type="date"
+              className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all w-full lg:w-auto"
+              value={filters.from}
+              onChange={(e) => setFilters({ ...filters, from: e.target.value })}
+              placeholder="From Date"
+            />
+            <input
+              type="date"
+              className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all w-full lg:w-auto"
+              value={filters.to}
+              onChange={(e) => setFilters({ ...filters, to: e.target.value })}
+              placeholder="To Date"
+            />
           </div>
         </div>
 
         {/* Payment MOMs Grid */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-lg font-semibold text-secondary-900">Payment MOMs</h2>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <h2 className="text-xl font-bold text-gray-900">Payment MOMs</h2>
+            <p className="text-sm text-gray-600 mt-1">Manage your payment minutes of meeting</p>
           </div>
-          <div className="card-content">
+          <div className="p-6">
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
               </div>
             ) : moms.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                <div className="rounded-full bg-secondary-100 p-4 mb-4">
-                  <FileText className="h-8 w-8 text-secondary-400" />
+                <div className="rounded-full bg-gradient-to-br from-blue-50 to-blue-100 p-6 mb-6">
+                  <FileText className="h-12 w-12 text-blue-500" />
                 </div>
-                <h3 className="text-lg font-semibold text-secondary-900 mb-2">No Payment MOMs found</h3>
-                <p className="text-sm text-secondary-600 mb-6 max-w-sm">
-                  Get started by creating your first payment MOM.
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No Payment MOMs found</h3>
+                <p className="text-sm text-gray-600 mb-8 max-w-sm">
+                  Get started by creating your first payment MOM to track payment discussions and agreements.
                 </p>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setMomOpen(true)}
-                  className="btn btn-primary btn-md inline-flex items-center gap-2"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-5 w-5" />
                   Create First MOM
-                </button>
+                </motion.button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {moms.map(m => {
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {moms.map((m, index) => {
                   const statusBadge = getStatusBadge(m.status)
                   const StatusIcon = statusBadge.icon
+                  const amount = (m.smart?.totalPayable ?? m.paymentAmount) || 0
                   return (
                     <motion.div
                       key={m._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="rounded-lg border border-secondary-200 p-5 bg-white hover:shadow-md transition-shadow"
+                      transition={{ delay: index * 0.05 }}
+                      className="group relative bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-blue-300 hover:shadow-xl transition-all duration-300 overflow-hidden"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-base font-semibold text-secondary-900 line-clamp-1">{m.meetingTitle}</h3>
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border}`}>
-                          <StatusIcon className="h-3 w-3" />
+                      {/* Status indicator bar */}
+                      <div className={`absolute top-0 left-0 right-0 h-1 ${statusBadge.bg.replace('bg-gradient-to-r', 'bg')}`} />
+                      
+                      <div className="flex items-start justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 pr-2 flex-1">{m.meetingTitle}</h3>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} flex-shrink-0`}>
+                          <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
                           {m.status}
                         </span>
                       </div>
                       
-                      <div className="space-y-2 mb-4">
-  <div className="flex items-center gap-2 text-sm text-secondary-600">
-    <Calendar className="h-4 w-4" />
-    <span>
-      {new Date(m.meetingDate).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })}
-    </span>
-  </div>
+                      <div className="space-y-3 mb-5">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>
+                            {new Date(m.meetingDate).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        </div>
 
-  {m.dueDate && (
-    <div className="flex items-center gap-2 text-sm text-secondary-600">
-      <Clock className="h-4 w-4" />
-      <span>
-        Due:{" "}
-        {new Date(m.dueDate).toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })}
-      </span>
-    </div>
-  )}
+                        {m.dueDate && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Clock className="h-4 w-4 text-gray-400" />
+                            <span>
+                              Due: {new Date(m.dueDate).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                        )}
 
-  <div className="flex items-center gap-2 text-sm font-semibold text-secondary-900">
-    <DollarSign className="h-4 w-4" />
+                        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                          <div className="p-2 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
+                            <DollarSign className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Amount</p>
+                            <p className="text-xl font-bold text-gray-900">
+                              ₹{amount.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-    <span>
-      ₹
-      {((m.smart?.totalPayable ?? m.paymentAmount) || 0).toLocaleString(
-        "en-IN",
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }
-      )}
-    </span>
-  </div>
-</div>
-
-
-                      {m.aiSummary || m.agreedPaymentTerms ? (
-                        <p className="text-sm text-secondary-600 line-clamp-2 mb-4">
+                      {(m.aiSummary || m.agreedPaymentTerms) && (
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-5 bg-gray-50 rounded-lg p-3 border border-gray-100">
                           {m.aiSummary || m.agreedPaymentTerms}
                         </p>
-                      ) : null}
+                      )}
 
-                      <div className="flex items-center gap-2 pt-4 border-t border-secondary-200">
+                      <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => onEdit(m)}
-                          className="btn btn-outline btn-sm flex-1"
+                          className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center gap-2"
                         >
-                          <Edit className="h-3.5 w-3.5 mr-1.5" />
+                          <Edit className="h-4 w-4" />
                           Edit
                         </button>
                         <button
                           onClick={() => onDelete(m._id)}
-                          className="btn btn-outline btn-sm text-danger-700 hover:bg-danger-50 hover:border-danger-200"
+                          className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Delete"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                         <div className="flex gap-1">
                           <button
                             onClick={() => quickStatus(m._id, 'paid')}
-                            className="p-1.5 text-success-600 hover:bg-success-50 rounded transition-colors"
+                            className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
                             title="Mark as Paid"
                           >
                             <CheckCircle2 className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => quickStatus(m._id, 'overdue')}
-                            className="p-1.5 text-danger-600 hover:bg-danger-50 rounded transition-colors"
+                            className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                             title="Mark as Overdue"
                           >
                             <AlertTriangle className="h-4 w-4" />
@@ -392,20 +521,21 @@ export default function PaymentsPage() {
             
             {/* Pagination */}
             {moms.length > 0 && (
-              <div className="mt-6 flex items-center justify-between text-sm">
-                <div className="text-secondary-600">
-                  Page {meta.page} of {Math.max(1, Math.ceil((meta.total || 0) / meta.limit))}
+              <div className="mt-8 flex items-center justify-between pt-6 border-t border-gray-200">
+                <div className="text-sm text-gray-600">
+                  Showing page <span className="font-semibold text-gray-900">{meta.page}</span> of{' '}
+                  <span className="font-semibold text-gray-900">{Math.max(1, Math.ceil((meta.total || 0) / meta.limit))}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    className="btn btn-outline btn-sm"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={meta.page <= 1 || loading}
                     onClick={() => load(Math.max(1, meta.page - 1))}
                   >
                     Previous
                   </button>
                   <button
-                    className="btn btn-outline btn-sm"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={meta.page >= Math.ceil((meta.total || 0) / meta.limit) || loading}
                     onClick={() => load(meta.page + 1)}
                   >
@@ -595,5 +725,3 @@ function useDebounce(value, delay) {
   }, [value, delay])
   return debounced
 }
-
-

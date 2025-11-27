@@ -1,6 +1,6 @@
-import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail, FileSpreadsheet, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, CreditCard, Users, FileText, BarChart3, UserCircle2, LogOut, Search, Settings, PlusCircle, Download, AlertCircle, Star, ChevronDown, Database, Mail, FileSpreadsheet, ClipboardList, Building2 } from 'lucide-react'
 import DashboardHeader from './DashboardHeader.jsx'
 import ImportModal from '../ui/ImportModal.jsx'
 import { useImportContext } from '../../context/ImportContext.jsx'
@@ -474,31 +474,36 @@ export default function DashboardLayout({ children }) {
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-4 space-y-6 pb-6 min-h-0 sidebar-scroll">
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Overview</div>
-            <DashboardMenu collapsed={collapsed} />
-            <SideLink to="/reports" icon={BarChart3} label="Reports" />
+            <div className="space-y-1">
+              <DashboardMenu collapsed={collapsed} />
+              <SideLink to="/reports" icon={BarChart3} label="Reports" />
+            </div>
           </div>
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Manage</div>
-            <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
-            <SideLink to="/payments" icon={CreditCard} label="Payments" actionIcon={Download} />
-            <SideLink to="/customers/new" icon={Users} label="Creation of Master Data" actionIcon={PlusCircle} />
-            <SideLink to="/po-entry" icon={FileSpreadsheet} label="PO Entry" />
-            <SideLink to="/payments?createMom=1" icon={ClipboardList} label="Create MOM" actionIcon={PlusCircle} />
+            <div className="space-y-1">
+              <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
+              <PaymentsMenu collapsed={collapsed} />
+              <MasterDataMenu collapsed={collapsed} />
+              <SideLink to="/po-entry" icon={FileSpreadsheet} label="PO Entry" />
+            </div>
           </div>
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>System</div>
-            <SideLink to="/subscription" icon={FileText} label="Subscription" />
-            <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
-            <SideLink to="/contact" icon={Mail} label="Contact" />
-            <SideLink to="/alerts" icon={AlertCircle} label="Alerts" />
-            <SideLink to="/settings" icon={Settings} label="Settings" />
-            {/* Only show Database and Users options for admin role */}
-            {user?.role === 'admin' && (
-              <>
-                <SideLink to="/admin/database" icon={Database} label="Database" />
-                <SideLink to="/admin/users" icon={Users} label="Users" />
-              </>
-            )}
+            <div className="space-y-1">
+              <SideLink to="/subscription" icon={FileText} label="Subscription" />
+              <SideLink to="/profile" icon={UserCircle2} label="My Profile" />
+              <SideLink to="/contact" icon={Mail} label="Contact" />
+              <SideLink to="/alerts" icon={AlertCircle} label="Alerts" />
+              <SideLink to="/settings" icon={Settings} label="Settings" />
+              {/* Only show Database and Users options for admin role */}
+              {user?.role === 'admin' && (
+                <>
+                  <SideLink to="/admin/database" icon={Database} label="Database" />
+                  <SideLink to="/admin/users" icon={Users} label="Users" />
+                </>
+              )}
+            </div>
           </div>
 
           <div className="mt-4 p-3 rounded-lg border border-primary-200/60 bg-primary-50 dark:border-secondary-700 dark:bg-[#1E293B]" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>
@@ -605,6 +610,86 @@ function DashboardMenu({ collapsed = false }) {
           <SubLink to={'/dashboard/performance'} label="Performance" icon={Star} />
           <Divider />
           <SubLink to={'/dashboard/others'} label="Others" icon={Users} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MasterDataMenu({ collapsed = false }) {
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  
+  // Keep menu open if on master data pages
+  useEffect(() => {
+    if (location.pathname.startsWith('/customers')) {
+      setOpen(true)
+    }
+  }, [location.pathname])
+
+  return (
+    <div>
+      <button
+        onClick={() => { setOpen((v) => !v); navigate('/customers'); }}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
+        aria-expanded={open}
+        aria-controls="masterdata-submenu"
+      >
+        <span className="inline-flex items-center gap-3 flex-1 min-w-0">
+          <Building2 className="h-4 w-4 opacity-90 transition-colors shrink-0" />
+          <span className="flex-1 text-left" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Master Data</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div
+        id="masterdata-submenu"
+        className={`overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-out ${open ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1'}`}
+      >
+        <div className="mt-1 ml-0 mr-0 py-1 space-y-1" style={{ display: collapsed ? 'none' : undefined }}>
+          <SubLink to={'/customers'} label="View All Master Data" icon={Building2} />
+          <Divider />
+          <SubLink to={'/customers/new'} label="Create New" icon={PlusCircle} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PaymentsMenu({ collapsed = false }) {
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  
+  // Keep menu open if on payments page
+  useEffect(() => {
+    if (location.pathname.startsWith('/payments')) {
+      setOpen(true)
+    }
+  }, [location.pathname])
+
+  return (
+    <div>
+      <button
+        onClick={() => { setOpen((v) => !v); navigate('/payments'); }}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
+        aria-expanded={open}
+        aria-controls="payments-submenu"
+      >
+        <span className="inline-flex items-center gap-3 flex-1 min-w-0">
+          <CreditCard className="h-4 w-4 opacity-90 transition-colors shrink-0" />
+          <span className="flex-1 text-left" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Payments</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div
+        id="payments-submenu"
+        className={`overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-out ${open ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1'}`}
+      >
+        <div className="mt-1 ml-0 mr-0 py-1 space-y-1" style={{ display: collapsed ? 'none' : undefined }}>
+          <SubLink to={'/payments'} label="View Payments" icon={CreditCard} />
+          <Divider />
+          <SubLink to={'/payments?createMom=1'} label="Create MOM" icon={ClipboardList} />
         </div>
       </div>
     </div>

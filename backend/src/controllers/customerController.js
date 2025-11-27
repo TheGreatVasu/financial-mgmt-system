@@ -123,6 +123,9 @@ function deriveBaseCustomerRow(payload = {}, masterPayload = {}, existing = {}) 
     company_name: companyName,
     email: fallbackEmail,
     phone: fallbackPhone,
+    // Also include contact_email and contact_phone for schema compatibility
+    contact_email: fallbackEmail,
+    contact_phone: fallbackPhone,
     gst_number: gstCandidate,
     customer_address: customerAddress,
     country,
@@ -331,7 +334,7 @@ const getCustomers = asyncHandler(async (req, res) => {
       }));
     }
     const [{ c }] = await qb.clone().count({ c: '*' });
-    return res.json({ success: true, data: hydratedRows, meta: { page: Number(page), limit: Number(limit), total: Number(c) } });
+    return res.json({ success: true, data: rows, meta: { page: Number(page), limit: Number(limit), total: Number(c) } });
   }
   return res.status(503).json({
     success: false,
@@ -464,10 +467,22 @@ const createCustomer = asyncHandler(async (req, res) => {
   if (db) {
     const masterPayload = extractMasterPayload(p);
     const baseRow = deriveBaseCustomerRow(p, masterPayload);
+    
+    // Generate unique customer_code if not provided
+    let customerCode = p.customerCode || p.customer_code;
+    if (!customerCode) {
+      // Generate customer code from company name or timestamp
+      const companyName = baseRow.company_name || 'CUST';
+      const prefix = companyName.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'CUST';
+      customerCode = `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    }
+    
     const trx = await db.transaction();
     try {
       const [id] = await trx('customers').insert({
         ...baseRow,
+        customer_code: customerCode,
+        status: 'active', // Ensure status is set
         metadata: masterPayload.metadata && Object.keys(masterPayload.metadata).length
           ? JSON.stringify(masterPayload.metadata)
           : null,
