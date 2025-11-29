@@ -95,9 +95,9 @@ export default function CustomersList() {
             </h1>
             <p className="text-sm text-gray-600 mt-2">View and manage all your customer master data records</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
             <button
-              className="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="px-4 py-2.5 border border-secondary-300 dark:border-secondary-700 rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-800 transition-all duration-200 text-sm font-medium text-secondary-700 dark:text-secondary-300 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
               onClick={() => toast.info('Import feature coming soon!')}
             >
               <Upload className="h-4 w-4 inline mr-2" />
@@ -105,11 +105,16 @@ export default function CustomersList() {
             </button>
             <Link
               to="/customers/new"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 
+                         bg-gradient-to-r from-blue-600 to-blue-700 
+                         text-white shadow-lg shadow-blue-500/30
+                         hover:from-blue-700 hover:to-blue-800 
+                         hover:shadow-xl hover:shadow-blue-500/40
+                         active:scale-[0.98]
+                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Plus className="h-5 w-5" />
-              <span className="hidden sm:inline">Add Master Data</span>
-              <span className="sm:hidden">Add</span>
+              <span>Create New</span>
             </Link>
           </div>
         </div>

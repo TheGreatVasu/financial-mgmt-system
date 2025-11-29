@@ -431,7 +431,7 @@ export default function DashboardLayout({ children }) {
         aria-hidden={!sidebarOpen}
       />
       <div 
-        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-50 bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200 flex flex-col`} 
+        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed inset-y-0 left-0 z-[10000] bg-secondary-50 dark:bg-[#111827] backdrop-blur-sm border-r border-secondary-200/80 dark:border-secondary-800 shadow-[0_10px_30px_-10px_rgba(2,6,23,0.15)] transition-transform duration-200 flex flex-col`} 
         style={{ width: isMobile ? '280px' : computedSidebarWidth }} 
         data-tour="sidebar"
         aria-label="Main navigation"
@@ -482,10 +482,12 @@ export default function DashboardLayout({ children }) {
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Manage</div>
             <div className="space-y-1">
+              <CreateMOMLink icon={ClipboardList} label="Create MOM" />
+              <SideLink to="/dashboard/monthly-plan" icon={FileText} label="Collection Plan" />
+              <SideLink to="/payments" icon={CreditCard} label="Payments" exact />
               <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
-              <PaymentsMenu collapsed={collapsed} />
-              <MasterDataMenu collapsed={collapsed} />
               <SideLink to="/po-entry" icon={FileSpreadsheet} label="PO Entry" />
+              <SideLink to="/customers" icon={Building2} label="Master Data" />
             </div>
           </div>
           <div>
@@ -553,13 +555,24 @@ export default function DashboardLayout({ children }) {
   )
 }
 
-function SideLink({ to, icon: Icon, label, badge, actionIcon: ActionIcon }) {
+function SideLink({ to, icon: Icon, label, badge, actionIcon: ActionIcon, exact = false }) {
+  const location = useLocation()
+  
+  // Special handling for payments link - don't highlight if createMom query param is present
+  const shouldBeActive = (isActive) => {
+    if (to === '/payments' && location.search.includes('createMom')) {
+      return false
+    }
+    return isActive
+  }
+  
   return (
     <NavLink
       to={to}
+      end={exact}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
-          isActive
+        `group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors cursor-pointer ${
+          shouldBeActive(isActive)
             ? 'text-primary-700 bg-primary-50'
             : 'text-secondary-700 hover:text-secondary-900 hover:bg-secondary-100'
         }`
@@ -579,6 +592,26 @@ function SideLink({ to, icon: Icon, label, badge, actionIcon: ActionIcon }) {
   )
 }
 
+function CreateMOMLink({ icon: Icon, label }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isActive = location.pathname === '/payments' && location.search.includes('createMom')
+  
+  return (
+    <button
+      onClick={() => navigate('/payments?createMom=1')}
+      className={`group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors w-full cursor-pointer ${
+        isActive
+          ? 'text-primary-700 bg-primary-50'
+          : 'text-secondary-700 hover:text-secondary-900 hover:bg-secondary-100'
+      }`}
+    >
+      <Icon className="h-4 w-4 opacity-90 group-hover:text-secondary-900 transition-colors shrink-0" />
+      <span className="flex-1 text-left min-w-0">{label}</span>
+    </button>
+  )
+}
+
 function DashboardMenu({ collapsed = false }) {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
@@ -586,7 +619,7 @@ function DashboardMenu({ collapsed = false }) {
     <div>
       <button
         onClick={() => { setOpen((v) => !v); navigate('/dashboard'); }}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors cursor-pointer`}
         aria-expanded={open}
         aria-controls="dashboard-submenu"
       >
@@ -616,45 +649,7 @@ function DashboardMenu({ collapsed = false }) {
   )
 }
 
-function MasterDataMenu({ collapsed = false }) {
-  const [open, setOpen] = useState(false)
-  const navigate = useNavigate()
-  const location = useLocation()
-  
-  // Keep menu open if on master data pages
-  useEffect(() => {
-    if (location.pathname.startsWith('/customers')) {
-      setOpen(true)
-    }
-  }, [location.pathname])
-
-  return (
-    <div>
-      <button
-        onClick={() => { setOpen((v) => !v); navigate('/customers'); }}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
-        aria-expanded={open}
-        aria-controls="masterdata-submenu"
-      >
-        <span className="inline-flex items-center gap-3 flex-1 min-w-0">
-          <Building2 className="h-4 w-4 opacity-90 transition-colors shrink-0" />
-          <span className="flex-1 text-left" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Master Data</span>
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      <div
-        id="masterdata-submenu"
-        className={`overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-out ${open ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1'}`}
-      >
-        <div className="mt-1 ml-0 mr-0 py-1 space-y-1" style={{ display: collapsed ? 'none' : undefined }}>
-          <SubLink to={'/customers'} label="View All Master Data" icon={Building2} />
-          <Divider />
-          <SubLink to={'/customers/new'} label="Create New" icon={PlusCircle} />
-        </div>
-      </div>
-    </div>
-  )
-}
+// Master Data is now a simple link without submenu
 
 function PaymentsMenu({ collapsed = false }) {
   const [open, setOpen] = useState(false)
@@ -672,7 +667,7 @@ function PaymentsMenu({ collapsed = false }) {
     <div>
       <button
         onClick={() => { setOpen((v) => !v); navigate('/payments'); }}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors`}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm text-secondary-700 hover:text-secondary-900 transition-colors cursor-pointer`}
         aria-expanded={open}
         aria-controls="payments-submenu"
       >
@@ -699,7 +694,7 @@ function PaymentsMenu({ collapsed = false }) {
 function SubLink({ to, label, icon: Icon }) {
   // Use plain Link to avoid automatic active (blue) styling when hash matches
   return (
-    <NavLink to={to} className={() => `group flex items-center gap-2 px-3 py-2 text-sm text-secondary-700 hover:text-secondary-900`} end>
+    <NavLink to={to} className={() => `group flex items-center gap-2 px-3 py-2 text-sm text-secondary-700 hover:text-secondary-900 cursor-pointer`} end>
       <Icon className="h-3.5 w-3.5 opacity-80 group-hover:text-secondary-900 transition-colors" />
       <span>{label}</span>
     </NavLink>
