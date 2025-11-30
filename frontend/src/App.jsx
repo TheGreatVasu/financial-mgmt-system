@@ -33,7 +33,6 @@ import PerformancePage from './pages/dashboard/performance'
 import OthersPage from './pages/dashboard/others'
 import DatabaseManagementPage from './pages/admin/database'
 import UsersManagementPage from './pages/admin/users'
-import ExcelPage from './pages/excel'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuthContext()
@@ -269,15 +268,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UsersManagementPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/excel"
-          element={
-            <ProtectedRoute>
-              <ExcelPage />
             </ProtectedRoute>
           }
         />
