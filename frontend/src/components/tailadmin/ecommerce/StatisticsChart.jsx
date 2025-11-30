@@ -11,14 +11,14 @@ export default function StatisticsChart({ buckets = [] }) {
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <button className="px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-lg">
+        <div className="flex items-center gap-1">
+          <button className="btn btn-primary btn-sm">
             Monthly
           </button>
-          <button className="px-3 py-1 text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100">
+          <button className="btn btn-ghost btn-sm">
             Quarterly
           </button>
-          <button className="px-3 py-1 text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100">
+          <button className="btn btn-ghost btn-sm">
             Annually
           </button>
         </div>

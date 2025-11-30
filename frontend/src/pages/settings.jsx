@@ -3,6 +3,7 @@ import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { fetchSettings, updateSettings } from '../services/settingsService'
 import { useToast } from '../components/ui/Toast.jsx'
+import Button from '../components/ui/Button.jsx'
 import { 
   Moon, 
   Sun, 
@@ -404,31 +405,31 @@ export default function SettingsPage() {
               {/* Quick Actions */}
               <div className="rounded-xl border border-secondary-200/70 bg-white p-5 shadow-sm">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <button
                     type="button"
                     onClick={() => handleQuickAction('subscription')}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all text-left"
+                    className="btn btn-outline w-full justify-start gap-3 px-4 py-3"
                   >
-                    <CreditCard className="w-5 h-5 text-blue-600" />
-                    <div className="flex-1">
+                    <CreditCard className="w-5 h-5 text-blue-600 shrink-0" />
+                    <div className="flex-1 text-left">
                       <div className="font-medium text-gray-900">Manage Subscription</div>
                       <div className="text-xs text-gray-600">View and update your plan</div>
                     </div>
-                    <ExternalLink className="w-4 h-4 text-gray-400" />
+                    <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleQuickAction('branding')}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all text-left"
+                    className="btn btn-outline w-full justify-start gap-3 px-4 py-3"
                   >
-                    <Palette className="w-5 h-5 text-blue-600" />
-                    <div className="flex-1">
+                    <Palette className="w-5 h-5 text-blue-600 shrink-0" />
+                    <div className="flex-1 text-left">
                       <div className="font-medium text-gray-900">Company Branding</div>
                       <div className="text-xs text-gray-600">Customize your branding</div>
                     </div>
-                    <ExternalLink className="w-4 h-4 text-gray-400" />
+                    <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
                   </button>
 
                   <button
@@ -452,23 +453,16 @@ export default function SettingsPage() {
                 <p className="text-sm text-gray-600 mb-4">
                   {hasChanges ? 'You have unsaved changes' : 'All changes are saved'}
                 </p>
-                <button
+                <Button
                   type="submit"
                   disabled={saving || !hasChanges}
-                  className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 flex items-center justify-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Save Settings
-                    </>
-                  )}
-                </button>
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={saving}
+                  icon={saving ? undefined : CheckCircle2}>
+                  {saving ? 'Saving...' : 'Save Settings'}
+                </Button>
               </div>
             </div>
           </div>

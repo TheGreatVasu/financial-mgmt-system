@@ -50,7 +50,7 @@ export default function Footer() {
             <p className="mt-4 text-sm text-white/80">Get product updates and insights straight to your inbox.</p>
             <form className="mt-4 flex gap-2" onSubmit={(e) => e.preventDefault()}>
               <input type="email" required placeholder="Enter your email" className="flex-1 px-3 py-2 rounded-md bg-white text-secondary-900 placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-600" />
-              <button className="px-4 py-2 rounded-md bg-primary-600 hover:bg-primary-700 transition-colors text-sm font-medium">Subscribe</button>
+              <button className="btn btn-primary btn-sm">Subscribe</button>
             </form>
             <div className="mt-2 text-xs text-white/60">We care about your data. Read our <a className="underline hover:text-white" href="#">Privacy Policy</a>.</div>
           </div>

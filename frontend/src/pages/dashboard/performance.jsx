@@ -81,14 +81,14 @@ export default function PerformancePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 rounded-xl border border-secondary-200/80 bg-white px-3 py-2 shadow-inner hover:border-primary-200 transition-colors"
+              className="btn btn-outline btn-md"
             >
-              <RefreshCw className="h-4 w-4 text-primary-600" />
-              <span className="text-sm font-semibold">Refresh</span>
+              <RefreshCw className="h-4 w-4" />
+              <span>Refresh</span>
             </button>
             <button
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-700"
+              className="btn btn-primary btn-md"
             >
               <Download className="h-4 w-4" />
               Export

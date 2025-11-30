@@ -342,29 +342,29 @@ export default function CustomersList() {
         variant="dialog"
         size="sm"
         footer={(
-          <>
+          <div className="flex items-center justify-end gap-2 w-full">
             <button
-              className="btn btn-outline"
+              className="btn btn-outline btn-md"
               onClick={() => setDeletingCustomer(null)}
               disabled={isDeleting}
             >
               Cancel
             </button>
             <button
-              className="btn btn-primary bg-red-600 hover:bg-red-700"
+              className="btn btn-danger btn-md"
               onClick={handleDelete}
               disabled={isDeleting}
             >
               {isDeleting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Deleting...
                 </>
               ) : (
                 'Delete'
               )}
             </button>
-          </>
+          </div>
         )}
       >
         {deletingCustomer && (

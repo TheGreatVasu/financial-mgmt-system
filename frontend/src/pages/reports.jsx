@@ -171,7 +171,7 @@ export default function Reports() {
             <button
               onClick={handleDownloadReport}
               disabled={!data || downloading}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn btn-primary btn-md"
             >
               <Download className="h-4 w-4" />
               {downloading ? 'Generating…' : 'Download Report'}

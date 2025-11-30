@@ -123,24 +123,24 @@ export default function NewPOPage() {
       <div className="space-y-5">
         {/* Toolbar */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between md:flex-nowrap gap-3 md:gap-4">
-          <div className="flex items-center gap-3 flex-1 overflow-x-auto">
-            <button onClick={addRow} className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm">
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto">
+            <button onClick={addRow} className="btn btn-primary btn-sm">
               <PlusSquare className="h-4 w-4" />
               Add Row
             </button>
-            <button onClick={onImport} className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border border-secondary-300 bg-white hover:bg-secondary-50 transition-colors">
+            <button onClick={onImport} className="btn btn-outline btn-sm">
               <Upload className="h-4 w-4" />
               Import
             </button>
-            <button onClick={onExport} className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border border-secondary-300 bg-white hover:bg-secondary-50 transition-colors">
+            <button onClick={onExport} className="btn btn-outline btn-sm">
               <Download className="h-4 w-4" />
               Export
             </button>
-            <button onClick={onSave} className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border ${dirty ? 'border-blue-600 text-white bg-blue-600 hover:bg-blue-700' : 'border-secondary-300 bg-white'} transition-colors`}>
+            <button onClick={onSave} className={`btn btn-sm ${dirty ? 'btn-primary' : 'btn-outline'}`}>
               <Save className="h-4 w-4" />
               Save
             </button>
-            <button onClick={deleteSelected} className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border border-secondary-300 bg-white hover:bg-secondary-50 transition-colors">
+            <button onClick={deleteSelected} className="btn btn-outline btn-sm">
               <Trash2 className="h-4 w-4" />
               Delete
             </button>

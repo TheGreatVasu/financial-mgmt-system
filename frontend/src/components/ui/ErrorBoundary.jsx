@@ -70,14 +70,14 @@ class ErrorBoundary extends React.Component {
             <div className="flex gap-3">
               <button
                 onClick={this.handleReset}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn btn-primary btn-md flex-1"
               >
                 <RefreshCw className="w-4 h-4" />
                 Try Again
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="btn btn-outline btn-md flex-1"
               >
                 Refresh Page
               </button>

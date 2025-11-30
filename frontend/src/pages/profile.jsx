@@ -498,17 +498,17 @@ export default function Profile() {
             </div>
 
             <div className="pt-2">
-              <div className="text-sm font-medium mb-2">Theme Settings</div>
-              <div className="inline-flex items-center gap-3 p-2 rounded-lg border border-secondary-200 dark:border-secondary-700">
+              <div className="text-sm font-medium mb-3">Theme Settings</div>
+              <div className="inline-flex items-center gap-2 p-1.5 rounded-lg border border-secondary-200 dark:border-secondary-700 bg-secondary-50 dark:bg-secondary-800">
                 <button 
                   onClick={()=>applyTheme('light')} 
-                  className={`px-3 py-1.5 rounded-md text-sm transition-colors ${themePreview==='light' ? 'bg-primary-600 text-white' : 'bg-secondary-100 dark:bg-[#1E293B] hover:bg-secondary-200 dark:hover:bg-secondary-700'}`}
+                  className={`btn btn-sm transition-all ${themePreview==='light' ? 'btn-primary' : 'btn-ghost'}`}
                 >
                   Light
                 </button>
                 <button 
                   onClick={()=>applyTheme('dark')} 
-                  className={`px-3 py-1.5 rounded-md text-sm transition-colors ${themePreview==='dark' ? 'bg-primary-600 text-white' : 'bg-secondary-100 dark:bg-[#1E293B] hover:bg-secondary-200 dark:hover:bg-secondary-700'}`}
+                  className={`btn btn-sm transition-all ${themePreview==='dark' ? 'btn-primary' : 'btn-ghost'}`}
                 >
                   Dark
                 </button>

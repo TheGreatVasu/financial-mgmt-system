@@ -342,7 +342,7 @@ export default function CustomerDetail() {
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                className="btn btn-primary btn-md"
               >
                 <Edit className="h-4 w-4" />
                 Edit
@@ -354,14 +354,14 @@ export default function CustomerDetail() {
                     setIsEditing(false)
                     loadCustomer() // Reset form
                   }}
-                  className="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                  className="btn btn-outline btn-md"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={onSave}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="btn btn-success btn-md"
                 >
                   {saving ? (
                     <>

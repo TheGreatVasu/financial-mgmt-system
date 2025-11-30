@@ -65,7 +65,7 @@ function PricingCard({ plan, current, onSelect, loading }) {
         <div className="mt-auto pt-3 border-t border-gray-100">
           {isCurrent ? (
             <button 
-              className="w-full px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium cursor-not-allowed transition-all text-xs"
+              className="btn btn-outline btn-sm w-full opacity-60 cursor-not-allowed"
               disabled
               aria-label="Current plan"
             >
@@ -74,7 +74,7 @@ function PricingCard({ plan, current, onSelect, loading }) {
           ) : isPremium ? (
             <button
               onClick={() => window.location.href = '/contact'}
-              className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.01] text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+              className="btn btn-primary btn-sm w-full"
               aria-label="Contact sales for Premium plan"
             >
               Click Here to Proceed
@@ -83,12 +83,12 @@ function PricingCard({ plan, current, onSelect, loading }) {
             <button
               onClick={() => onSelect(plan.id)}
               disabled={loading}
-              className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="btn btn-primary btn-sm w-full"
               aria-label="Proceed with Classic plan"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" aria-hidden="true" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                   Processing...
                 </>
               ) : (
@@ -99,7 +99,7 @@ function PricingCard({ plan, current, onSelect, loading }) {
             <button
               onClick={() => onSelect(plan.id)}
               disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="btn btn-primary btn-sm w-full"
               aria-label="Proceed with Free plan"
             >
               {loading ? (

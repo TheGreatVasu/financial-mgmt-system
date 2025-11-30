@@ -525,9 +525,9 @@ export default function DashboardLayout({ children }) {
             </div>
           </div>
 
-          <button onClick={handleLogout} className="mt-6 w-full inline-flex items-center justify-center gap-3 px-3 py-2.5 rounded-md text-sm text-white bg-primary-600 hover:bg-primary-700 transition-colors" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>
+          <button onClick={handleLogout} className="btn btn-primary btn-md w-full mt-6" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>
             <LogOut className="h-4 w-4" />
-            Logout
+            <span style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Logout</span>
           </button>
         </nav>
         {/* Resize handle */}

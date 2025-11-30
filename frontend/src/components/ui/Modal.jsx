@@ -128,7 +128,7 @@ export default function Modal({ open, onClose, title, children, footer, variant 
             <div className="p-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(90vh - 120px)' }}>
               {children}
             </div>
-            <div className="px-6 py-5 border-t border-secondary-200 dark:border-secondary-800 bg-secondary-50/50 dark:bg-secondary-900/30 rounded-b-xl">
+            <div className="px-6 py-5 border-t border-secondary-200 dark:border-secondary-800 bg-secondary-50/50 dark:bg-secondary-900/30 rounded-b-xl flex items-center justify-end gap-2">
               {footer}
             </div>
           </div>
