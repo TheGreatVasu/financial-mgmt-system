@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 
 const MASTER_ROLES = [
   'Sales Manager',
@@ -114,93 +115,130 @@ export default function CustomerNew() {
   }
 
   function validateAllSteps() {
-    // Step 1: Company Profile
-    if (companyProfile.primaryContact.email && !validateEmail(companyProfile.primaryContact.email)) {
-      setError('Primary contact email must be a valid @financialmgmt.com or @gmail.com address')
-      return false
-    }
-    if (companyProfile.primaryContact.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
-      setError('Primary contact number must contain only digits and be 7-15 digits long')
-      return false
-    }
-    for (const site of companyProfile.siteOffices) {
-      if (site.contactNumber && !validatePhone(site.contactNumber)) {
-        setError('Site office contact number must contain only digits and be 7-15 digits long')
+    try {
+      // Step 1: Company Profile
+      if (companyProfile?.primaryContact?.email && !validateEmail(companyProfile.primaryContact.email)) {
+        setError('Primary contact email must be a valid @financialmgmt.com or @gmail.com address')
         return false
       }
-    }
-    // Step 2: Customer Profile
-    if (customerProfile.emailId && !validateEmail(customerProfile.emailId)) {
-      setError('Customer email must be a valid @financialmgmt.com or @gmail.com address')
-      return false
-    }
-    if (customerProfile.contactPersonNumber && !validatePhone(customerProfile.contactPersonNumber)) {
-      setError('Customer contact number must contain only digits and be 7-15 digits long')
-      return false
-    }
-    // Step 4: Team Profiles
-    for (const member of teamProfiles) {
-      if (member.email && !validateEmail(member.email)) {
-        setError('Team member email must be a valid @financialmgmt.com or @gmail.com address')
+      if (companyProfile?.primaryContact?.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
+        setError('Primary contact number must contain only digits and be 7-15 digits long')
         return false
       }
-      if (member.contactNumber && !validatePhone(member.contactNumber)) {
-        setError('Team member contact number must contain only digits and be 7-15 digits long')
+      for (const site of (companyProfile?.siteOffices || [])) {
+        if (site?.contactNumber && !validatePhone(site.contactNumber)) {
+          setError('Site office contact number must contain only digits and be 7-15 digits long')
+          return false
+        }
+      }
+      // Step 2: Customer Profile
+      if (customerProfile?.emailId && !validateEmail(customerProfile.emailId)) {
+        setError('Customer email must be a valid @financialmgmt.com or @gmail.com address')
         return false
       }
+      if (customerProfile?.contactPersonNumber && !validatePhone(customerProfile.contactPersonNumber)) {
+        setError('Customer contact number must contain only digits and be 7-15 digits long')
+        return false
+      }
+      // Step 4: Team Profiles
+      for (const member of (teamProfiles || [])) {
+        if (member?.email && !validateEmail(member.email)) {
+          setError('Team member email must be a valid @financialmgmt.com or @gmail.com address')
+          return false
+        }
+        if (member?.contactNumber && !validatePhone(member.contactNumber)) {
+          setError('Team member contact number must contain only digits and be 7-15 digits long')
+          return false
+        }
+      }
+      setError('')
+      return true
+    } catch (err) {
+      console.error('Validation error:', err)
+      setError('Validation error occurred. Please check your input.')
+      return false
     }
-    setError('')
-    return true
   }
 
-  function canGoNext() {
-    if (currentStep === 0) {
-      // Company Profile required fields
-      if (!companyProfile.companyName?.trim() && !companyProfile.legalEntityName?.trim()) return false;
-      if (!validateAllSteps()) return false;
-      return true;
+  const canGoNext = useCallback(() => {
+    try {
+      if (currentStep === 0) {
+        // Company Profile required fields - don't call validateAllSteps here to avoid infinite loops
+        if (!companyProfile?.companyName?.trim() && !companyProfile?.legalEntityName?.trim()) {
+          return false
+        }
+        return true
+      }
+      if (currentStep === 1) {
+        // Customer Profile required fields
+        if (!customerProfile?.contactPersonName?.trim() || 
+            !customerProfile?.contactPersonNumber?.trim() || 
+            !customerProfile?.emailId?.trim()) {
+          return false
+        }
+        return true
+      }
+      if (currentStep === 3) {
+        // Team Profiles step - skip validation during render
+        return true
+      }
+      return true
+    } catch (err) {
+      console.error('Error in canGoNext:', err)
+      return false
     }
-    if (currentStep === 1) {
-      // Customer Profile required fields
-      if (!customerProfile.contactPersonName?.trim() || !customerProfile.contactPersonNumber?.trim() || !customerProfile.emailId?.trim()) return false;
-      if (!validateAllSteps()) return false;
-      return true;
-    }
-    if (currentStep === 3) {
-      // Team Profiles step
-      if (!validateAllSteps()) return false;
-      return true;
-    }
-    // Add more validations for other steps if needed
-    return true
-  }
+  }, [currentStep, companyProfile, customerProfile])
 
   function goToStep(idx) {
     if (idx < currentStep) {
       setCurrentStep(idx)
     } else {
-      // Only allow forward if all previous are valid
-      let valid = true
-      for (let i = 0; i < idx; ++i) {
-        setCurrentStep(i)
-        if (!canGoNext()) {
-          valid = false
-          break
-        }
+      // Only allow forward if current step is valid
+      if (canGoNext()) {
+        setCurrentStep(idx)
       }
-      if (valid && canGoNext()) setCurrentStep(idx)
     }
   }
 
-  function updateCompany(field, value) {
-    setCompanyProfile((prev) => ({ ...prev, [field]: value }))
-  }
+  const updateCompany = useCallback((field, value) => {
+    try {
+      setCompanyProfile((prev) => {
+        if (!prev) {
+          console.warn('Company profile state is null, initializing...')
+          return {
+            companyName: '',
+            legalEntityName: '',
+            corporateOffice: emptyAddress('Corporate Office'),
+            marketingOffice: emptyAddress('Marketing Office'),
+            correspondenceAddress: '',
+            gstNumbers: [''],
+            siteOffices: [emptyAddress('Site Office 1')],
+            plantAddresses: [emptyAddress('Plant Address 1')],
+            primaryContact: emptyContact(),
+            [field]: value
+          }
+        }
+        return { ...prev, [field]: value }
+      })
+    } catch (err) {
+      console.error('Error updating company field:', field, err)
+      // Don't throw - just log the error to prevent blank page
+    }
+  }, [])
 
   function updateNestedAddress(listKey, index, field, value) {
-    setCompanyProfile((prev) => {
-      const nextList = prev[listKey].map((item, i) => (i === index ? { ...item, [field]: value } : item))
-      return { ...prev, [listKey]: nextList }
-    })
+    try {
+      setCompanyProfile((prev) => {
+        if (!prev[listKey] || !Array.isArray(prev[listKey])) {
+          console.warn(`List key ${listKey} is not an array, initializing...`)
+          return { ...prev, [listKey]: [emptyAddress(`${listKey} 1`)] }
+        }
+        const nextList = prev[listKey].map((item, i) => (i === index ? { ...item, [field]: value } : item))
+        return { ...prev, [listKey]: nextList }
+      })
+    } catch (err) {
+      console.error('Error updating nested address:', err)
+    }
   }
 
   function addAddress(listKey, labelPrefix) {
@@ -304,26 +342,73 @@ export default function CustomerNew() {
     navigate(`/customers/${createdRecordId}`)
   }
 
+  // Prevent blank page crashes by catching errors early
+  useEffect(() => {
+    const errorHandler = (event) => {
+      console.error('Global error caught:', event.error)
+      // Prevent blank page by logging error but not crashing
+      event.preventDefault()
+      return true
+    }
+    
+    const unhandledRejectionHandler = (event) => {
+      console.error('Unhandled promise rejection:', event.reason)
+      event.preventDefault()
+    }
+    
+    window.addEventListener('error', errorHandler)
+    window.addEventListener('unhandledrejection', unhandledRejectionHandler)
+    
+    return () => {
+      window.removeEventListener('error', errorHandler)
+      window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
+    }
+  }, [])
+
+  // Ensure state is always initialized
+  useEffect(() => {
+    if (!companyProfile) {
+      setCompanyProfile({
+        companyName: '',
+        legalEntityName: '',
+        corporateOffice: emptyAddress('Corporate Office'),
+        marketingOffice: emptyAddress('Marketing Office'),
+        correspondenceAddress: '',
+        gstNumbers: [''],
+        siteOffices: [emptyAddress('Site Office 1')],
+        plantAddresses: [emptyAddress('Plant Address 1')],
+        primaryContact: emptyContact()
+      })
+    }
+  }, [])
+
   return (
-    <DashboardLayout>
+    <ErrorBoundary>
+      <DashboardLayout>
       <div className="flex flex-col gap-1 mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Creation of Master Data</h1>
         <p className="text-sm text-secondary-600">Stepwise onboarding for company, customer, payment, and team details.</p>
       </div>
       {/* Stepper */}
       <div className="flex items-center gap-3 mb-8">
-        {STEPS.map((step, idx) => (
-          <button
-            key={step.label}
-            type="button"
-            onClick={() => goToStep(idx)}
-            className={`flex flex-col items-center px-2 focus:outline-none ${idx === currentStep ? 'text-primary-700 font-bold' : 'text-gray-400'} ${canGoNext() || idx < currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-            disabled={idx > currentStep && !canGoNext()}
-          >
-            <span className={`rounded-full w-8 h-8 flex items-center justify-center border-2 ${idx <= currentStep ? 'border-primary-600 bg-primary-50' : 'border-gray-300 bg-white'}`}>{idx + 1}</span>
-            <span className="text-xs mt-1">{step.label}</span>
-          </button>
-        ))}
+        {STEPS.map((step, idx) => {
+          const isCurrentStep = idx === currentStep
+          const isPastStep = idx < currentStep
+          const canNavigate = isPastStep || (isCurrentStep && canGoNext())
+          
+          return (
+            <button
+              key={step.label}
+              type="button"
+              onClick={() => goToStep(idx)}
+              className={`flex flex-col items-center px-2 focus:outline-none ${isCurrentStep ? 'text-primary-700 font-bold' : 'text-gray-400'} ${canNavigate ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+              disabled={idx > currentStep && !canGoNext()}
+            >
+              <span className={`rounded-full w-8 h-8 flex items-center justify-center border-2 ${idx <= currentStep ? 'border-primary-600 bg-primary-50' : 'border-gray-300 bg-white'}`}>{idx + 1}</span>
+              <span className="text-xs mt-1">{step.label}</span>
+            </button>
+          )
+        })}
       </div>
       <form onSubmit={onSubmit} className="space-y-6">
         {error && (
@@ -341,8 +426,26 @@ export default function CustomerNew() {
           <label className="form-label">Company Name *</label>
           <input
             className="input"
-            value={companyProfile.companyName}
-            onChange={e => updateCompany('companyName', e.target.value)}
+            type="text"
+            value={companyProfile?.companyName || ''}
+            onChange={(e) => {
+              try {
+                const value = e.target.value
+                updateCompany('companyName', value)
+                // Clear error when user starts typing
+                if (value?.trim() || companyProfile?.legalEntityName?.trim()) {
+                  setError('')
+                }
+              } catch (err) {
+                console.error('Error updating company name:', err)
+              }
+            }}
+            onBlur={(e) => {
+              // Validate on blur, not on every keystroke
+              if (!e.target.value?.trim() && !companyProfile?.legalEntityName?.trim()) {
+                setError('Company Name or Legal Entity Name is required')
+              }
+            }}
             placeholder="Company trading name"
           />
         </div>
@@ -350,8 +453,26 @@ export default function CustomerNew() {
           <label className="form-label">Legal Entity Name *</label>
           <input
             className="input"
-            value={companyProfile.legalEntityName}
-            onChange={e => updateCompany('legalEntityName', e.target.value)}
+            type="text"
+            value={companyProfile?.legalEntityName || ''}
+            onChange={(e) => {
+              try {
+                const value = e.target.value
+                updateCompany('legalEntityName', value)
+                // Clear error when user starts typing
+                if (value?.trim() || companyProfile?.companyName?.trim()) {
+                  setError('')
+                }
+              } catch (err) {
+                console.error('Error updating legal entity name:', err)
+              }
+            }}
+            onBlur={(e) => {
+              // Validate on blur, not on every keystroke
+              if (!e.target.value?.trim() && !companyProfile?.companyName?.trim()) {
+                setError('Company Name or Legal Entity Name is required')
+              }
+            }}
             placeholder="Registered legal entity"
           />
         </div>
@@ -359,11 +480,17 @@ export default function CustomerNew() {
           <label className="form-label">Corporate Office Address</label>
           <textarea
             className="input min-h-[90px]"
-            value={companyProfile.corporateOffice.addressLine}
-            onChange={e => setCompanyProfile(prev => ({
-              ...prev,
-              corporateOffice: { ...prev.corporateOffice, addressLine: e.target.value }
-            }))}
+            value={companyProfile.corporateOffice?.addressLine || ''}
+            onChange={e => {
+              try {
+                setCompanyProfile(prev => ({
+                  ...prev,
+                  corporateOffice: { ...(prev.corporateOffice || emptyAddress('Corporate Office')), addressLine: e.target.value }
+                }))
+              } catch (err) {
+                console.error('Error updating corporate office:', err)
+              }
+            }}
             placeholder="Full address, GST No, contact numbers"
           />
         </div>
@@ -371,11 +498,17 @@ export default function CustomerNew() {
           <label className="form-label">Marketing Office</label>
           <textarea
             className="input min-h-[90px]"
-            value={companyProfile.marketingOffice.addressLine}
-            onChange={e => setCompanyProfile(prev => ({
-              ...prev,
-              marketingOffice: { ...prev.marketingOffice, addressLine: e.target.value }
-            }))}
+            value={companyProfile.marketingOffice?.addressLine || ''}
+            onChange={e => {
+              try {
+                setCompanyProfile(prev => ({
+                  ...prev,
+                  marketingOffice: { ...(prev.marketingOffice || emptyAddress('Marketing Office')), addressLine: e.target.value }
+                }))
+              } catch (err) {
+                console.error('Error updating marketing office:', err)
+              }
+            }}
             placeholder="Address and contact details"
           />
         </div>
@@ -383,7 +516,7 @@ export default function CustomerNew() {
       <div>
         <label className="form-label">Site Offices & GST</label>
         <div className="space-y-4">
-          {companyProfile.siteOffices.map((site, index) => (
+          {(companyProfile.siteOffices || []).map((site, index) => (
             <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-secondary-800">{site.label}</span>
@@ -397,7 +530,7 @@ export default function CustomerNew() {
               </div>
               <textarea
                 className="input min-h-[80px]"
-                value={site.addressLine}
+                value={site?.addressLine || ''}
                 onChange={e => updateNestedAddress('siteOffices', index, 'addressLine', e.target.value)}
                 placeholder="Address with GST"
               />
@@ -405,13 +538,13 @@ export default function CustomerNew() {
                 <input
                   className="input"
                   placeholder="GST Number"
-                  value={site.gstNumber}
+                  value={site?.gstNumber || ''}
                   onChange={e => updateNestedAddress('siteOffices', index, 'gstNumber', e.target.value)}
                 />
                 <input
                   className="input"
                   placeholder="Contact Number"
-                  value={site.contactNumber || ''}
+                  value={site?.contactNumber || ''}
                   onChange={e => updateNestedAddress('siteOffices', index, 'contactNumber', e.target.value)}
                 />
               </div>
@@ -429,7 +562,7 @@ export default function CustomerNew() {
       <div>
         <label className="form-label">Plant Addresses</label>
         <div className="space-y-4">
-          {companyProfile.plantAddresses.map((plant, index) => (
+          {(companyProfile.plantAddresses || []).map((plant, index) => (
             <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-secondary-800">{plant.label}</span>
@@ -443,14 +576,14 @@ export default function CustomerNew() {
               </div>
               <textarea
                 className="input min-h-[80px]"
-                value={plant.addressLine}
+                value={plant?.addressLine || ''}
                 onChange={e => updateNestedAddress('plantAddresses', index, 'addressLine', e.target.value)}
                 placeholder="Address and GST"
               />
               <input
                 className="input"
                 placeholder="GST Number"
-                value={plant.gstNumber}
+                value={plant?.gstNumber || ''}
                 onChange={e => updateNestedAddress('plantAddresses', index, 'gstNumber', e.target.value)}
               />
             </div>
@@ -467,7 +600,7 @@ export default function CustomerNew() {
       <div>
         <label className="form-label">GST Numbers</label>
         <div className="grid gap-3">
-          {companyProfile.gstNumbers.map((gst, index) => (
+          {(companyProfile.gstNumbers || []).map((gst, index) => (
             <input
               key={index}
               className="input"
@@ -485,29 +618,47 @@ export default function CustomerNew() {
           <input
             className="input mb-2"
             placeholder="Name"
-            value={companyProfile.primaryContact.name}
-            onChange={e => updateCompany('primaryContact', {
-              ...companyProfile.primaryContact,
-              name: e.target.value
-            })}
+            value={companyProfile.primaryContact?.name || ''}
+            onChange={e => {
+              try {
+                updateCompany('primaryContact', {
+                  ...(companyProfile.primaryContact || emptyContact()),
+                  name: e.target.value
+                })
+              } catch (err) {
+                console.error('Error updating primary contact name:', err)
+              }
+            }}
           />
           <input
             className="input mb-2"
             placeholder="Contact Number"
-            value={companyProfile.primaryContact.contactNumber}
-            onChange={e => updateCompany('primaryContact', {
-              ...companyProfile.primaryContact,
-              contactNumber: e.target.value
-            })}
+            value={companyProfile.primaryContact?.contactNumber || ''}
+            onChange={e => {
+              try {
+                updateCompany('primaryContact', {
+                  ...(companyProfile.primaryContact || emptyContact()),
+                  contactNumber: e.target.value
+                })
+              } catch (err) {
+                console.error('Error updating primary contact number:', err)
+              }
+            }}
           />
           <input
             className="input"
             placeholder="Email ID"
-            value={companyProfile.primaryContact.email}
-            onChange={e => updateCompany('primaryContact', {
-              ...companyProfile.primaryContact,
-              email: e.target.value
-            })}
+            value={companyProfile.primaryContact?.email || ''}
+            onChange={e => {
+              try {
+                updateCompany('primaryContact', {
+                  ...(companyProfile.primaryContact || emptyContact()),
+                  email: e.target.value
+                })
+              } catch (err) {
+                console.error('Error updating primary contact email:', err)
+              }
+            }}
           />
         </div>
         <div>
@@ -906,7 +1057,8 @@ export default function CustomerNew() {
           </div>
         </div>
       )}
-    </DashboardLayout>
+      </DashboardLayout>
+    </ErrorBoundary>
   )
 }
 

@@ -179,7 +179,17 @@ export default function GoogleProfileCompletionPage() {
         navigate('/dashboard', { replace: true })
       }, 1500)
     } catch (err) {
-      const errorMsg = err?.message || 'Failed to complete profile'
+      let errorMsg = err?.message || 'Failed to complete profile'
+      
+      // Handle role column truncation error with helpful message
+      if (errorMsg.includes('Role column') || err?.response?.data?.error === 'ROLE_COLUMN_TRUNCATION') {
+        if (err?.response?.data?.retry) {
+          errorMsg = 'Database schema was updated. Please refresh this page and try again.'
+        } else {
+          errorMsg = 'Database schema needs to be updated. The system will attempt to fix this automatically. Please try again in a moment, or contact your administrator if the issue persists.'
+        }
+      }
+      
       setError(errorMsg)
       setLoading(false)
     }

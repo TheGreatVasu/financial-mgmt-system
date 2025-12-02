@@ -827,12 +827,23 @@ const completeGoogleProfile = asyncHandler(async (req, res) => {
     user = await updateProfileById(userId, { firstName, lastName, phoneNumber, role });
   } catch (dbError) {
     // Handle database errors, especially role column truncation
-    if (dbError.message && dbError.message.includes('Data truncated for column \'role\'')) {
+    if (dbError.code === 'ROLE_COLUMN_TRUNCATION' || (dbError.message && dbError.message.includes('Role column'))) {
       console.error('Database error updating role:', dbError);
+      // If auto-fix was attempted but failed, provide helpful message
+      if (dbError.message && dbError.message.includes('auto-fix')) {
+        return res.status(500).json({
+          success: false,
+          message: 'Database schema error: Role column is too small. Please run migration 202501200000_fix_role_column_comprehensive.sql to fix it.',
+          error: 'ROLE_COLUMN_TRUNCATION',
+          migrationFile: '202501200000_fix_role_column_comprehensive.sql'
+        });
+      }
+      // If auto-fix was successful, tell user to retry
       return res.status(500).json({
         success: false,
-        message: 'Database schema error: Role column is too small. The migration has been applied. Please refresh and try again.',
-        error: 'ROLE_COLUMN_TRUNCATION'
+        message: 'Database schema was updated. Please refresh the page and try again.',
+        error: 'ROLE_COLUMN_TRUNCATION',
+        retry: true
       });
     }
     // Re-throw other database errors

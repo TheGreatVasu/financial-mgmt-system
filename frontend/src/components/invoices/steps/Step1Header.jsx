@@ -1,0 +1,239 @@
+export default function Step1Header({ formData, updateFormData, errors, customers = [] }) {
+  return (
+    <div className="space-y-6">
+      <div className="border-b border-secondary-200 pb-3">
+        <h3 className="text-lg font-semibold text-secondary-900">Invoice Header & Customer Info</h3>
+        <p className="text-sm text-secondary-600 mt-1">Enter basic invoice and customer information</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Key ID
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.keyId ? 'border-danger-500' : ''}`}
+            value={formData.keyId || ''}
+            onChange={(e) => updateFormData('keyId', e.target.value)}
+            placeholder="Enter Key ID"
+          />
+          {errors.keyId && <p className="text-xs text-danger-500 mt-1">{errors.keyId}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            GST Tax Invoice No <span className="text-danger-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.gstTaxInvoiceNo ? 'border-danger-500' : ''}`}
+            value={formData.gstTaxInvoiceNo || ''}
+            onChange={(e) => updateFormData('gstTaxInvoiceNo', e.target.value)}
+            placeholder="Enter GST Tax Invoice No"
+            required
+          />
+          {errors.gstTaxInvoiceNo && <p className="text-xs text-danger-500 mt-1">{errors.gstTaxInvoiceNo}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            GST Tax Invoice Date <span className="text-danger-500">*</span>
+          </label>
+          <input
+            type="date"
+            className={`input ${errors.gstTaxInvoiceDate ? 'border-danger-500' : ''}`}
+            value={formData.gstTaxInvoiceDate || ''}
+            onChange={(e) => updateFormData('gstTaxInvoiceDate', e.target.value)}
+            required
+          />
+          {errors.gstTaxInvoiceDate && <p className="text-xs text-danger-500 mt-1">{errors.gstTaxInvoiceDate}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Internal Invoice No
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.internalInvoiceNo ? 'border-danger-500' : ''}`}
+            value={formData.internalInvoiceNo || ''}
+            onChange={(e) => updateFormData('internalInvoiceNo', e.target.value)}
+            placeholder="Enter Internal Invoice No"
+          />
+          {errors.internalInvoiceNo && <p className="text-xs text-danger-500 mt-1">{errors.internalInvoiceNo}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Invoice Type
+          </label>
+          <select
+            className={`input ${errors.invoiceType ? 'border-danger-500' : ''}`}
+            value={formData.invoiceType || ''}
+            onChange={(e) => updateFormData('invoiceType', e.target.value)}
+          >
+            <option value="">Select Invoice Type</option>
+            <option value="GST">GST</option>
+            <option value="Non-GST">Non-GST</option>
+            <option value="Proforma">Proforma</option>
+          </select>
+          {errors.invoiceType && <p className="text-xs text-danger-500 mt-1">{errors.invoiceType}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Business Unit
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.businessUnit ? 'border-danger-500' : ''}`}
+            value={formData.businessUnit || ''}
+            onChange={(e) => updateFormData('businessUnit', e.target.value)}
+            placeholder="Enter Business Unit"
+          />
+          {errors.businessUnit && <p className="text-xs text-danger-500 mt-1">{errors.businessUnit}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Customer <span className="text-danger-500">*</span>
+          </label>
+          <select
+            className={`input ${errors.customerId ? 'border-danger-500' : ''}`}
+            value={formData.customerId || ''}
+            onChange={(e) => {
+              updateFormData('customerId', e.target.value)
+              // Also set customerName from selected customer
+              const selectedCustomer = customers.find(c => (c.id || c._id) == e.target.value)
+              if (selectedCustomer) {
+                updateFormData('customerName', selectedCustomer.companyName || selectedCustomer.company_name || selectedCustomer.name || '')
+              }
+            }}
+            required
+          >
+            <option value="">Select Customer</option>
+            {customers.map((customer) => (
+              <option key={customer.id || customer._id} value={customer.id || customer._id}>
+                {customer.companyName || customer.company_name || customer.name || 'Unknown'}
+              </option>
+            ))}
+          </select>
+          {errors.customerId && <p className="text-xs text-danger-500 mt-1">{errors.customerId}</p>}
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Customer Name
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.customerName ? 'border-danger-500' : ''}`}
+            value={formData.customerName || ''}
+            onChange={(e) => updateFormData('customerName', e.target.value)}
+            placeholder="Customer name (auto-filled from selection)"
+          />
+          {errors.customerName && <p className="text-xs text-danger-500 mt-1">{errors.customerName}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Segment
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.segment ? 'border-danger-500' : ''}`}
+            value={formData.segment || ''}
+            onChange={(e) => updateFormData('segment', e.target.value)}
+            placeholder="Enter Segment"
+          />
+          {errors.segment && <p className="text-xs text-danger-500 mt-1">{errors.segment}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Region
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.region ? 'border-danger-500' : ''}`}
+            value={formData.region || ''}
+            onChange={(e) => updateFormData('region', e.target.value)}
+            placeholder="Enter Region"
+          />
+          {errors.region && <p className="text-xs text-danger-500 mt-1">{errors.region}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Zone
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.zone ? 'border-danger-500' : ''}`}
+            value={formData.zone || ''}
+            onChange={(e) => updateFormData('zone', e.target.value)}
+            placeholder="Enter Zone"
+          />
+          {errors.zone && <p className="text-xs text-danger-500 mt-1">{errors.zone}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Sales Order No
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.salesOrderNo ? 'border-danger-500' : ''}`}
+            value={formData.salesOrderNo || ''}
+            onChange={(e) => updateFormData('salesOrderNo', e.target.value)}
+            placeholder="Enter Sales Order No"
+          />
+          {errors.salesOrderNo && <p className="text-xs text-danger-500 mt-1">{errors.salesOrderNo}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Account Manager Name
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.accountManagerName ? 'border-danger-500' : ''}`}
+            value={formData.accountManagerName || ''}
+            onChange={(e) => updateFormData('accountManagerName', e.target.value)}
+            placeholder="Enter Account Manager Name"
+          />
+          {errors.accountManagerName && <p className="text-xs text-danger-500 mt-1">{errors.accountManagerName}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            PO No / Reference
+          </label>
+          <input
+            type="text"
+            className={`input ${errors.poNoReference ? 'border-danger-500' : ''}`}
+            value={formData.poNoReference || ''}
+            onChange={(e) => updateFormData('poNoReference', e.target.value)}
+            placeholder="Enter PO No / Reference"
+          />
+          {errors.poNoReference && <p className="text-xs text-danger-500 mt-1">{errors.poNoReference}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            PO Date
+          </label>
+          <input
+            type="date"
+            className={`input ${errors.poDate ? 'border-danger-500' : ''}`}
+            value={formData.poDate || ''}
+            onChange={(e) => updateFormData('poDate', e.target.value)}
+          />
+          {errors.poDate && <p className="text-xs text-danger-500 mt-1">{errors.poDate}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+

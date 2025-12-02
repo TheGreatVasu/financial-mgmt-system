@@ -285,11 +285,30 @@ async function updateProfileById(id, { firstName, lastName, email, phoneNumber, 
     return await findById(id);
   } catch (error) {
     // Re-throw with more context for role column issues
-    if (error.message && error.message.includes('Data truncated for column \'role\'')) {
-      const dbError = new Error('Database schema error: Role column is too small. Please run the migration to fix it.');
-      dbError.originalError = error;
-      dbError.code = 'ROLE_COLUMN_TRUNCATION';
-      throw dbError;
+    if (error.message && (error.message.includes('Data truncated for column \'role\'') || 
+        error.message.includes('role') && error.code === 'ER_DATA_TOO_LONG')) {
+      // Try to automatically fix the schema by running the migration
+      console.warn('⚠️ Role column truncation detected. Attempting to fix schema automatically...');
+      
+      try {
+        // Simple fix: Convert role column to VARCHAR(255)
+        await db.raw(`
+          ALTER TABLE users 
+          MODIFY COLUMN role VARCHAR(255) NOT NULL DEFAULT 'user'
+        `);
+        console.log('✅ Successfully fixed role column schema automatically');
+        
+        // Retry the update
+        await db('users').where({ id }).update(updateData);
+        return await findById(id);
+      } catch (fixError) {
+        console.error('❌ Failed to auto-fix role column:', fixError);
+        const dbError = new Error('Database schema error: Role column is too small. The system attempted to fix it automatically but failed. Please run the migration manually or contact your administrator.');
+        dbError.originalError = error;
+        dbError.fixError = fixError.message;
+        dbError.code = 'ROLE_COLUMN_TRUNCATION';
+        throw dbError;
+      }
     }
     throw error;
   }

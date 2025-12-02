@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createInvoiceService } from '../../services/invoiceService.js'
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx'
+import MultiStepInvoiceForm from '../../components/invoices/MultiStepInvoiceForm.jsx'
 import Modal from '../../components/ui/Modal.jsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -379,10 +380,10 @@ export default function InvoicesList() {
         onClose={() => setShowCreateModal(false)}
         title="Create New Invoice"
         variant="dialog"
-        size="lg"
+        size="xl"
         footer={null}
       >
-        <InvoiceForm
+        <MultiStepInvoiceForm
           onSubmit={handleCreate}
           onCancel={() => setShowCreateModal(false)}
         />

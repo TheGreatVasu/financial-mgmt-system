@@ -22,6 +22,7 @@ export default function Modal({ open, onClose, title, children, footer, variant 
     sm: 'max-w-md',
     md: 'max-w-2xl',
     lg: 'max-w-4xl',
+    xl: 'max-w-6xl',
   }
   
   // Professional modal widths - narrower for better visibility
@@ -29,6 +30,7 @@ export default function Modal({ open, onClose, title, children, footer, variant 
     sm: 'min(60vw, 480px)',
     md: 'min(55vw, 600px)',
     lg: 'min(50vw, 900px)',
+    xl: 'min(90vw, 1200px)',
   }
 
   return (
