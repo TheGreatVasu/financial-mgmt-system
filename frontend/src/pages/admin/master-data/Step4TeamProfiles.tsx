@@ -6,14 +6,14 @@ import { z } from 'zod'
 const teamProfileSchema = z.object({
   teamMemberName: z.string().min(1, 'Team member name is required'),
   employeeId: z.string().min(1, 'Employee ID is required'),
-  role: z.enum(['Manager', 'Accountant', 'Sales', 'Operations']),
+  role: z.string().min(1, 'Role is required'),
   department: z.string().min(1, 'Department is required'),
-  contactNumber: z.string().regex(/^\d{10}$/, 'Valid 10-digit phone number required'),
+  contactNumber: z.string().min(1, 'Phone number is required'),
   emailId: z.string().email('Valid email required'),
   reportingManager: z.string().min(1, 'Reporting manager is required'),
   location: z.string().min(1, 'Location is required'),
-  accessLevel: z.enum(['Admin', 'Standard', 'Viewer']),
-  remarks: z.string().optional(),
+  accessLevel: z.string().min(1, 'Access level is required'),
+  remarks: z.string().optional().or(z.literal('')),
 })
 
 type TeamProfileFormData = z.infer<typeof teamProfileSchema>

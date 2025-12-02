@@ -5,16 +5,16 @@ import { z } from 'zod'
 
 const additionalStepSchema = z.object({
   defaultCurrency: z.string().min(1, 'Default currency is required'),
-  defaultTax: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Valid percentage required'),
+  defaultTax: z.string().min(1, 'Default tax is required'),
   invoicePrefix: z.string().min(1, 'Invoice prefix is required'),
   quotationPrefix: z.string().min(1, 'Quotation prefix is required'),
-  enableBOQ: z.enum(['Yes', 'No']),
-  enableAutoInvoice: z.enum(['Yes', 'No']),
+  enableBOQ: z.string().min(1, 'Please select Yes or No'),
+  enableAutoInvoice: z.string().min(1, 'Please select Yes or No'),
   notificationEmail: z.string().email('Valid email required'),
-  smsNotification: z.enum(['Yes', 'No']),
-  allowPartialDelivery: z.enum(['Yes', 'No']),
-  serviceCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Valid percentage required'),
-  remarks: z.string().optional(),
+  smsNotification: z.string().min(1, 'Please select Yes or No'),
+  allowPartialDelivery: z.string().min(1, 'Please select Yes or No'),
+  serviceCharge: z.string().min(1, 'Service charge is required'),
+  remarks: z.string().optional().or(z.literal('')),
 })
 
 type AdditionalStepFormData = z.infer<typeof additionalStepSchema>

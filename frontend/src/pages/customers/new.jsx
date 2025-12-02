@@ -100,6 +100,8 @@ export default function CustomerNew() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
+  const [createdRecordId, setCreatedRecordId] = useState(null)
 
   function canGoNext() {
     if (currentStep === 0) {
@@ -227,12 +229,19 @@ export default function CustomerNew() {
       }
       const res = await svc.create(payload)
       const created = res?.data
-      navigate(`/customers/${created?.id ?? created?._id ?? ''}`)
+      const recordId = created?.id ?? created?._id ?? ''
+      setCreatedRecordId(recordId)
+      setShowSuccessPopup(true)
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to create master record')
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleDone() {
+    setShowSuccessPopup(false)
+    navigate(`/customers/${createdRecordId}`)
   }
 
   return (
@@ -456,41 +465,266 @@ export default function CustomerNew() {
 )}
         {/* Step 2: Customer Profile */}
         {currentStep === 1 && (
-  <CustomerProfileForm
-    defaultValues={customerProfile}
-    onPrevious={onPrev}
-    onNext={(data) => {
-      setCustomerProfile(data);
-      onNext();
-    }}
-    loading={saving}
-  />
+  <section className="card">
+    <div className="card-header">
+      <h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2>
+    </div>
+    <div className="card-content space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="form-label">Contact Person Name *</label>
+          <input
+            className="input"
+            value={customerProfile.contactPersonName}
+            onChange={e => setCustomerProfile({ ...customerProfile, contactPersonName: e.target.value })}
+            placeholder="Enter contact person name"
+          />
+        </div>
+        <div>
+          <label className="form-label">Contact Person Number *</label>
+          <input
+            className="input"
+            value={customerProfile.contactPersonNumber}
+            onChange={e => setCustomerProfile({ ...customerProfile, contactPersonNumber: e.target.value })}
+            placeholder="Enter phone number"
+          />
+        </div>
+        <div>
+          <label className="form-label">Email ID *</label>
+          <input
+            className="input"
+            type="email"
+            value={customerProfile.emailId}
+            onChange={e => setCustomerProfile({ ...customerProfile, emailId: e.target.value })}
+            placeholder="Enter email address"
+          />
+        </div>
+        <div>
+          <label className="form-label">Department</label>
+          <input
+            className="input"
+            value={customerProfile.department}
+            onChange={e => setCustomerProfile({ ...customerProfile, department: e.target.value })}
+            placeholder="Enter department"
+          />
+        </div>
+        <div>
+          <label className="form-label">Designation</label>
+          <input
+            className="input"
+            value={customerProfile.designation}
+            onChange={e => setCustomerProfile({ ...customerProfile, designation: e.target.value })}
+            placeholder="Enter designation"
+          />
+        </div>
+        <div>
+          <label className="form-label">Job Role</label>
+          <input
+            className="input"
+            value={customerProfile.jobRole}
+            onChange={e => setCustomerProfile({ ...customerProfile, jobRole: e.target.value })}
+            placeholder="Enter job role"
+          />
+        </div>
+        <div>
+          <label className="form-label">Segment</label>
+          <input
+            className="input"
+            value={customerProfile.segment}
+            onChange={e => setCustomerProfile({ ...customerProfile, segment: e.target.value })}
+            placeholder="Enter segment"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
 )}
         {/* Step 3: Payment Terms */}
         {currentStep === 2 && (
           <section className="card">
-            <div className="card-header flex items-center justify-between"><h2 className="text-lg font-semibold text-secondary-900">Creation of Payment Terms</h2></div>
-            <div className="card-content space-y-4">{/* ...same as before... */}
-              {/* ...copy Payment Terms JSX here... */}
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-secondary-900">Creation of Payment Terms</h2>
+            </div>
+            <div className="card-content space-y-4">
+              {paymentTerms.map((term, index) => (
+                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-secondary-800">Payment Term {index + 1}</span>
+                    {paymentTerms.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-danger-600 hover:text-danger-700 text-xs"
+                        onClick={() => removePaymentTerm(index)}
+                      >Remove</button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Payment Term Title</label>
+                      <input
+                        className="input"
+                        value={term.title}
+                        onChange={e => updatePaymentTerm(index, 'title', e.target.value)}
+                        placeholder="e.g., Advance 50%, Balance at Delivery"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Payment Type</label>
+                      <select
+                        className="input"
+                        value={term.type}
+                        onChange={e => updatePaymentTerm(index, 'type', e.target.value)}
+                      >
+                        <option value="Milestone Based">Milestone Based</option>
+                        <option value="Time Based">Time Based</option>
+                        <option value="Fixed">Fixed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Credit Days</label>
+                      <input
+                        className="input"
+                        type="number"
+                        value={term.creditDays}
+                        onChange={e => updatePaymentTerm(index, 'creditDays', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Description</label>
+                      <input
+                        className="input"
+                        value={term.description}
+                        onChange={e => updatePaymentTerm(index, 'description', e.target.value)}
+                        placeholder="Payment description"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="form-label">Notes</label>
+                    <textarea
+                      className="input min-h-[80px]"
+                      value={term.notes}
+                      onChange={e => updatePaymentTerm(index, 'notes', e.target.value)}
+                      placeholder="Additional notes for this payment term"
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-outline btn-sm inline-flex items-center gap-2"
+                onClick={addPaymentTerm}
+              >
+                <Plus className="h-4 w-4" /> Add Payment Term
+              </button>
             </div>
           </section>
         )}
         {/* Step 4: Team Profiles */}
         {currentStep === 3 && (
           <section className="card">
-            <div className="card-header"><h2 className="text-lg font-semibold text-secondary-900">Sales / Collection Master Profiles</h2></div>
-            <div className="card-content grid grid-cols-1 lg:grid-cols-2 gap-4">{/* ...same as before... */}
-              {/* ...copy Team Profiles JSX here... */}
+            <div className="card-header">
+              <h2 className="text-lg font-semibold text-secondary-900">Sales / Collection Master Profiles</h2>
+            </div>
+            <div className="card-content space-y-4">
+              {teamProfiles.map((member, index) => (
+                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-secondary-800">Profile: {member.role}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Name</label>
+                      <input
+                        className="input"
+                        value={member.name}
+                        onChange={e => updateTeamProfile(index, 'name', e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact Number</label>
+                      <input
+                        className="input"
+                        value={member.contactNumber}
+                        onChange={e => updateTeamProfile(index, 'contactNumber', e.target.value)}
+                        placeholder="10-digit phone number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Email</label>
+                      <input
+                        className="input"
+                        type="email"
+                        value={member.email}
+                        onChange={e => updateTeamProfile(index, 'email', e.target.value)}
+                        placeholder="Email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Department</label>
+                      <input
+                        className="input"
+                        value={member.department}
+                        onChange={e => updateTeamProfile(index, 'department', e.target.value)}
+                        placeholder="Department"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Designation</label>
+                      <input
+                        className="input"
+                        value={member.designation}
+                        onChange={e => updateTeamProfile(index, 'designation', e.target.value)}
+                        placeholder="Designation"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Job Role</label>
+                      <input
+                        className="input"
+                        value={member.jobRole}
+                        onChange={e => updateTeamProfile(index, 'jobRole', e.target.value)}
+                        placeholder="Job role"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}
         {/* Step 5: Additional Step */}
         {currentStep === 4 && (
           <section className="card">
-            <div className="card-header"><h2 className="text-lg font-semibold text-secondary-900">Additional Step</h2></div>
-            <div className="card-content">
-              {/* Add your custom fields here */}
-              <div className="mb-4">Example additional box/step for future expansion.</div>
+            <div className="card-header">
+              <h2 className="text-lg font-semibold text-secondary-900">Additional Configuration</h2>
+            </div>
+            <div className="card-content space-y-4">
+              <div className="rounded-lg border border-secondary-200 p-6 bg-secondary-50">
+                <p className="text-sm text-secondary-600 mb-4">
+                  Review and confirm all master data entries above. Once submitted, this configuration will be saved to your system.
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Company Profile configured</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Customer Profile configured</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Payment Terms configured</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Team Profiles configured</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -527,6 +761,91 @@ export default function CustomerNew() {
   )}
 </div>
       </form>
+      
+      {/* Success Popup Modal */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in">
+            {/* Success Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                <svg className="h-8 w-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Success Message */}
+            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+              Master Data Created Successfully! ✨
+            </h3>
+            <p className="text-center text-gray-600 text-sm mb-6">
+              All your company, customer, payment terms, and team profile details have been saved successfully.
+            </p>
+
+            {/* Details Summary */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Company Name:</span>
+                <span className="font-semibold text-gray-900">{companyProfile.companyName || companyProfile.legalEntityName}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Contact Person:</span>
+                <span className="font-semibold text-gray-900">{customerProfile.contactPersonName || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Email:</span>
+                <span className="font-semibold text-gray-900 truncate">{customerProfile.emailId || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+                <span className="text-gray-600">Record ID:</span>
+                <span className="font-mono text-blue-600 font-semibold">{createdRecordId}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSuccessPopup(false)
+                  setCurrentStep(0)
+                  setCompanyProfile({
+                    companyName: '',
+                    legalEntityName: '',
+                    corporateOffice: emptyAddress('Corporate Office'),
+                    marketingOffice: emptyAddress('Marketing Office'),
+                    correspondenceAddress: '',
+                    gstNumbers: [''],
+                    siteOffices: [emptyAddress('Site Office 1')],
+                    plantAddresses: [emptyAddress('Plant Address 1')],
+                    primaryContact: emptyContact()
+                  })
+                  setCustomerProfile({
+                    department: '',
+                    designation: '',
+                    jobRole: '',
+                    segment: '',
+                    contactPersonName: '',
+                    contactPersonNumber: '',
+                    emailId: ''
+                  })
+                  setPaymentTerms([defaultPaymentTerm()])
+                  setTeamProfiles(MASTER_ROLES.map((role) => ({ role, ...emptyContact() })))
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+              >
+                Create Another
+              </button>
+              <button
+                onClick={handleDone}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

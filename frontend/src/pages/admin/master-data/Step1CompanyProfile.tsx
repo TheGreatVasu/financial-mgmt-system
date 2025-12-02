@@ -10,16 +10,16 @@ const companyProfileSchema = z.object({
   district: z.string().min(1, 'District is required'),
   state: z.string().min(1, 'State is required'),
   country: z.string().min(1, 'Country is required'),
-  pinCode: z.string().regex(/^\d{5,6}$/, 'Valid pin code required'),
+  pinCode: z.string().min(1, 'Pin code is required'),
   correspondenceAddress: z.string().min(1, 'Correspondence address is required'),
-  gstin: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Valid GSTIN required'),
-  panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Valid PAN required'),
-  cinNumber: z.string().min(1, 'CIN number is required'),
-  businessType: z.enum(['Proprietorship', 'Partnership', 'Pvt Ltd', 'Public Ltd']),
+  gstin: z.string().min(0, 'GSTIN').optional().or(z.literal('')),
+  panNumber: z.string().min(0, 'PAN').optional().or(z.literal('')),
+  cinNumber: z.string().min(0, 'CIN').optional().or(z.literal('')),
+  businessType: z.string().min(1, 'Business type is required'),
   businessUnit: z.string().min(1, 'Business unit is required'),
-  website: z.string().url('Valid URL required').optional().or(z.literal('')),
+  website: z.string().min(0, 'Website').optional().or(z.literal('')),
   emailId: z.string().email('Valid email required'),
-  contactNumber: z.string().regex(/^\d{10}$/, 'Valid 10-digit phone number required'),
+  contactNumber: z.string().min(10, 'Phone number is required'),
 })
 
 type CompanyProfileFormData = z.infer<typeof companyProfileSchema>

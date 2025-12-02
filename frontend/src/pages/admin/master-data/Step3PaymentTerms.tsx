@@ -5,18 +5,18 @@ import { z } from 'zod'
 
 const paymentTermsSchema = z.object({
   paymentTermName: z.string().min(1, 'Payment term name is required'),
-  creditPeriod: z.string().regex(/^\d+$/, 'Credit period must be a number'),
-  advanceRequired: z.enum(['Yes', 'No']),
-  advancePercentage: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Valid percentage required').optional(),
-  balancePaymentDueDays: z.string().regex(/^\d+$/, 'Balance payment due days must be a number'),
-  latePaymentInterest: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Valid percentage required'),
-  billingCycle: z.enum(['Monthly', 'Quarterly', 'Yearly']),
-  paymentMethod: z.enum(['Bank Transfer', 'UPI', 'Cheque']),
+  creditPeriod: z.string().min(1, 'Credit period is required'),
+  advanceRequired: z.string().min(1, 'Please select Yes or No'),
+  advancePercentage: z.string().optional().or(z.literal('')),
+  balancePaymentDueDays: z.string().min(1, 'Balance payment due days is required'),
+  latePaymentInterest: z.string().min(1, 'Late payment interest is required'),
+  billingCycle: z.string().min(1, 'Billing cycle is required'),
+  paymentMethod: z.string().min(1, 'Payment method is required'),
   bankName: z.string().min(1, 'Bank name is required'),
   bankAccountNumber: z.string().min(1, 'Bank account number is required'),
-  ifscCode: z.string().regex(/^[A-Z]{4}[0][A-Z0-9]{6}$/, 'Valid IFSC code required'),
-  upiId: z.string().email().optional().or(z.literal('')),
-  notes: z.string().optional(),
+  ifscCode: z.string().min(1, 'IFSC code is required'),
+  upiId: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
 })
 
 type PaymentTermsFormData = z.infer<typeof paymentTermsSchema>
