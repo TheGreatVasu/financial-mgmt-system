@@ -482,7 +482,7 @@ export default function DashboardLayout({ children }) {
           <div>
             <div className="px-3 mb-3 text-[11px] uppercase tracking-wider text-secondary-500 font-medium" style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}>Manage</div>
             <div className="space-y-1">
-              <CreateMOMLink icon={ClipboardList} label="Create MOM" />
+              <SideLink to="/mom" icon={ClipboardList} label="Minutes of Meeting / Calendar" />
               <SideLink to="/dashboard/monthly-plan" icon={FileText} label="Collection Plan" />
               <SideLink to="/payments" icon={CreditCard} label="Payments" exact />
               <SideLink to="/invoices" icon={FileText} label="Invoices" actionIcon={PlusCircle} />
@@ -592,25 +592,6 @@ function SideLink({ to, icon: Icon, label, badge, actionIcon: ActionIcon, exact 
   )
 }
 
-function CreateMOMLink({ icon: Icon, label }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const isActive = location.pathname === '/payments' && location.search.includes('createMom')
-  
-  return (
-    <button
-      onClick={() => navigate('/payments?createMom=1')}
-      className={`group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors w-full cursor-pointer ${
-        isActive
-          ? 'text-primary-700 bg-primary-50'
-          : 'text-secondary-700 hover:text-secondary-900 hover:bg-secondary-100'
-      }`}
-    >
-      <Icon className="h-4 w-4 opacity-90 group-hover:text-secondary-900 transition-colors shrink-0" />
-      <span className="flex-1 text-left min-w-0">{label}</span>
-    </button>
-  )
-}
 
 function DashboardMenu({ collapsed = false }) {
   const [open, setOpen] = useState(false)

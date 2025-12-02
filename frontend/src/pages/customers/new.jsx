@@ -103,16 +103,73 @@ export default function CustomerNew() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [createdRecordId, setCreatedRecordId] = useState(null)
 
+  function validateEmail(email) {
+    // Accept only company domain or gmail.com
+    return /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/.test(email)
+  }
+
+  function validatePhone(phone) {
+    // Allow only digits, optional + at start
+    return /^\+?\d{7,15}$/.test(phone || '')
+  }
+
+  function validateAllSteps() {
+    // Step 1: Company Profile
+    if (companyProfile.primaryContact.email && !validateEmail(companyProfile.primaryContact.email)) {
+      setError('Primary contact email must be a valid @financialmgmt.com or @gmail.com address')
+      return false
+    }
+    if (companyProfile.primaryContact.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
+      setError('Primary contact number must contain only digits and be 7-15 digits long')
+      return false
+    }
+    for (const site of companyProfile.siteOffices) {
+      if (site.contactNumber && !validatePhone(site.contactNumber)) {
+        setError('Site office contact number must contain only digits and be 7-15 digits long')
+        return false
+      }
+    }
+    // Step 2: Customer Profile
+    if (customerProfile.emailId && !validateEmail(customerProfile.emailId)) {
+      setError('Customer email must be a valid @financialmgmt.com or @gmail.com address')
+      return false
+    }
+    if (customerProfile.contactPersonNumber && !validatePhone(customerProfile.contactPersonNumber)) {
+      setError('Customer contact number must contain only digits and be 7-15 digits long')
+      return false
+    }
+    // Step 4: Team Profiles
+    for (const member of teamProfiles) {
+      if (member.email && !validateEmail(member.email)) {
+        setError('Team member email must be a valid @financialmgmt.com or @gmail.com address')
+        return false
+      }
+      if (member.contactNumber && !validatePhone(member.contactNumber)) {
+        setError('Team member contact number must contain only digits and be 7-15 digits long')
+        return false
+      }
+    }
+    setError('')
+    return true
+  }
+
   function canGoNext() {
     if (currentStep === 0) {
       // Company Profile required fields
-      return (
-        !!companyProfile.companyName?.trim() || !!companyProfile.legalEntityName?.trim()
-      )
+      if (!companyProfile.companyName?.trim() && !companyProfile.legalEntityName?.trim()) return false;
+      if (!validateAllSteps()) return false;
+      return true;
     }
     if (currentStep === 1) {
       // Customer Profile required fields
-      return !!customerProfile.contactPersonName?.trim() && !!customerProfile.contactPersonNumber?.trim() && !!customerProfile.emailId?.trim()
+      if (!customerProfile.contactPersonName?.trim() || !customerProfile.contactPersonNumber?.trim() || !customerProfile.emailId?.trim()) return false;
+      if (!validateAllSteps()) return false;
+      return true;
+    }
+    if (currentStep === 3) {
+      // Team Profiles step
+      if (!validateAllSteps()) return false;
+      return true;
     }
     // Add more validations for other steps if needed
     return true
@@ -205,8 +262,11 @@ export default function CustomerNew() {
       setError('Company / legal entity name is required')
       return
     }
-    if (customerProfile.emailId && !/^\S+@\S+\.\S+$/.test(customerProfile.emailId)) {
-      setError('Please enter a valid email for customer profile')
+    if (!customerProfile.contactPersonName?.trim() || !customerProfile.contactPersonNumber?.trim() || !customerProfile.emailId?.trim()) {
+      setError('Please fill all required customer profile fields')
+      return
+    }
+    if (!validateAllSteps()) {
       return
     }
     try {

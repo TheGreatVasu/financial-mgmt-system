@@ -15,6 +15,7 @@ import Subscription from './pages/subscription'
 import ContactPage from './pages/contact-dashboard'
 import AlertsPage from './pages/alerts'
 import SettingsPage from './pages/settings'
+import MOMPage from './pages/mom'
 import LoadingScreen from './pages/loading'
 import CustomersList from './pages/customers/index'
 import CustomerNew from './pages/customers/new'
@@ -250,6 +251,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/mom"
+          element={
+            <ProtectedRoute>
+              <MOMPage />
             </ProtectedRoute>
           }
         />

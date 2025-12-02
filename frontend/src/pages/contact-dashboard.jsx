@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
-import { createApiClient } from '../services/apiClient'
+import { createContactService } from '../services/contactService'
 import { useAuthContext } from '../context/AuthContext.jsx'
 
 export default function ContactPage() {
   const { token, user } = useAuthContext()
+  const contactService = useMemo(() => createContactService(token), [token])
   const [form, setForm] = useState({ 
     name: '', 
     email: '', 
@@ -33,14 +34,33 @@ export default function ContactPage() {
     setError('')
   }
 
+  function validateEmail(email) {
+    // Accept only company domain or gmail.com
+    return /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/.test(email)
+  }
+
+  function validatePhone(phone) {
+    // Allow only digits, optional + at start
+    return /^\+?\d{7,15}$/.test(phone || '')
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
-    
+
     // Validation
-    const emailValid = /.+@.+\..+/.test(form.email)
-    if (!form.name || !emailValid || !form.subject || !form.message) {
-      setError('Please fill all required fields with a valid email.')
+    if (!form.name || !form.email || !form.subject || !form.message) {
+      setError('Please fill all required fields.')
+      setStatus('error')
+      return
+    }
+    if (!validateEmail(form.email)) {
+      setError('Email must be a valid @financialmgmt.com or @gmail.com address.')
+      setStatus('error')
+      return
+    }
+    if (form.phone && !validatePhone(form.phone)) {
+      setError('Phone number must contain only digits and be 7-15 digits long.')
       setStatus('error')
       return
     }
@@ -48,8 +68,7 @@ export default function ContactPage() {
     setStatus('sending')
 
     try {
-      const api = createApiClient(token)
-      const { data } = await api.post('/contact', {
+      const data = await contactService.submit({
         name: form.name,
         email: form.email,
         phone: form.phone || undefined,

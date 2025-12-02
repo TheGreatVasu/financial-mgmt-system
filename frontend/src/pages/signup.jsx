@@ -60,9 +60,10 @@ export default function SignupPage() {
     if (!value.trim()) {
       return 'Email is required'
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    // Accept only company domain or gmail.com
+    const emailRegex = /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/
     if (!emailRegex.test(value)) {
-      return 'Please enter a valid email address'
+      return 'Email must be a valid @financialmgmt.com or @gmail.com address'
     }
     return ''
   }
@@ -71,14 +72,9 @@ export default function SignupPage() {
     if (!value || !value.trim()) {
       return 'Phone number is required'
     }
-    // Remove any non-digit characters for validation
-    const digitsOnly = value.replace(/\D/g, '')
-    // Minimum 7 digits, maximum 15 digits (international standard for phone number without country code)
-    if (digitsOnly.length < 7) {
-      return 'Phone number is too short'
-    }
-    if (digitsOnly.length > 15) {
-      return 'Phone number is too long'
+    // Allow only digits, optional + at start, 7-15 digits
+    if (!/^\+?\d{7,15}$/.test(value)) {
+      return 'Phone number must contain only digits and be 7-15 digits long'
     }
     return ''
   }

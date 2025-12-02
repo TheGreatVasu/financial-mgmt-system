@@ -1,89 +1,69 @@
 import DashboardLayout from '../components/layout/DashboardLayout'
 import React, { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import Modal from '../components/ui/Modal.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
-import { createMOMService } from '../services/momService'
 import { createPaymentService } from '../services/paymentService'
-import { Plus, Search, Filter, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { getSalesInvoiceDashboard } from '../services/salesInvoiceService'
+import { Plus, Search, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, Building2, Package, CreditCard, Banknote } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 
 export default function PaymentsPage() {
   const { token } = useAuthContext()
-  const momApi = useMemo(() => createMOMService(token), [token])
   const paymentApi = useMemo(() => createPaymentService(token), [token])
-  const [searchParams, setSearchParams] = useSearchParams()
   
-  const [momOpen, setMomOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [paymentsLoading, setPaymentsLoading] = useState(false)
-  const [moms, setMoms] = useState([])
+  const [invoicesLoading, setInvoicesLoading] = useState(false)
   const [payments, setPayments] = useState([])
-  const [meta, setMeta] = useState({ page: 1, limit: 12, total: 0 })
-  const [filters, setFilters] = useState({ q: '', status: '', from: '', to: '' })
+  const [invoices, setInvoices] = useState([])
+  const [meta, setMeta] = useState({ page: 1, limit: 20, total: 0 })
+  const [filters, setFilters] = useState({ q: '', customer: '', from: '', to: '' })
   const [form, setForm] = useState(defaultForm())
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
 
-  const smart = useMemo(() => {
-    const amount = Number(form.paymentAmount || 0)
-    const rate = Number(form.interestRate || 0)
-    const due = form.dueDate ? new Date(form.dueDate) : null
-    const today = new Date()
-    let computedInterest = 0
-    if (due && today > due && rate > 0) {
-      const daysLate = Math.floor((today - due) / (24*60*60*1000))
-      computedInterest = Math.round(((amount * (rate/100)) / 30) * daysLate * 100) / 100
-    }
-    return { totalPayable: amount + computedInterest, pendingDues: amount, computedInterest }
-  }, [form.paymentAmount, form.interestRate, form.dueDate])
+  const debounced = useDebounce(filters, 400)
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const totalAmount = moms.reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
-    const paidAmount = moms.filter(m => m.status === 'paid').reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
-    const pendingAmount = moms.filter(m => ['planned', 'due'].includes(m.status)).reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
-    const overdueAmount = moms.filter(m => m.status === 'overdue').reduce((sum, m) => sum + ((m.smart?.totalPayable ?? m.paymentAmount) || 0), 0)
-    const overdueCount = moms.filter(m => m.status === 'overdue').length
-    const dueCount = moms.filter(m => m.status === 'due').length
+    const totalAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    const paidCount = payments.filter(p => p.status === 'completed').length
+    const pendingCount = payments.filter(p => p.status === 'pending').length
     
     return {
       totalAmount,
-      paidAmount,
-      pendingAmount,
-      overdueAmount,
-      overdueCount,
-      dueCount,
-      totalCount: moms.length
+      paidCount,
+      pendingCount,
+      totalCount: payments.length
     }
-  }, [moms])
+  }, [payments])
 
-  const debounced = useDebounce(filters, 400)
-
-  async function loadPayments() {
+  async function loadInvoices() {
     if (!token) return
-    setPaymentsLoading(true)
+    setInvoicesLoading(true)
     try {
-      const response = await paymentApi.list({ limit: 50 })
-      setPayments(response?.data || [])
+      const dashboardData = await getSalesInvoiceDashboard(token)
+      const invoicesList = dashboardData?.data?.invoices || []
+      setInvoices(invoicesList)
     } catch (err) {
-      console.error('Failed to load payments:', err)
+      console.error('Failed to load invoices:', err)
+      toast.error('Failed to load invoices')
     } finally {
-      setPaymentsLoading(false)
+      setInvoicesLoading(false)
     }
   }
 
-  async function load(page = meta.page) {
+  async function loadPayments(page = meta.page) {
     if (!token) return
     setLoading(true)
     setError('')
     try {
-      const { data, meta: m } = await momApi.list({ ...debounced, page, limit: meta.limit })
-      setMoms(data || [])
-      if (m) setMeta(m)
+      const response = await paymentApi.list({ ...debounced, page, limit: meta.limit })
+      setPayments(response?.data || [])
+      if (response?.meta) setMeta(response.meta)
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load payment MOMs'
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load payments'
       setError(errorMsg)
       toast.error(errorMsg)
     } finally {
@@ -93,134 +73,128 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     if (token) {
-      load(1)
-      loadPayments()
+      loadPayments(1)
+      loadInvoices()
     }
-  }, [token, debounced.q, debounced.status, debounced.from, debounced.to])
+  }, [token, debounced.q, debounced.customer, debounced.from, debounced.to])
 
-  useEffect(() => {
-    if (searchParams.get('createMom')) {
-      setMomOpen(true)
-      const params = new URLSearchParams(searchParams)
-      params.delete('createMom')
-      setSearchParams(params, { replace: true })
-    }
-  }, [searchParams, setSearchParams])
-
-  async function submitMOM(e) {
+  async function submitPayment(e) {
     e?.preventDefault?.()
     try {
       const payload = {
-        ...form,
-        meetingDate: new Date(form.meetingDate),
-        participants: form.participants.split(',').map(s => s.trim()).filter(Boolean),
+        paymentReceiptDate: form.paymentReceiptDate,
+        invoiceId: form.invoiceId,
+        customerName: form.customerName,
+        projectName: form.projectName,
+        packageName: form.packageName,
         paymentAmount: Number(form.paymentAmount),
-        interestRate: Number(form.interestRate),
-        aiSummary: undefined,
+        paymentType: form.paymentType,
+        bankName: form.bankName,
+        bankCreditDate: form.bankCreditDate,
       }
+      
       if (editingId) {
-        await momApi.update(editingId, payload)
-        toast.success('Payment MOM updated successfully!')
+        await paymentApi.update(editingId, payload)
+        toast.success('Payment updated successfully!')
       } else {
-        await momApi.create(payload)
-        toast.success('Payment MOM created successfully!')
+        await paymentApi.create(payload)
+        toast.success('Payment created successfully!')
       }
       closeModal()
-      load()
+      loadPayments()
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to save payment MOM'
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to save payment'
       toast.error(errorMsg)
       throw err
     }
   }
 
   function closeModal() {
-    setMomOpen(false)
+    setPaymentOpen(false)
     setEditingId(null)
     setForm(defaultForm())
   }
 
-  function onEdit(m) {
-    setEditingId(m._id)
+  function onEdit(p) {
+    setEditingId(p.id)
     setForm({
-      meetingTitle: m.meetingTitle || '',
-      meetingDate: new Date(m.meetingDate).toISOString().slice(0,10),
-      participants: (m.participants || []).join(', '),
-      agenda: m.agenda || '',
-      discussionNotes: m.discussionNotes || '',
-      agreedPaymentTerms: m.agreedPaymentTerms || '',
-      paymentAmount: m.paymentAmount ?? 0,
-      dueDate: m.dueDate ? new Date(m.dueDate).toISOString().slice(0,10) : '',
-      paymentType: m.paymentType || 'milestone',
-      interestRate: m.interestRate ?? 0,
-      status: m.status || 'planned'
+      paymentReceiptDate: p.payment_receipt_date ? new Date(p.payment_receipt_date).toISOString().slice(0,10) : '',
+      invoiceId: p.invoice_id || '',
+      customerName: p.customer_name || '',
+      projectName: p.project_name || '',
+      packageName: p.package_name || '',
+      paymentAmount: p.amount || 0,
+      paymentType: p.payment_type || '1st Due',
+      bankName: p.bank_name || '',
+      bankCreditDate: p.bank_credit_date ? new Date(p.bank_credit_date).toISOString().slice(0,10) : '',
     })
-    setMomOpen(true)
+    setPaymentOpen(true)
   }
 
-  async function onDelete(id) {
-    if (!window.confirm('Are you sure you want to delete this payment MOM? This action cannot be undone.')) return
-    try {
-      await momApi.remove(id)
-      toast.success('Payment MOM deleted successfully!')
-      load()
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete payment MOM'
-      toast.error(errorMsg)
+  function onInvoiceSelect(invoiceId) {
+    const invoice = invoices.find(inv => inv.id === invoiceId || inv.gst_tax_invoice_no === invoiceId)
+    if (invoice) {
+      setForm(prev => ({
+        ...prev,
+        invoiceId: invoice.id || invoice.gst_tax_invoice_no,
+        customerName: invoice.customer_name || '',
+        projectName: invoice.business_unit || invoice.sales_order_no || '',
+        packageName: invoice.material_description || '',
+      }))
     }
   }
 
-  async function quickStatus(id, status) {
+  async function onDelete(id) {
+    if (!window.confirm('Are you sure you want to delete this payment? This action cannot be undone.')) return
     try {
-      await momApi.update(id, { status })
-      toast.success(`Status updated to ${status}`)
-      load()
+      await paymentApi.remove(id)
+      toast.success('Payment deleted successfully!')
+      loadPayments()
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to update status'
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete payment'
       toast.error(errorMsg)
     }
   }
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      planned: { 
-        bg: 'bg-gradient-to-r from-blue-50 to-blue-100', 
-        text: 'text-blue-700', 
-        border: 'border-blue-200', 
-        icon: Clock,
-        dot: 'bg-blue-500'
-      },
-      due: { 
-        bg: 'bg-gradient-to-r from-amber-50 to-amber-100', 
-        text: 'text-amber-700', 
-        border: 'border-amber-200', 
-        icon: Clock,
-        dot: 'bg-amber-500'
-      },
-      paid: { 
-        bg: 'bg-gradient-to-r from-green-50 to-green-100', 
+      completed: { 
+        bg: 'bg-green-100', 
         text: 'text-green-700', 
         border: 'border-green-200', 
         icon: CheckCircle2,
         dot: 'bg-green-500'
       },
-      overdue: { 
-        bg: 'bg-gradient-to-r from-red-50 to-red-100', 
+      pending: { 
+        bg: 'bg-amber-100', 
+        text: 'text-amber-700', 
+        border: 'border-amber-200', 
+        icon: Clock,
+        dot: 'bg-amber-500'
+      },
+      failed: { 
+        bg: 'bg-red-100', 
         text: 'text-red-700', 
         border: 'border-red-200', 
         icon: AlertTriangle,
         dot: 'bg-red-500'
       },
       cancelled: { 
-        bg: 'bg-gradient-to-r from-gray-50 to-gray-100', 
+        bg: 'bg-gray-100', 
         text: 'text-gray-700', 
         border: 'border-gray-200', 
         icon: X,
         dot: 'bg-gray-500'
       }
     }
-    return statusMap[status] || statusMap.planned
+    return statusMap[status] || statusMap.pending
   }
+
+  // Get unique customers from invoices
+  const uniqueCustomers = useMemo(() => {
+    const customers = [...new Set(invoices.map(inv => inv.customer_name).filter(Boolean))].sort()
+    return customers
+  }, [invoices])
 
   return (
     <DashboardLayout>
@@ -231,16 +205,16 @@ export default function PaymentsPage() {
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
               Payments
             </h1>
-            <p className="text-sm text-gray-600 mt-2">Track and manage payment records and MOMs</p>
+            <p className="text-sm text-gray-600 mt-2">Track and manage payment records</p>
           </div>
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setMomOpen(true)}
+            onClick={() => setPaymentOpen(true)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200"
           >
             <Plus className="h-5 w-5" />
-            Create Payment MOM
+            Create Payment Entry
           </motion.button>
         </div>
 
@@ -278,13 +252,12 @@ export default function PaymentsPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Wallet className="h-6 w-6" />
+                <DollarSign className="h-6 w-6" />
               </div>
-              <ArrowUpRight className="h-5 w-5 opacity-80" />
             </div>
             <p className="text-blue-100 text-sm font-medium mb-1">Total Amount</p>
             <p className="text-2xl font-bold">₹{stats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-blue-100 text-xs mt-2">{stats.totalCount} MOMs</p>
+            <p className="text-blue-100 text-xs mt-2">{stats.totalCount} payments</p>
           </motion.div>
 
           <motion.div
@@ -297,11 +270,10 @@ export default function PaymentsPage() {
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
-              <TrendingUp className="h-5 w-5 opacity-80" />
             </div>
-            <p className="text-green-100 text-sm font-medium mb-1">Paid</p>
-            <p className="text-2xl font-bold">₹{stats.paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-green-100 text-xs mt-2">Completed payments</p>
+            <p className="text-green-100 text-sm font-medium mb-1">Completed</p>
+            <p className="text-2xl font-bold">{stats.paidCount}</p>
+            <p className="text-green-100 text-xs mt-2">Payments received</p>
           </motion.div>
 
           <motion.div
@@ -314,28 +286,26 @@ export default function PaymentsPage() {
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
                 <Clock className="h-6 w-6" />
               </div>
-              <AlertCircle className="h-5 w-5 opacity-80" />
             </div>
             <p className="text-amber-100 text-sm font-medium mb-1">Pending</p>
-            <p className="text-2xl font-bold">₹{stats.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-amber-100 text-xs mt-2">{stats.dueCount} due soon</p>
+            <p className="text-2xl font-bold">{stats.pendingCount}</p>
+            <p className="text-amber-100 text-xs mt-2">Awaiting processing</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-500/25"
+            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg shadow-purple-500/25"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <AlertTriangle className="h-6 w-6" />
+                <FileText className="h-6 w-6" />
               </div>
-              <TrendingDown className="h-5 w-5 opacity-80" />
             </div>
-            <p className="text-red-100 text-sm font-medium mb-1">Overdue</p>
-            <p className="text-2xl font-bold">₹{stats.overdueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-red-100 text-xs mt-2">{stats.overdueCount} require attention</p>
+            <p className="text-purple-100 text-sm font-medium mb-1">Invoices</p>
+            <p className="text-2xl font-bold">{invoices.length}</p>
+            <p className="text-purple-100 text-xs mt-2">Available for payment</p>
           </motion.div>
         </div>
 
@@ -346,21 +316,20 @@ export default function PaymentsPage() {
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Search MOMs by title, participants, or notes..."
+                placeholder="Search payments by invoice number, customer, or reference..."
                 value={filters.q}
                 onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               />
             </div>
             <select
               className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all w-full lg:w-auto lg:min-w-[200px]"
-              value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              value={filters.customer}
+              onChange={(e) => setFilters({ ...filters, customer: e.target.value })}
             >
-              <option value="">All Status</option>
-              <option value="planned">Planned</option>
-              <option value="due">Due</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
+              <option value="">All Customers</option>
+              {uniqueCustomers.map(customer => (
+                <option key={customer} value={customer}>{customer}</option>
+              ))}
             </select>
             <input
               type="date"
@@ -379,149 +348,106 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Payment MOMs Grid */}
+        {/* Payments Table */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <h2 className="text-xl font-bold text-gray-900">Payment MOMs</h2>
-            <p className="text-sm text-gray-600 mt-1">Manage your payment minutes of meeting</p>
+            <h2 className="text-xl font-bold text-gray-900">Payment Entries</h2>
+            <p className="text-sm text-gray-600 mt-1">Following format to be displayed for entry</p>
           </div>
-          <div className="p-6">
+          <div className="overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
               </div>
-            ) : moms.length === 0 ? (
+            ) : payments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
                 <div className="rounded-full bg-gradient-to-br from-blue-50 to-blue-100 p-6 mb-6">
-                  <FileText className="h-12 w-12 text-blue-500" />
+                  <CreditCard className="h-12 w-12 text-blue-500" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No Payment MOMs found</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No Payments found</h3>
                 <p className="text-sm text-gray-600 mb-8 max-w-sm">
-                  Get started by creating your first payment MOM to track payment discussions and agreements.
+                  Get started by creating your first payment entry.
                 </p>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setMomOpen(true)}
+                  onClick={() => setPaymentOpen(true)}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all"
                 >
                   <Plus className="h-5 w-5" />
-                  Create First MOM
+                  Create First Payment
                 </motion.button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {moms.map((m, index) => {
-                  const statusBadge = getStatusBadge(m.status)
-                  const StatusIcon = statusBadge.icon
-                  const amount = (m.smart?.totalPayable ?? m.paymentAmount) || 0
-                  return (
-                    <motion.div
-                      key={m._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="group relative bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-blue-300 hover:shadow-xl transition-all duration-300 overflow-hidden"
-                    >
-                      {/* Status indicator bar */}
-                      <div className={`absolute top-0 left-0 right-0 h-1 ${statusBadge.bg.replace('bg-gradient-to-r', 'bg')}`} />
-                      
-                      <div className="flex items-start justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 pr-2 flex-1">{m.meetingTitle}</h3>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} flex-shrink-0`}>
-                          <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
-                          {m.status}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-3 mb-5">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Calendar className="h-4 w-4 text-gray-400" />
-                          <span>
-                            {new Date(m.meetingDate).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Receipt Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Credit Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payments.map((p) => {
+                    const statusBadge = getStatusBadge(p.status)
+                    const StatusIcon = statusBadge.icon
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {p.payment_receipt_date ? new Date(p.payment_receipt_date).toLocaleDateString('en-IN') : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.customer_name || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.project_name || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.package_name || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          ₹{Number(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.payment_type || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.bank_name || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {p.bank_credit_date ? new Date(p.bank_credit_date).toLocaleDateString('en-IN') : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border}`}>
+                            <StatusIcon className="h-3 w-3" />
+                            {p.status}
                           </span>
-                        </div>
-
-                        {m.dueDate && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Clock className="h-4 w-4 text-gray-400" />
-                            <span>
-                              Due: {new Date(m.dueDate).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => onEdit(p)}
+                              className="text-blue-600 hover:text-blue-900 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => onDelete(p.id)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                        )}
-
-                        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                          <div className="p-2 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
-                            <DollarSign className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Amount</p>
-                            <p className="text-xl font-bold text-gray-900">
-                              ₹{amount.toLocaleString("en-IN", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {(m.aiSummary || m.agreedPaymentTerms) && (
-                        <p className="text-sm text-gray-600 line-clamp-2 mb-5 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                          {m.aiSummary || m.agreedPaymentTerms}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                        <button
-                          onClick={() => onEdit(m)}
-                          className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center gap-2"
-                        >
-                          <Edit className="h-4 w-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => onDelete(m._id)}
-                          className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => quickStatus(m._id, 'paid')}
-                            className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-                            title="Mark as Paid"
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => quickStatus(m._id, 'overdue')}
-                            className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Mark as Overdue"
-                          >
-                            <AlertTriangle className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             )}
             
             {/* Pagination */}
-            {moms.length > 0 && (
-              <div className="mt-8 flex items-center justify-between pt-6 border-t border-gray-200">
+            {payments.length > 0 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   Showing page <span className="font-semibold text-gray-900">{meta.page}</span> of{' '}
                   <span className="font-semibold text-gray-900">{Math.max(1, Math.ceil((meta.total || 0) / meta.limit))}</span>
@@ -530,14 +456,14 @@ export default function PaymentsPage() {
                   <button
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={meta.page <= 1 || loading}
-                    onClick={() => load(Math.max(1, meta.page - 1))}
+                    onClick={() => loadPayments(Math.max(1, meta.page - 1))}
                   >
                     Previous
                   </button>
                   <button
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={meta.page >= Math.ceil((meta.total || 0) / meta.limit) || loading}
-                    onClick={() => load(meta.page + 1)}
+                    onClick={() => loadPayments(meta.page + 1)}
                   >
                     Next
                   </button>
@@ -548,11 +474,11 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Create/Edit MOM Modal */}
+      {/* Create/Edit Payment Modal */}
       <Modal
-        open={momOpen}
+        open={paymentOpen}
         onClose={closeModal}
-        title={editingId ? 'Edit Payment MOM' : 'Create Payment MOM'}
+        title={editingId ? 'Edit Payment Entry' : 'Create Payment Entry'}
         variant="dialog"
         size="lg"
         footer={(
@@ -565,69 +491,73 @@ export default function PaymentsPage() {
             </button>
             <button 
               className="btn btn-primary btn-md"
-              onClick={submitMOM} 
-              disabled={!form.meetingTitle || !form.meetingDate}
+              onClick={submitPayment} 
+              disabled={!form.paymentReceiptDate || !form.invoiceId || !form.paymentAmount}
             >
-              {editingId ? 'Update MOM' : 'Create MOM'}
+              {editingId ? 'Update Payment' : 'Create Payment'}
             </button>
           </div>
         )}
       >
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={submitMOM}>
+        <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={submitPayment}>
           <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Meeting Title *</label>
-            <input
-              className="input"
-              value={form.meetingTitle}
-              onChange={(e) => setForm({ ...form, meetingTitle: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Date *</label>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Payment Receipt Date *</label>
             <input
               type="date"
               className="input"
-              value={form.meetingDate}
-              onChange={(e) => setForm({ ...form, meetingDate: e.target.value })}
+              value={form.paymentReceiptDate}
+              onChange={(e) => setForm({ ...form, paymentReceiptDate: e.target.value })}
               required
             />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Participants</label>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Invoice Number *</label>
+            <select
+              className="input"
+              value={form.invoiceId}
+              onChange={(e) => {
+                setForm({ ...form, invoiceId: e.target.value })
+                onInvoiceSelect(e.target.value)
+              }}
+              required
+            >
+              <option value="">Select Invoice</option>
+              {invoices.map(inv => (
+                <option key={inv.id || inv.gst_tax_invoice_no} value={inv.id || inv.gst_tax_invoice_no}>
+                  {inv.gst_tax_invoice_no || inv.internal_invoice_no} - {inv.customer_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Customer Name</label>
             <input
               className="input"
-              placeholder="Comma separated names"
-              value={form.participants}
-              onChange={(e) => setForm({ ...form, participants: e.target.value })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Agenda</label>
-            <input
-              className="input"
-              value={form.agenda}
-              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Discussion Notes</label>
-            <textarea
-              className="input min-h-[80px]"
-              value={form.discussionNotes}
-              onChange={(e) => setForm({ ...form, discussionNotes: e.target.value })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Agreed Payment Terms</label>
-            <textarea
-              className="input min-h-[60px]"
-              value={form.agreedPaymentTerms}
-              onChange={(e) => setForm({ ...form, agreedPaymentTerms: e.target.value })}
+              value={form.customerName}
+              onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+              placeholder="Auto-filled from invoice"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Payment Amount</label>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Project Name</label>
+            <input
+              className="input"
+              value={form.projectName}
+              onChange={(e) => setForm({ ...form, projectName: e.target.value })}
+              placeholder="Auto-filled from invoice"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Package Name</label>
+            <input
+              className="input"
+              value={form.packageName}
+              onChange={(e) => setForm({ ...form, packageName: e.target.value })}
+              placeholder="Auto-filled from invoice"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Payment Amount *</label>
             <input
               type="number"
               className="input"
@@ -635,15 +565,7 @@ export default function PaymentsPage() {
               onChange={(e) => setForm({ ...form, paymentAmount: e.target.value })}
               min="0"
               step="0.01"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Due Date</label>
-            <input
-              type="date"
-              className="input"
-              value={form.dueDate}
-              onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+              required
             />
           </div>
           <div>
@@ -653,56 +575,29 @@ export default function PaymentsPage() {
               value={form.paymentType}
               onChange={(e) => setForm({ ...form, paymentType: e.target.value })}
             >
-              <option value="advance">Advance</option>
-              <option value="milestone">Milestone</option>
-              <option value="final">Final</option>
-              <option value="refund">Refund</option>
-              <option value="other">Other</option>
+              <option value="1st Due">1st Due</option>
+              <option value="2nd Due">2nd Due</option>
+              <option value="3rd Due">3rd Due</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Interest Rate (%)</label>
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Bank Name</label>
             <input
-              type="number"
               className="input"
-              value={form.interestRate}
-              onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
-              min="0"
-              step="0.01"
+              value={form.bankName}
+              onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+              placeholder="Amount Credit Bank Name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Status</label>
-            <select
+            <label className="block text-sm font-medium text-secondary-700 mb-1.5">Bank Credit Date</label>
+            <input
+              type="date"
               className="input"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
-              <option value="planned">Planned</option>
-              <option value="due">Due</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <div className="rounded-lg border border-secondary-200 p-4 bg-secondary-50">
-              <div className="text-sm font-semibold mb-2 text-secondary-900">Smart Calculation</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-secondary-600">Total Payable:</span>
-                  <span className="font-semibold text-secondary-900 ml-2">₹{smart.totalPayable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-secondary-600">Pending Dues:</span>
-                  <span className="font-semibold text-secondary-900 ml-2">₹{smart.pendingDues.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-secondary-600">Interest:</span>
-                  <span className="font-semibold text-secondary-900 ml-2">₹{smart.computedInterest.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            </div>
+              value={form.bankCreditDate}
+              onChange={(e) => setForm({ ...form, bankCreditDate: e.target.value })}
+              placeholder="Payment Credit in Bank Date"
+            />
           </div>
         </form>
       </Modal>
@@ -712,17 +607,15 @@ export default function PaymentsPage() {
 
 function defaultForm() {
   return {
-    meetingTitle: '',
-    meetingDate: new Date().toISOString().slice(0,10),
-    participants: '',
-    agenda: '',
-    discussionNotes: '',
-    agreedPaymentTerms: '',
+    paymentReceiptDate: '',
+    invoiceId: '',
+    customerName: '',
+    projectName: '',
+    packageName: '',
     paymentAmount: 0,
-    dueDate: '',
-    paymentType: 'milestone',
-    interestRate: 0,
-    status: 'planned'
+    paymentType: '1st Due',
+    bankName: '',
+    bankCreditDate: '',
   }
 }
 

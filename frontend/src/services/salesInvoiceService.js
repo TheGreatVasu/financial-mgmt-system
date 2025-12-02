@@ -27,3 +27,14 @@ export async function getSalesInvoiceDashboard(token) {
   }
 }
 
+export function createSalesInvoiceService(token) {
+  const api = createApiClient(token)
+  return {
+    list: (params = {}) => api.get('/dashboard/sales-invoice', { params }).then(r => {
+      // Extract invoices from dashboard response
+      const dashboardData = r.data?.data || {}
+      return { data: dashboardData.invoices || [], meta: { total: dashboardData.invoices?.length || 0 } }
+    }),
+  }
+}
+

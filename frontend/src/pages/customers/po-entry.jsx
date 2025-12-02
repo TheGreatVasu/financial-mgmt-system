@@ -11,6 +11,16 @@ export default function CustomerPOEntry() {
   const navigate = useNavigate()
   const { token } = useAuthContext()
   const [formData, setFormData] = useState({
+      const [formError, setFormError] = useState('')
+      function validateEmail(email) {
+        // Accept only company domain or gmail.com
+        return /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/.test(email)
+      }
+
+      function validatePhone(phone) {
+        // Allow only digits, optional + at start
+        return /^\+?\d{7,15}$/.test(phone || '')
+      }
     // Customer Details
     customerName: '',
     customerAddress: '',
@@ -72,16 +82,29 @@ export default function CustomerPOEntry() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    setFormError('')
     setLoading(true)
-    
+
+    // Validation: check for email and phone fields if present
+    if (formData.email && !validateEmail(formData.email)) {
+      setFormError('Email must be a valid @financialmgmt.com or @gmail.com address')
+      setLoading(false)
+      return
+    }
+    if (formData.phone && !validatePhone(formData.phone)) {
+      setFormError('Phone number must contain only digits and be 7-15 digits long')
+      setLoading(false)
+      return
+    }
+
     try {
       const api = createApiClient(token)
-      
+
       // Export to Excel
       const response = await api.post('/customers/po-entry/export', formData, {
         responseType: 'blob'
       })
-      
+
       // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
@@ -93,9 +116,9 @@ export default function CustomerPOEntry() {
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
-      
+
       toast.success('PO Entry exported to Excel successfully!')
-      
+
       // Optionally navigate back or stay on page
       // navigate('/customers')
     } catch (error) {
@@ -313,6 +336,11 @@ export default function CustomerPOEntry() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
+          {formError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              {formError}
+            </div>
+          )}
           {sections.map((section, sectionIndex) => (
             <div key={sectionIndex} className="rounded-xl border border-secondary-200 bg-white shadow-sm overflow-hidden">
               {/* Section Header */}
