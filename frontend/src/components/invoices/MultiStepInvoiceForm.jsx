@@ -331,53 +331,96 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
 
   return (
     <div className="space-y-6">
-      {/* Progress Bar */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-secondary-700">
-            Step {currentStep} of {TOTAL_STEPS}: {stepTitles[currentStep - 1]}
-          </span>
-          <span className="text-sm text-secondary-500">
-            {Math.round((currentStep / TOTAL_STEPS) * 100)}% Complete
+      {/* Modern Progress Bar */}
+      <div className="mb-8">
+        {/* Progress Info */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            {stepTitles[currentStep - 1]}
+          </h3>
+          <span className="text-sm font-medium text-primary-600">
+            Step {currentStep} of {TOTAL_STEPS}
           </span>
         </div>
-        <div className="w-full h-2 bg-secondary-200 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary-600 transition-all duration-300"
-            style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Step Indicator */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-secondary-200">
-        {stepTitles.map((title, index) => (
-          <div
-            key={index + 1}
-            className={`flex flex-col items-center flex-1 ${
-              index + 1 < currentStep ? 'text-primary-600' :
-              index + 1 === currentStep ? 'text-primary-700 font-semibold' :
-              'text-secondary-400'
-            }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mb-1 ${
-                index + 1 < currentStep
-                  ? 'bg-primary-600 border-primary-600 text-white'
-                  : index + 1 === currentStep
-                  ? 'bg-primary-100 border-primary-600 text-primary-700'
-                  : 'bg-white border-secondary-300 text-secondary-400'
-              }`}
-            >
-              {index + 1 < currentStep ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <span className="text-sm font-semibold">{index + 1}</span>
-              )}
-            </div>
-            <span className="text-xs text-center hidden md:block">{title.split(' ')[0]}</span>
+        
+        {/* Progress Bar */}
+        <div className="relative">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-500 ease-out"
+              style={{ width: `${((currentStep - 1) / (TOTAL_STEPS - 1)) * 100}%` }}
+              role="progressbar"
+              aria-valuenow={currentStep}
+              aria-valuemin={1}
+              aria-valuemax={TOTAL_STEPS}
+            />
           </div>
-        ))}
+          
+          {/* Step Indicators */}
+          <div className="flex justify-between mt-4 relative">
+            {stepTitles.map((_, index) => {
+              const step = index + 1;
+              const isCompleted = step < currentStep;
+              const isActive = step === currentStep;
+              const isUpcoming = step > currentStep;
+              
+              return (
+                <button
+                  key={step}
+                  onClick={() => step < currentStep && setCurrentStep(step)}
+                  className={`flex flex-col items-center group relative focus:outline-none ${
+                    isCompleted ? 'cursor-pointer' : 'cursor-default'
+                  }`}
+                  disabled={!isCompleted}
+                  aria-label={`Step ${step}: ${stepTitles[index]}`}
+                >
+                  <div 
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                      isCompleted 
+                        ? 'bg-primary-600 border-primary-600 text-white transform hover:scale-110' 
+                        : isActive 
+                          ? 'bg-white border-primary-600 text-primary-700 shadow-lg scale-110' 
+                          : 'bg-white border-gray-300 text-gray-400'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : (
+                      <span className={`font-semibold ${isActive ? 'text-primary-700' : 'text-gray-500'}`}>
+                        {step}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Step Title */}
+                  <span 
+                    className={`mt-2 text-xs font-medium text-center transition-colors duration-200 ${
+                      isActive ? 'text-primary-700 font-semibold' : 'text-gray-500'
+                    }`}
+                  >
+                    {stepTitles[index].split(' ')[0]}
+                  </span>
+                  
+                  {/* Tooltip for full step title */}
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                      {stepTitles[index]}
+                    </div>
+                    <div className="w-2 h-2 bg-gray-900 transform rotate-45 -mt-1 mx-auto"></div>
+                  </div>
+                </button>
+              );
+            })}
+            
+            {/* Connector lines */}
+            <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-200 -z-10">
+              <div 
+                className="h-full bg-primary-500 transition-all duration-500 ease-out"
+                style={{ width: `${((currentStep - 1) / (TOTAL_STEPS - 1)) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Step Content */}
