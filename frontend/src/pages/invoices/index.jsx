@@ -4,6 +4,7 @@ import { Download, Plus, Filter as FilterIcon, Edit, Trash2, Eye, Search, Loader
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createInvoiceService } from '../../services/invoiceService.js'
+import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx'
 import MultiStepInvoiceForm from '../../components/invoices/MultiStepInvoiceForm.jsx'
 import Modal from '../../components/ui/Modal.jsx'
@@ -207,12 +208,13 @@ export default function InvoicesList() {
           <div className="card-content">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
-                <input
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
+              <SmartDropdown
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  className="input pl-10 w-full"
+                  onChange={(val) => setQ(val)}
+                  fieldName="invoiceNumber"
                   placeholder="Search by invoice number or customer..."
+                  inputClassName="input pl-10 w-full"
                 />
               </div>
               <select

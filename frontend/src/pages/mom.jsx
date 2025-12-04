@@ -1,6 +1,7 @@
 import DashboardLayout from '../components/layout/DashboardLayout'
 import React, { useState, useEffect, useMemo } from 'react'
 import Modal from '../components/ui/Modal.jsx'
+import SmartDropdown from '../components/ui/SmartDropdown.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { createMOMService } from '../services/momService'
 import { getSalesInvoiceDashboard } from '../services/salesInvoiceService'
@@ -694,20 +695,22 @@ export default function MOMPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1.5">Customer Name</label>
-                <input
-                  className="input"
+                <SmartDropdown
                   value={form.customerName}
-                  onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+                  onChange={(val) => setForm({ ...form, customerName: val })}
+                  fieldName="customerName"
                   placeholder="Auto-filled from invoice"
+                  inputClassName="input"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1.5">Project Name</label>
-                <input
-                  className="input"
+                <SmartDropdown
                   value={form.projectName}
-                  onChange={(e) => setForm({ ...form, projectName: e.target.value })}
+                  onChange={(val) => setForm({ ...form, projectName: val })}
+                  fieldName="projectName"
                   placeholder="Auto-filled from invoice"
+                  inputClassName="input"
                 />
               </div>
               <div>

@@ -2,6 +2,7 @@ import React from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 
 const companyProfileSchema = z.object({
   companyName: z.string().min(1, 'Company name is required'),
@@ -91,6 +92,16 @@ export default function Step1CompanyProfile({
                 </option>
               ))}
             </select>
+          ) : name === 'emailId' || name === 'contactNumber' ? (
+            <SmartDropdown
+              value={field.value as string}
+              onChange={field.onChange}
+              fieldName={name}
+              placeholder={placeholder}
+              inputClassName={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                error ? 'border-red-500' : 'border-gray-300'
+              }`}
+            />
           ) : (
             <input
               {...field}

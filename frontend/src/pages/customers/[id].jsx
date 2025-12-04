@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Loader2, AlertCircle, Save, X, Building2, Mail, Phone, FileText, DollarSign, MapPin, Users, CreditCard, Plus, Trash2, Edit, Eye } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
+import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -228,7 +229,21 @@ export default function CustomerDetail() {
   }
 
   function updatePaymentTerm(index, field, value) {
-    setPaymentTerms((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+    setPaymentTerms((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              [field]:
+                field === 'creditDays'
+                  ? value === '' || value === null
+                    ? ''
+                    : Number(value)
+                  : value,
+            }
+          : item
+      )
+    )
   }
 
   function addPaymentTerm() {
@@ -573,12 +588,13 @@ export default function CustomerDetail() {
                   <label className="block text-sm font-medium text-gray-700 mb-3">GST Numbers</label>
                   <div className="grid gap-3">
                     {companyProfile.gstNumbers.map((gst, index) => (
-                      <input
+                      <SmartDropdown
                         key={index}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder={`GST No ${index + 1}`}
                         value={gst}
-                        onChange={(e) => updateGst(index, e.target.value)}
+                        onChange={(val) => updateGst(index, val)}
+                        fieldName="gstNo"
+                        placeholder={`GST No ${index + 1}`}
+                        inputClassName="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ))}
                     <button type="button" className="w-fit px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm" onClick={addGstField}>
@@ -770,8 +786,8 @@ export default function CustomerDetail() {
                         type="number"
                         min={0}
                         placeholder="Credit Days"
-                        value={term.creditDays}
-                        onChange={(e) => updatePaymentTerm(index, 'creditDays', Number(e.target.value))}
+                        value={term.creditDays === '' ? '' : term.creditDays ?? ''}
+                        onChange={(e) => updatePaymentTerm(index, 'creditDays', e.target.value)}
                       />
                       <input
                         className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"

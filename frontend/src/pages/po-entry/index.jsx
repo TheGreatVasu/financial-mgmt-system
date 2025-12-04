@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
+import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
+
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import { createPOEntryService } from '../../services/poEntryService'
@@ -253,22 +255,15 @@ export default function POEntry() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Customer Name" required>
-                <select
-                  name="customerName"
+                <SmartDropdown
                   value={form.customerName}
-                  onChange={(e) => handleCustomerSelect(e.target.value)}
-                  className={`input ${errors.customerName ? 'border-danger-400' : ''}`}
-                >
-                  <option value="">Select from Master Data</option>
-                  {masterOptions.customers.map((customer) => {
-                    const optionLabel = customer.companyName || customer.name || 'Unnamed Customer'
-                    return (
-                      <option key={customer.id ?? optionLabel} value={optionLabel}>
-                        {optionLabel}
-                      </option>
-                    )
-                  })}
-                </select>
+                  onChange={(val) => {
+                    handleCustomerSelect(val)
+                  }}
+                  fieldName="customerName"
+                  placeholder="Select from Master Data or start typing"
+                  inputClassName={`input ${errors.customerName ? 'border-danger-400' : ''}`}
+                />
                 {errors.customerName ? <span className="text-xs text-danger-600">{errors.customerName}</span> : null}
               </Field>
               <Field label="Customer Address" required>
@@ -340,7 +335,13 @@ export default function POEntry() {
                 </select>
               </Field>
               <Field label="GST No">
-                <input name="gstNo" value={form.gstNo} onChange={handleChange} className="input" placeholder="27ABCDE1234F1Z5" />
+                <SmartDropdown
+                  value={form.gstNo}
+                  onChange={(val) => handleChange({ target: { name: 'gstNo', value: val } })}
+                  fieldName="gstNo"
+                  placeholder="27ABCDE1234F1Z5"
+                  inputClassName="input"
+                />
               </Field>
               <Field label="Sales Manager">
                 <select name="salesManager" value={form.salesManager} onChange={handleChange} className="input">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
+import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 
@@ -268,7 +269,21 @@ export default function CustomerNew() {
   }
 
   function updatePaymentTerm(index, field, value) {
-    setPaymentTerms((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+    setPaymentTerms((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              [field]:
+                field === 'creditDays'
+                  ? value === '' || value === null
+                    ? ''
+                    : Number(value)
+                  : value,
+            }
+          : item
+      )
+    )
   }
 
   function addPaymentTerm() {
@@ -601,12 +616,13 @@ export default function CustomerNew() {
         <label className="form-label">GST Numbers</label>
         <div className="grid gap-3">
           {(companyProfile.gstNumbers || []).map((gst, index) => (
-            <input
+            <SmartDropdown
               key={index}
-              className="input"
-              placeholder={`GST No ${index + 1}`}
               value={gst}
-              onChange={e => updateGst(index, e.target.value)}
+              onChange={val => updateGst(index, val)}
+              fieldName="gstNo"
+              placeholder={`GST No ${index + 1}`}
+              inputClassName="input"
             />
           ))}
           <button type="button" className="btn btn-outline btn-sm w-fit" onClick={addGstField}>Add GST No</button>
@@ -681,33 +697,35 @@ export default function CustomerNew() {
       <h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2>
     </div>
     <div className="card-content space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="form-label">Contact Person Name *</label>
-          <input
-            className="input"
+          <SmartDropdown
             value={customerProfile.contactPersonName}
-            onChange={e => setCustomerProfile({ ...customerProfile, contactPersonName: e.target.value })}
+            onChange={val => setCustomerProfile({ ...customerProfile, contactPersonName: val })}
+            fieldName="customerName"
             placeholder="Enter contact person name"
+            inputClassName="input"
           />
         </div>
         <div>
           <label className="form-label">Contact Person Number *</label>
-          <input
-            className="input"
+          <SmartDropdown
             value={customerProfile.contactPersonNumber}
-            onChange={e => setCustomerProfile({ ...customerProfile, contactPersonNumber: e.target.value })}
+            onChange={val => setCustomerProfile({ ...customerProfile, contactPersonNumber: val })}
+            fieldName="contactPersonNumber"
             placeholder="Enter phone number"
+            inputClassName="input"
           />
         </div>
         <div>
           <label className="form-label">Email ID *</label>
-          <input
-            className="input"
-            type="email"
+          <SmartDropdown
             value={customerProfile.emailId}
-            onChange={e => setCustomerProfile({ ...customerProfile, emailId: e.target.value })}
+            onChange={val => setCustomerProfile({ ...customerProfile, emailId: val })}
+            fieldName="emailId"
             placeholder="Enter email address"
+            inputClassName="input"
           />
         </div>
         <div>
@@ -796,8 +814,8 @@ export default function CustomerNew() {
                       <input
                         className="input"
                         type="number"
-                        value={term.creditDays}
-                        onChange={e => updatePaymentTerm(index, 'creditDays', parseInt(e.target.value) || 0)}
+                        value={term.creditDays === '' ? '' : term.creditDays ?? ''}
+                        onChange={e => updatePaymentTerm(index, 'creditDays', e.target.value)}
                         placeholder="0"
                       />
                     </div>
@@ -975,8 +993,15 @@ export default function CustomerNew() {
       
       {/* Success Popup Modal */}
       {showSuccessPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in">
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[12000]"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in relative">
             {/* Success Icon */}
             <div className="flex justify-center mb-6">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
