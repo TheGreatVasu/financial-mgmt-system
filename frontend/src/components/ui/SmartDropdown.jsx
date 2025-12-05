@@ -48,8 +48,6 @@ export default function SmartDropdown({
     [fieldName]
   )
 
-  const openOnFocus = behavior.openOnFocus === true
-
   const canSearch = !!token && !!effectiveFieldKey
 
   useEffect(() => {
@@ -85,13 +83,15 @@ export default function SmartDropdown({
             )
 
       setSuggestions(filtered)
-      setOpen(filtered.length > 0 || openOnFocus)
+      // Do not auto-open; keep current open state so list only shows after user clicks
+      setOpen((prev) => prev)
       setHighlightIndex(-1)
     } catch (err) {
       // Fail silently; we never block typing
       // eslint-disable-next-line no-console
       console.error('SmartDropdown search error:', err)
       setSuggestions([])
+      // Do not auto-open on error
       setOpen(false)
     } finally {
       setLoading(false)
@@ -181,6 +181,16 @@ export default function SmartDropdown({
     [effectiveFieldKey]
   )
 
+  const handleManualOpen = () => {
+    setOpen(true)
+    if (!initialLoadedRef.current) {
+      initialLoadedRef.current = true
+      runSearch(query)
+    } else if (suggestions.length === 0) {
+      runSearch(query)
+    }
+  }
+
   return (
     <div className="relative" ref={wrapperRef}>
       <input
@@ -190,18 +200,8 @@ export default function SmartDropdown({
           setQuery(e.target.value)
           onChange?.(e.target.value)
         }}
-        onFocus={() => {
-          if (!open && openOnFocus) {
-            setOpen(true)
-            if (!initialLoadedRef.current) {
-              initialLoadedRef.current = true
-              // Load initial suggestions without waiting for typing
-              runSearch(query)
-            }
-          } else if (suggestions.length > 0) {
-            setOpen(true)
-          }
-        }}
+        // Only open when the user clicks the field
+        onClick={handleManualOpen}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
@@ -216,30 +216,40 @@ export default function SmartDropdown({
           <div className="h-3 w-3 border-2 border-gray-300 border-t-primary-500 rounded-full animate-spin" />
         </div>
       )}
-      {open && suggestions.length > 0 && (
+      {open && (
         <div
           id={listboxId}
           role="listbox"
           className="absolute z-20 mt-1 w-full rounded-md border border-secondary-200 bg-white shadow-lg max-h-60 overflow-auto text-sm"
         >
-          {suggestions.map((s, idx) => (
-            <button
-              key={`${s}-${idx}`}
-              type="button"
-              className={`w-full text-left px-3 py-2 hover:bg-secondary-50 ${
-                idx === highlightIndex ? 'bg-secondary-100' : ''
-              }`}
-              role="option"
-              aria-selected={idx === highlightIndex}
-              onMouseDown={(e) => {
-                // Prevent input blur before click
-                e.preventDefault()
-                handleSelect(s)
-              }}
-            >
-              {renderHighlighted(s)}
-            </button>
-          ))}
+          {loading && suggestions.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500 text-center">
+              Loading suggestions...
+            </div>
+          ) : suggestions.length > 0 ? (
+            suggestions.map((s, idx) => (
+              <button
+                key={`${s}-${idx}`}
+                type="button"
+                className={`w-full text-left px-3 py-2 hover:bg-secondary-50 ${
+                  idx === highlightIndex ? 'bg-secondary-100' : ''
+                }`}
+                role="option"
+                aria-selected={idx === highlightIndex}
+                onMouseDown={(e) => {
+                  // Prevent input blur before click
+                  e.preventDefault()
+                  handleSelect(s)
+                }}
+              >
+                {renderHighlighted(s)}
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-500 text-center">
+              No suggestions found
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -20,8 +20,10 @@ import LoadingScreen from './pages/loading'
 import CustomersList from './pages/customers/index'
 import CustomerNew from './pages/customers/new'
 import CustomerDetail from './pages/customers/[id]'
+import POEntryListPage from './pages/po-entry/list.jsx'
 import POEntry from './pages/po-entry/index'
 import InvoicesList from './pages/invoices/index'
+import InvoiceNewPage from './pages/invoices/new.jsx'
 import InvoiceDetail from './pages/invoices/[id]'
 import NewPOPage from './pages/dashboard/new-po'
 import BoqEntry from './pages/dashboard/boq-entry'
@@ -188,6 +190,14 @@ export default function App() {
           path="/po-entry"
           element={
             <ProtectedRoute>
+              <POEntryListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/po-entry/new"
+          element={
+            <ProtectedRoute>
               <POEntry />
             </ProtectedRoute>
           }
@@ -198,6 +208,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <InvoicesList />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoices/new"
+          element={
+            <ProtectedRoute>
+              <InvoiceNewPage />
             </ProtectedRoute>
           }
         />

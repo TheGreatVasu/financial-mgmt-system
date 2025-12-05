@@ -6,7 +6,6 @@ import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createInvoiceService } from '../../services/invoiceService.js'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx'
-import MultiStepInvoiceForm from '../../components/invoices/MultiStepInvoiceForm.jsx'
 import Modal from '../../components/ui/Modal.jsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -18,7 +17,6 @@ export default function InvoicesList() {
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('all')
   const [q, setQ] = useState('')
-  const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [deletingInvoice, setDeletingInvoice] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -46,19 +44,6 @@ export default function InvoicesList() {
       console.error('Failed to load invoices:', err)
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleCreate(payload) {
-    try {
-      await invoiceService.create(payload)
-      toast.success('Invoice created successfully!')
-      setShowCreateModal(false)
-      await loadInvoices()
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to create invoice'
-      toast.error(errorMsg)
-      throw err
     }
   }
 
@@ -169,7 +154,7 @@ export default function InvoicesList() {
               <span className="hidden sm:inline">Export</span>
             </button>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => navigate('/invoices/new')}
               className="btn btn-primary btn-md inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -254,7 +239,7 @@ export default function InvoicesList() {
                 </p>
                 {invoices.length === 0 && (
                   <button
-                    onClick={() => setShowCreateModal(true)}
+                    onClick={() => navigate('/invoices/new')}
                     className="btn btn-primary btn-md inline-flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
@@ -375,21 +360,6 @@ export default function InvoicesList() {
           </div>
         </div>
       </div>
-
-      {/* Create Invoice Modal */}
-      <Modal
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create New Invoice"
-        variant="dialog"
-        size="xl"
-        footer={null}
-      >
-        <MultiStepInvoiceForm
-          onSubmit={handleCreate}
-          onCancel={() => setShowCreateModal(false)}
-        />
-      </Modal>
 
       {/* Edit Invoice Modal */}
       <Modal

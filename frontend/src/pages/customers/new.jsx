@@ -105,6 +105,10 @@ export default function CustomerNew() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [createdRecordId, setCreatedRecordId] = useState(null)
 
+  const progressPercent = Math.round(
+    (currentStep / Math.max(1, STEPS.length - 1)) * 100
+  )
+
   function validateEmail(email) {
     // Accept only company domain or gmail.com
     return /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/.test(email)
@@ -400,30 +404,70 @@ export default function CustomerNew() {
   return (
     <ErrorBoundary>
       <DashboardLayout>
-      <div className="flex flex-col gap-1 mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Creation of Master Data</h1>
-        <p className="text-sm text-secondary-600">Stepwise onboarding for company, customer, payment, and team details.</p>
-      </div>
-      {/* Stepper */}
-      <div className="flex items-center gap-3 mb-8">
-        {STEPS.map((step, idx) => {
-          const isCurrentStep = idx === currentStep
-          const isPastStep = idx < currentStep
-          const canNavigate = isPastStep || (isCurrentStep && canGoNext())
-          
-          return (
-            <button
-              key={step.label}
-              type="button"
-              onClick={() => goToStep(idx)}
-              className={`flex flex-col items-center px-2 focus:outline-none ${isCurrentStep ? 'text-primary-700 font-bold' : 'text-gray-400'} ${canNavigate ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-              disabled={idx > currentStep && !canGoNext()}
-            >
-              <span className={`rounded-full w-8 h-8 flex items-center justify-center border-2 ${idx <= currentStep ? 'border-primary-600 bg-primary-50' : 'border-gray-300 bg-white'}`}>{idx + 1}</span>
-              <span className="text-xs mt-1">{step.label}</span>
-            </button>
-          )
-        })}
+      <div className="mb-8 rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-secondary-900">Creation of Master Data</h1>
+            <p className="text-sm text-secondary-600">Stepwise onboarding for company, customer, payment, and team details.</p>
+          </div>
+          <div className="text-sm font-medium text-primary-700 bg-white/70 border border-primary-100 rounded-full px-4 py-2 shadow-xs">
+            {progressPercent}% complete
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-5">
+          <div className="h-2 w-full rounded-full bg-secondary-100 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-300 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5">
+            {STEPS.map((step, idx) => {
+              const isCurrentStep = idx === currentStep
+              const isPastStep = idx < currentStep
+              const canNavigate = isPastStep || (isCurrentStep && canGoNext())
+              return (
+                <button
+                  key={step.label}
+                  type="button"
+                  onClick={() => goToStep(idx)}
+                  disabled={idx > currentStep && !canGoNext()}
+                  className={`group relative flex flex-col rounded-xl border px-3 py-3 text-left shadow-sm transition-all focus:outline-none ${
+                    isCurrentStep
+                      ? 'border-primary-200 bg-white shadow-primary-100'
+                      : isPastStep
+                      ? 'border-success-200 bg-success-50 text-secondary-800'
+                      : 'border-secondary-200 bg-white text-secondary-500'
+                  } ${canNavigate ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-semibold ${
+                        isCurrentStep
+                          ? 'border-primary-500 text-primary-700 bg-primary-50'
+                          : isPastStep
+                          ? 'border-success-500 text-success-700 bg-success-50'
+                          : 'border-secondary-200 text-secondary-500 bg-secondary-50'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1">
+                      <div className={`text-sm font-semibold ${isCurrentStep ? 'text-primary-800' : ''}`}>
+                        {step.label}
+                      </div>
+                      <div className="text-xs text-secondary-500">
+                        {isCurrentStep ? 'In progress' : isPastStep ? 'Completed' : 'Pending'}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
       <form onSubmit={onSubmit} className="space-y-6">
         {error && (
