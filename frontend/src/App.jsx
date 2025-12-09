@@ -202,6 +202,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/po-entry/:id"
+          element={
+            <ProtectedRoute>
+              <POEntry />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/invoices"

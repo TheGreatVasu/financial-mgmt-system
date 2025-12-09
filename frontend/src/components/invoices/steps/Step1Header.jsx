@@ -8,17 +8,10 @@ export default function Step1Header({ formData, updateFormData, errors, customer
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-1">
-            Key ID
-          </label>
-          <input
-            type="text"
-            className={`input ${errors.keyId ? 'border-danger-500' : ''}`}
-            value={formData.keyId || ''}
-            onChange={(e) => updateFormData('keyId', e.target.value)}
-            placeholder="Enter Key ID"
-          />
-          {errors.keyId && <p className="text-xs text-danger-500 mt-1">{errors.keyId}</p>}
+          <label className="block text-sm font-medium text-secondary-700 mb-1">Key ID</label>
+          <div className="input pointer-events-none cursor-not-allowed bg-secondary-50 text-secondary-600">
+            {formData.keyId || 'Assigned automatically on save'}
+          </div>
         </div>
 
         <div>

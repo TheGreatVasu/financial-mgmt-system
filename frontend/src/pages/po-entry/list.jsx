@@ -49,7 +49,7 @@ function Card({ entry }) {
       <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
         <div className="text-xs text-secondary-500">Last updated: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—'}</div>
         <Link
-          to="/po-entry/new"
+          to={`/po-entry/${entry.id || entry._id || entry.poNo}`}
           className="text-primary-700 text-sm font-semibold hover:text-primary-800 inline-flex items-center gap-1"
         >
           Edit / View

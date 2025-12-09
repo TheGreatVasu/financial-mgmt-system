@@ -1,44 +1,54 @@
-import apiClient from './apiClient'
+import { createApiClient } from './apiClient'
+
+const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+const apiClient = createApiClient(token || undefined)
 
 export interface CompanyProfileData {
+  logo?: File | null
   companyName: string
   legalEntityName: string
+
+  corporateAddress: string
+  corporateDistrict: string
+  corporateState: string
+  corporateCountry: string
+  corporatePinCode: string
+
+  correspondenceAddress: string
+  correspondenceDistrict: string
+  correspondenceState: string
+  correspondenceCountry: string
+  correspondencePinCode: string
+
+  otherOfficeType: 'Plant Address' | 'Site Office' | 'Marketing Office' | string
+  otherOfficeAddress: string
+  otherOfficeGst: string
+  otherOfficeDistrict: string
+  otherOfficeState: string
+  otherOfficeCountry: string
+  otherOfficePinCode: string
+
+  primaryContactName: string
+  primaryContactNumber: string
+  primaryContactEmail: string
+}
+
+export interface CustomerProfileData {
+  logo?: string
+  customerName: string
+  legalEntityName: string
   corporateOfficeAddress: string
+  correspondenceAddress: string
   district: string
   state: string
   country: string
   pinCode: string
-  correspondenceAddress: string
-  gstin: string
-  panNumber: string
-  cinNumber: string
-  businessType: string
-  businessUnit: string
-  website?: string
-  emailId: string
+  segment: 'Domestic' | 'Export'
+  gstNumber: string
+  poIssuingAuthority: string
+  designation: string
   contactNumber: string
-}
-
-export interface CustomerProfileData {
-  customerName: string
-  customerCode: string
-  gstin: string
-  panNumber: string
-  companyType: string
-  segment: string
-  region: string
-  zone: string
-  billingAddress: string
-  shippingAddress: string
-  contactPersonName: string
-  contactPersonNumber: string
-  contactEmailId: string
-  creditPeriod: string
-  paymentTerms: string
-  deliveryTerms: string
-  projectManager: string
-  anyHold: string
-  remarks?: string
+  emailId: string
 }
 
 export interface PaymentTermsData {

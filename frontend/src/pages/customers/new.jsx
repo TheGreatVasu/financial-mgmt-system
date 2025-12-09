@@ -7,16 +7,21 @@ import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 
+const DEV_BYPASS_VALIDATION = true
+
 const MASTER_ROLES = [
   'Sales Manager',
   'Sales Head',
   'Business Head',
-  'Collection Person Incharge',
+  'Collection Incharge',
   'Sales Agent',
-  'Collection Agent'
+  'Collection Agent',
+  'Project Manager',
+  'Project Head'
 ]
 
 const emptyContact = () => ({
+  photo: '',
   name: '',
   contactNumber: '',
   email: '',
@@ -35,35 +40,55 @@ const emptyAddress = (label) => ({
   gstNumber: ''
 })
 
+const emptyConsignee = () => ({
+  logo: '',
+  consigneeName: '',
+  consigneeAddress: '',
+  customerName: '',
+  legalEntityName: '',
+  city: '',
+  state: '',
+  gstNumber: '',
+  contactPersonName: '',
+  designation: '',
+  contactNumber: '',
+  emailId: ''
+})
+
+const emptyPayer = () => ({
+  logo: '',
+  payerName: '',
+  payerAddress: '',
+  customerName: '',
+  legalEntityName: '',
+  city: '',
+  state: '',
+  gstNumber: '',
+  contactPersonName: '',
+  designation: '',
+  contactNumber: '',
+  emailId: ''
+})
+
 const defaultPaymentTerm = () => ({
-  title: '',
-  type: 'Milestone Based',
-  description: '',
-  creditDays: 0,
-  notes: ''
+  basic: '',
+  freight: '',
+  taxes: '',
+  due1: '',
+  due2: '',
+  due3: '',
+  finalDue: '',
+  description: ''
 })
 
 const STEPS = [
-  {
-    label: 'Company Profile',
-    required: true,
-  },
-  {
-    label: 'Customer Profile',
-    required: true,
-  },
-  {
-    label: 'Payment Terms',
-    required: false,
-  },
-  {
-    label: 'Team Profiles',
-    required: false,
-  },
-  {
-    label: 'Additional Step',
-    required: false,
-  },
+  { label: 'Company Profile', required: true },
+  { label: 'Customer Profile', required: true },
+  { label: 'Consignee Profile', required: true },
+  { label: 'Payer Profile', required: true },
+  { label: 'Employee Profile', required: false },
+  { label: 'Payment Terms', required: false },
+  { label: 'Additional Step', required: false },
 ]
 
 export default function CustomerNew() {
@@ -74,31 +99,55 @@ export default function CustomerNew() {
   const [currentStep, setCurrentStep] = useState(0)
 
   const [companyProfile, setCompanyProfile] = useState({
+    logo: null,
     companyName: '',
     legalEntityName: '',
-    corporateOffice: emptyAddress('Corporate Office'),
-    marketingOffice: emptyAddress('Marketing Office'),
+    corporateAddress: '',
+    corporateDistrict: '',
+    corporateState: '',
+    corporateCountry: '',
+    corporatePinCode: '',
     correspondenceAddress: '',
-    gstNumbers: [''],
-    siteOffices: [emptyAddress('Site Office 1')],
-    plantAddresses: [emptyAddress('Plant Address 1')],
+    correspondenceDistrict: '',
+    correspondenceState: '',
+    correspondenceCountry: '',
+    correspondencePinCode: '',
+    otherOfficeType: 'Plant Address',
+    otherOfficeAddress: '',
+    otherOfficeGst: '',
+    otherOfficeDistrict: '',
+    otherOfficeState: '',
+    otherOfficeCountry: '',
+    otherOfficePinCode: '',
+    otherOfficeContactName: '',
+    otherOfficeContactNumber: '',
+    otherOfficeEmail: '',
     primaryContact: emptyContact()
   })
 
   const [customerProfile, setCustomerProfile] = useState({
-    department: '',
-    designation: '',
-    jobRole: '',
+    logo: '',
+    customerName: '',
+    legalEntityName: '',
+    corporateOfficeAddress: '',
+    correspondenceAddress: '',
+    district: '',
+    state: '',
+    country: '',
+    pinCode: '',
     segment: '',
-    contactPersonName: '',
-    contactPersonNumber: '',
+    gstNumber: '',
+    poIssuingAuthority: '',
+    designation: '',
+    contactNumber: '',
     emailId: ''
   })
 
+  const [consigneeProfiles, setConsigneeProfiles] = useState([emptyConsignee()])
+  const [payerProfiles, setPayerProfiles] = useState([emptyPayer()])
+
   const [paymentTerms, setPaymentTerms] = useState([defaultPaymentTerm()])
-  const [teamProfiles, setTeamProfiles] = useState(
-    MASTER_ROLES.map((role) => ({ role, ...emptyContact() }))
-  )
+  const [teamProfiles, setTeamProfiles] = useState([{ role: MASTER_ROLES[0], ...emptyContact() }])
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -141,9 +190,31 @@ export default function CustomerNew() {
         setError('Customer email must be a valid @financialmgmt.com or @gmail.com address')
         return false
       }
-      if (customerProfile?.contactPersonNumber && !validatePhone(customerProfile.contactPersonNumber)) {
+      if (customerProfile?.contactNumber && !validatePhone(customerProfile.contactNumber)) {
         setError('Customer contact number must contain only digits and be 7-15 digits long')
         return false
+      }
+
+      for (const consignee of consigneeProfiles || []) {
+        if (consignee?.emailId && !validateEmail(consignee.emailId)) {
+          setError('Consignee email must be a valid @financialmgmt.com or @gmail.com address')
+          return false
+        }
+        if (consignee?.contactNumber && !validatePhone(consignee.contactNumber)) {
+          setError('Consignee contact number must contain only digits and be 7-15 digits long')
+          return false
+        }
+      }
+
+      for (const payer of payerProfiles || []) {
+        if (payer?.emailId && !validateEmail(payer.emailId)) {
+          setError('Payer email must be a valid @financialmgmt.com or @gmail.com address')
+          return false
+        }
+        if (payer?.contactNumber && !validatePhone(payer.contactNumber)) {
+          setError('Payer contact number must contain only digits and be 7-15 digits long')
+          return false
+        }
       }
       // Step 4: Team Profiles
       for (const member of (teamProfiles || [])) {
@@ -166,24 +237,90 @@ export default function CustomerNew() {
   }
 
   const canGoNext = useCallback(() => {
+    if (DEV_BYPASS_VALIDATION) return true
     try {
       if (currentStep === 0) {
-        // Company Profile required fields - don't call validateAllSteps here to avoid infinite loops
-        if (!companyProfile?.companyName?.trim() && !companyProfile?.legalEntityName?.trim()) {
-          return false
-        }
-        return true
+        // Company Profile required fields - basic gating
+        const requiredFields = [
+          'companyName',
+          'legalEntityName',
+          'corporateAddress',
+          'corporateDistrict',
+          'corporateState',
+          'corporateCountry',
+          'corporatePinCode',
+          'correspondenceAddress',
+          'correspondenceDistrict',
+          'correspondenceState',
+          'correspondenceCountry',
+          'correspondencePinCode'
+        ]
+        const missing = requiredFields.some((key) => !companyProfile?.[key]?.trim())
+        return !missing
       }
       if (currentStep === 1) {
         // Customer Profile required fields
-        if (!customerProfile?.contactPersonName?.trim() || 
-            !customerProfile?.contactPersonNumber?.trim() || 
-            !customerProfile?.emailId?.trim()) {
-          return false
-        }
+        const requiredFields = [
+          'customerName',
+          'legalEntityName',
+          'corporateOfficeAddress',
+          'correspondenceAddress',
+          'district',
+          'state',
+          'country',
+          'pinCode',
+          'segment',
+          'gstNumber',
+          'poIssuingAuthority',
+          'designation',
+          'contactNumber',
+          'emailId'
+        ]
+        const missing = requiredFields.some((key) => !customerProfile?.[key]?.trim())
+        if (missing) return false
+        return true
+      }
+      if (currentStep === 2) {
+        // Consignee Profile required fields (check first entry)
+        const target = consigneeProfiles?.[0] || emptyConsignee()
+        const requiredFields = [
+          'consigneeName',
+          'consigneeAddress',
+          'customerName',
+          'legalEntityName',
+          'city',
+          'state',
+          'gstNumber',
+          'contactPersonName',
+          'designation',
+          'contactNumber',
+          'emailId'
+        ]
+        const missing = requiredFields.some((key) => !target?.[key]?.trim())
+        if (missing) return false
         return true
       }
       if (currentStep === 3) {
+        // Payer Profile required fields (check first entry)
+        const target = payerProfiles?.[0] || emptyPayer()
+        const requiredFields = [
+          'payerName',
+          'payerAddress',
+          'customerName',
+          'legalEntityName',
+          'city',
+          'state',
+          'gstNumber',
+          'contactPersonName',
+          'designation',
+          'contactNumber',
+          'emailId'
+        ]
+        const missing = requiredFields.some((key) => !target?.[key]?.trim())
+        if (missing) return false
+        return true
+      }
+      if (currentStep === 5) {
         // Team Profiles step - skip validation during render
         return true
       }
@@ -199,7 +336,7 @@ export default function CustomerNew() {
       setCurrentStep(idx)
     } else {
       // Only allow forward if current step is valid
-      if (canGoNext()) {
+      if (DEV_BYPASS_VALIDATION || canGoNext()) {
         setCurrentStep(idx)
       }
     }
@@ -211,6 +348,7 @@ export default function CustomerNew() {
         if (!prev) {
           console.warn('Company profile state is null, initializing...')
           return {
+            logo: null,
             companyName: '',
             legalEntityName: '',
             corporateOffice: emptyAddress('Corporate Office'),
@@ -231,59 +369,13 @@ export default function CustomerNew() {
     }
   }, [])
 
-  function updateNestedAddress(listKey, index, field, value) {
-    try {
-      setCompanyProfile((prev) => {
-        if (!prev[listKey] || !Array.isArray(prev[listKey])) {
-          console.warn(`List key ${listKey} is not an array, initializing...`)
-          return { ...prev, [listKey]: [emptyAddress(`${listKey} 1`)] }
-        }
-        const nextList = prev[listKey].map((item, i) => (i === index ? { ...item, [field]: value } : item))
-        return { ...prev, [listKey]: nextList }
-      })
-    } catch (err) {
-      console.error('Error updating nested address:', err)
-    }
-  }
-
-  function addAddress(listKey, labelPrefix) {
-    setCompanyProfile((prev) => ({
-      ...prev,
-      [listKey]: [...prev[listKey], emptyAddress(`${labelPrefix} ${prev[listKey].length + 1}`)]
-    }))
-  }
-
-  function removeAddress(listKey, index) {
-    setCompanyProfile((prev) => ({
-      ...prev,
-      [listKey]: prev[listKey].filter((_, i) => i !== index)
-    }))
-  }
-
-  function updateGst(index, value) {
-    setCompanyProfile((prev) => {
-      const next = [...prev.gstNumbers]
-      next[index] = value
-      return { ...prev, gstNumbers: next }
-    })
-  }
-
-  function addGstField() {
-    setCompanyProfile((prev) => ({ ...prev, gstNumbers: [...prev.gstNumbers, ''] }))
-  }
-
   function updatePaymentTerm(index, field, value) {
     setPaymentTerms((prev) =>
       prev.map((item, i) =>
         i === index
           ? {
               ...item,
-              [field]:
-                field === 'creditDays'
-                  ? value === '' || value === null
-                    ? ''
-                    : Number(value)
-                  : value,
+              [field]: value,
             }
           : item
       )
@@ -298,13 +390,41 @@ export default function CustomerNew() {
     setPaymentTerms((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function updateConsignee(index, field, value) {
+    setConsigneeProfiles((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    )
+  }
+
+  function addConsignee() {
+    setConsigneeProfiles((prev) => [...prev, emptyConsignee()])
+  }
+
+  function updatePayer(index, field, value) {
+    setPayerProfiles((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    )
+  }
+
+  function addPayer() {
+    setPayerProfiles((prev) => [...prev, emptyPayer()])
+  }
+
   function updateTeamProfile(index, field, value) {
     setTeamProfiles((prev) => prev.map((member, i) => (i === index ? { ...member, [field]: value } : member)))
   }
 
+  function addTeamProfile() {
+    setTeamProfiles((prev) => [...prev, { role: MASTER_ROLES[0], ...emptyContact() }])
+  }
+
+  function removeTeamProfile(index) {
+    setTeamProfiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
   function onNext(e) {
     e?.preventDefault()
-    if (canGoNext()) setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
+    if (DEV_BYPASS_VALIDATION || canGoNext()) setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
 
   function onPrev(e) {
@@ -319,8 +439,80 @@ export default function CustomerNew() {
       setError('Company / legal entity name is required')
       return
     }
-    if (!customerProfile.contactPersonName?.trim() || !customerProfile.contactPersonNumber?.trim() || !customerProfile.emailId?.trim()) {
+    const requiredCompany = [
+      'corporateAddress',
+      'corporateDistrict',
+      'corporateState',
+      'corporateCountry',
+      'corporatePinCode',
+      'correspondenceAddress',
+      'correspondenceDistrict',
+      'correspondenceState',
+      'correspondenceCountry',
+      'correspondencePinCode'
+    ]
+    const missingCompany = requiredCompany.some((key) => !companyProfile?.[key]?.trim())
+    if (missingCompany) {
+      setError('Please fill all required company profile fields')
+      return
+    }
+    const requiredFields = [
+      'customerName',
+      'legalEntityName',
+      'corporateOfficeAddress',
+      'correspondenceAddress',
+      'district',
+      'state',
+      'country',
+      'pinCode',
+      'segment',
+      'gstNumber',
+      'poIssuingAuthority',
+      'designation',
+      'contactNumber',
+      'emailId'
+    ]
+    const missing = requiredFields.some((key) => !customerProfile?.[key]?.trim())
+    if (missing) {
       setError('Please fill all required customer profile fields')
+      return
+    }
+    const firstConsignee = consigneeProfiles?.[0] || emptyConsignee()
+    const requiredConsignee = [
+      'consigneeName',
+      'consigneeAddress',
+      'customerName',
+      'legalEntityName',
+      'city',
+      'state',
+      'gstNumber',
+      'contactPersonName',
+      'designation',
+      'contactNumber',
+      'emailId'
+    ]
+    const missingConsignee = requiredConsignee.some((key) => !firstConsignee?.[key]?.trim())
+    if (missingConsignee) {
+      setError('Please fill all required consignee profile fields')
+      return
+    }
+    const firstPayer = payerProfiles?.[0] || emptyPayer()
+    const requiredPayer = [
+      'payerName',
+      'payerAddress',
+      'customerName',
+      'legalEntityName',
+      'city',
+      'state',
+      'gstNumber',
+      'contactPersonName',
+      'designation',
+      'contactNumber',
+      'emailId'
+    ]
+    const missingPayer = requiredPayer.some((key) => !firstPayer?.[key]?.trim())
+    if (missingPayer) {
+      setError('Please fill all required payer profile fields')
       return
     }
     if (!validateAllSteps()) {
@@ -330,9 +522,9 @@ export default function CustomerNew() {
       setSaving(true)
       const payload = {
         companyName: companyProfile.companyName || companyProfile.legalEntityName || null,
-        name: customerProfile.contactPersonName || companyProfile.primaryContact.name || null,
+        name: customerProfile.poIssuingAuthority || customerProfile.customerName || companyProfile.primaryContact.name || null,
         email: customerProfile.emailId || companyProfile.primaryContact.email || null,
-        phone: customerProfile.contactPersonNumber || companyProfile.primaryContact.contactNumber || null,
+        phone: customerProfile.contactNumber || companyProfile.primaryContact.contactNumber || null,
         gstNumber:
           companyProfile.gstNumbers.find((gst) => gst?.trim()) ||
           companyProfile.corporateOffice.gstNumber ||
@@ -340,6 +532,8 @@ export default function CustomerNew() {
         metadata: {
           companyProfile,
           customerProfile,
+          consigneeProfiles,
+          payerProfiles,
           paymentTerms,
           teamProfiles
         }
@@ -433,7 +627,7 @@ export default function CustomerNew() {
                   key={step.label}
                   type="button"
                   onClick={() => goToStep(idx)}
-                  disabled={idx > currentStep && !canGoNext()}
+                  disabled={idx > currentStep && !DEV_BYPASS_VALIDATION && !canGoNext()}
                   className={`group relative flex flex-col rounded-xl border px-3 py-3 text-left shadow-sm transition-all focus:outline-none ${
                     isCurrentStep
                       ? 'border-primary-200 bg-white shadow-primary-100'
@@ -480,340 +674,788 @@ export default function CustomerNew() {
       <h2 className="text-lg font-semibold text-secondary-900">Creation of Company Profile</h2>
     </div>
     <div className="card-content space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="form-label">Company Name *</label>
-          <input
-            className="input"
-            type="text"
-            value={companyProfile?.companyName || ''}
-            onChange={(e) => {
-              try {
-                const value = e.target.value
-                updateCompany('companyName', value)
-                // Clear error when user starts typing
-                if (value?.trim() || companyProfile?.legalEntityName?.trim()) {
-                  setError('')
-                }
-              } catch (err) {
-                console.error('Error updating company name:', err)
-              }
-            }}
-            onBlur={(e) => {
-              // Validate on blur, not on every keystroke
-              if (!e.target.value?.trim() && !companyProfile?.legalEntityName?.trim()) {
-                setError('Company Name or Legal Entity Name is required')
-              }
-            }}
-            placeholder="Company trading name"
-          />
-        </div>
-        <div>
-          <label className="form-label">Legal Entity Name *</label>
-          <input
-            className="input"
-            type="text"
-            value={companyProfile?.legalEntityName || ''}
-            onChange={(e) => {
-              try {
-                const value = e.target.value
-                updateCompany('legalEntityName', value)
-                // Clear error when user starts typing
-                if (value?.trim() || companyProfile?.companyName?.trim()) {
-                  setError('')
-                }
-              } catch (err) {
-                console.error('Error updating legal entity name:', err)
-              }
-            }}
-            onBlur={(e) => {
-              // Validate on blur, not on every keystroke
-              if (!e.target.value?.trim() && !companyProfile?.companyName?.trim()) {
-                setError('Company Name or Legal Entity Name is required')
-              }
-            }}
-            placeholder="Registered legal entity"
-          />
-        </div>
-        <div>
-          <label className="form-label">Corporate Office Address</label>
-          <textarea
-            className="input min-h-[90px]"
-            value={companyProfile.corporateOffice?.addressLine || ''}
-            onChange={e => {
-              try {
-                setCompanyProfile(prev => ({
-                  ...prev,
-                  corporateOffice: { ...(prev.corporateOffice || emptyAddress('Corporate Office')), addressLine: e.target.value }
-                }))
-              } catch (err) {
-                console.error('Error updating corporate office:', err)
-              }
-            }}
-            placeholder="Full address, GST No, contact numbers"
-          />
-        </div>
-        <div>
-          <label className="form-label">Marketing Office</label>
-          <textarea
-            className="input min-h-[90px]"
-            value={companyProfile.marketingOffice?.addressLine || ''}
-            onChange={e => {
-              try {
-                setCompanyProfile(prev => ({
-                  ...prev,
-                  marketingOffice: { ...(prev.marketingOffice || emptyAddress('Marketing Office')), addressLine: e.target.value }
-                }))
-              } catch (err) {
-                console.error('Error updating marketing office:', err)
-              }
-            }}
-            placeholder="Address and contact details"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="form-label">Site Offices & GST</label>
-        <div className="space-y-4">
-          {(companyProfile.siteOffices || []).map((site, index) => (
-            <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-secondary-800">{site.label}</span>
-                {companyProfile.siteOffices.length > 1 && (
-                  <button
-                    type="button"
-                    className="text-danger-600 hover:text-danger-700 text-xs"
-                    onClick={() => removeAddress('siteOffices', index)}
-                  >Remove</button>
-                )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-1">
+            <label className="form-label">Company Logo</label>
+            <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-lg font-semibold">
+                {companyProfile.logo instanceof File
+                  ? companyProfile.logo.name.substring(0, 2).toUpperCase()
+                  : 'Logo'}
               </div>
-              <textarea
-                className="input min-h-[80px]"
-                value={site?.addressLine || ''}
-                onChange={e => updateNestedAddress('siteOffices', index, 'addressLine', e.target.value)}
-                placeholder="Address with GST"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  className="input"
-                  placeholder="GST Number"
-                  value={site?.gstNumber || ''}
-                  onChange={e => updateNestedAddress('siteOffices', index, 'gstNumber', e.target.value)}
-                />
-                <input
-                  className="input"
-                  placeholder="Contact Number"
-                  value={site?.contactNumber || ''}
-                  onChange={e => updateNestedAddress('siteOffices', index, 'contactNumber', e.target.value)}
-                />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-secondary-800">Upload company logo</p>
+                <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
               </div>
+              <label className="btn btn-primary btn-sm cursor-pointer">
+                Choose File
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null
+                    updateCompany('logo', file)
+                  }}
+                />
+              </label>
+              {companyProfile.logo && (
+                <div className="text-xs text-secondary-600 truncate">
+                  {companyProfile.logo instanceof File ? companyProfile.logo.name : companyProfile.logo}
+                </div>
+              )}
             </div>
-          ))}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm inline-flex items-center gap-2"
-            onClick={() => addAddress('siteOffices', 'Site Office')}
-          >
-            <Plus className="h-4 w-4" /> Add Site Office
-          </button>
+          </div>
+
+          <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Company Name *</label>
+              <input
+                className="input"
+                type="text"
+                value={companyProfile?.companyName || ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                  updateCompany('companyName', value)
+                  if (value?.trim() || companyProfile?.legalEntityName?.trim()) setError('')
+                }}
+                placeholder="Company trading name"
+              />
+            </div>
+            <div>
+              <label className="form-label">Legal Entity Name *</label>
+              <input
+                className="input"
+                type="text"
+                value={companyProfile?.legalEntityName || ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                  updateCompany('legalEntityName', value)
+                  if (value?.trim() || companyProfile?.companyName?.trim()) setError('')
+                }}
+                placeholder="Registered legal entity"
+              />
+            </div>
+          </div>
         </div>
-      </div>
-      <div>
-        <label className="form-label">Plant Addresses</label>
-        <div className="space-y-4">
-          {(companyProfile.plantAddresses || []).map((plant, index) => (
-            <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-secondary-800">{plant.label}</span>
-                {companyProfile.plantAddresses.length > 1 && (
-                  <button
-                    type="button"
-                    className="text-danger-600 hover:text-danger-700 text-xs"
-                    onClick={() => removeAddress('plantAddresses', index)}
-                  >Remove</button>
-                )}
-              </div>
-              <textarea
-                className="input min-h-[80px]"
-                value={plant?.addressLine || ''}
-                onChange={e => updateNestedAddress('plantAddresses', index, 'addressLine', e.target.value)}
-                placeholder="Address and GST"
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <label className="form-label">Corporate Office Address *</label>
+            <textarea
+              className="input min-h-[90px]"
+              value={companyProfile.corporateAddress}
+              onChange={(e) => updateCompany('corporateAddress', e.target.value)}
+              placeholder="Full address"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                className="input"
+                placeholder="District *"
+                value={companyProfile.corporateDistrict}
+                onChange={(e) => updateCompany('corporateDistrict', e.target.value)}
               />
               <input
                 className="input"
-                placeholder="GST Number"
-                value={plant?.gstNumber || ''}
-                onChange={e => updateNestedAddress('plantAddresses', index, 'gstNumber', e.target.value)}
+                placeholder="State *"
+                value={companyProfile.corporateState}
+                onChange={(e) => updateCompany('corporateState', e.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="Country *"
+                value={companyProfile.corporateCountry}
+                onChange={(e) => updateCompany('corporateCountry', e.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="Pin Code *"
+                value={companyProfile.corporatePinCode}
+                onChange={(e) => updateCompany('corporatePinCode', e.target.value)}
               />
             </div>
-          ))}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm inline-flex items-center gap-2"
-            onClick={() => addAddress('plantAddresses', 'Plant Address')}
-          >
-            <Plus className="h-4 w-4" /> Add Plant Address
-          </button>
-        </div>
-      </div>
-      <div>
-        <label className="form-label">GST Numbers</label>
-        <div className="grid gap-3">
-          {(companyProfile.gstNumbers || []).map((gst, index) => (
-            <SmartDropdown
-              key={index}
-              value={gst}
-              onChange={val => updateGst(index, val)}
-              fieldName="gstNo"
-              placeholder={`GST No ${index + 1}`}
-              inputClassName="input"
+          </div>
+          <div className="space-y-3">
+            <label className="form-label">Correspondence Address *</label>
+            <textarea
+              className="input min-h-[90px]"
+              value={companyProfile.correspondenceAddress}
+              onChange={(e) => updateCompany('correspondenceAddress', e.target.value)}
+              placeholder="Postal address"
             />
-          ))}
-          <button type="button" className="btn btn-outline btn-sm w-fit" onClick={addGstField}>Add GST No</button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                className="input"
+                placeholder="District *"
+                value={companyProfile.correspondenceDistrict}
+                onChange={(e) => updateCompany('correspondenceDistrict', e.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="State *"
+                value={companyProfile.correspondenceState}
+                onChange={(e) => updateCompany('correspondenceState', e.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="Country *"
+                value={companyProfile.correspondenceCountry}
+                onChange={(e) => updateCompany('correspondenceCountry', e.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="Pin Code *"
+                value={companyProfile.correspondencePinCode}
+                onChange={(e) => updateCompany('correspondencePinCode', e.target.value)}
+              />
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="form-label">Primary Contact Person</label>
-          <input
-            className="input mb-2"
-            placeholder="Name"
-            value={companyProfile.primaryContact?.name || ''}
-            onChange={e => {
-              try {
-                updateCompany('primaryContact', {
-                  ...(companyProfile.primaryContact || emptyContact()),
-                  name: e.target.value
-                })
-              } catch (err) {
-                console.error('Error updating primary contact name:', err)
-              }
-            }}
-          />
-          <input
-            className="input mb-2"
-            placeholder="Contact Number"
-            value={companyProfile.primaryContact?.contactNumber || ''}
-            onChange={e => {
-              try {
-                updateCompany('primaryContact', {
-                  ...(companyProfile.primaryContact || emptyContact()),
-                  contactNumber: e.target.value
-                })
-              } catch (err) {
-                console.error('Error updating primary contact number:', err)
-              }
-            }}
-          />
-          <input
-            className="input"
-            placeholder="Email ID"
-            value={companyProfile.primaryContact?.email || ''}
-            onChange={e => {
-              try {
-                updateCompany('primaryContact', {
-                  ...(companyProfile.primaryContact || emptyContact()),
-                  email: e.target.value
-                })
-              } catch (err) {
-                console.error('Error updating primary contact email:', err)
-              }
-            }}
-          />
-        </div>
-        <div>
-          <label className="form-label">Correspondence Address</label>
+
+        <div className="space-y-3">
+          <label className="form-label">Other Office / Plant Details</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <select
+              className="input"
+              value={companyProfile.otherOfficeType}
+              onChange={(e) => updateCompany('otherOfficeType', e.target.value)}
+            >
+              <option value="Plant Address">Plant Address</option>
+              <option value="Site Office">Site Office</option>
+              <option value="Marketing Office">Marketing Office</option>
+            </select>
+            <input
+              className="input"
+              placeholder="GST No"
+              value={companyProfile.otherOfficeGst}
+              onChange={(e) => updateCompany('otherOfficeGst', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Pin Code"
+              value={companyProfile.otherOfficePinCode}
+              onChange={(e) => updateCompany('otherOfficePinCode', e.target.value)}
+            />
+          </div>
           <textarea
-            className="input min-h-[120px]"
-            value={companyProfile.correspondenceAddress}
-            onChange={e => updateCompany('correspondenceAddress', e.target.value)}
-            placeholder="Postal address for official communication"
+            className="input min-h-[80px]"
+            placeholder="Address"
+            value={companyProfile.otherOfficeAddress}
+            onChange={(e) => updateCompany('otherOfficeAddress', e.target.value)}
           />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              className="input"
+              placeholder="District"
+              value={companyProfile.otherOfficeDistrict}
+              onChange={(e) => updateCompany('otherOfficeDistrict', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="State"
+              value={companyProfile.otherOfficeState}
+              onChange={(e) => updateCompany('otherOfficeState', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Country"
+              value={companyProfile.otherOfficeCountry}
+              onChange={(e) => updateCompany('otherOfficeCountry', e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input
+              className="input"
+              placeholder="Contact Person Name"
+              value={companyProfile.otherOfficeContactName}
+              onChange={(e) => updateCompany('otherOfficeContactName', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Contact Number"
+              value={companyProfile.otherOfficeContactNumber}
+              onChange={(e) => updateCompany('otherOfficeContactNumber', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Email ID"
+              value={companyProfile.otherOfficeEmail}
+              onChange={(e) => updateCompany('otherOfficeEmail', e.target.value)}
+            />
+          </div>
         </div>
-      </div>
     </div>
   </section>
 )}
         {/* Step 2: Customer Profile */}
         {currentStep === 1 && (
-  <section className="card">
-    <div className="card-header">
-      <h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2>
-    </div>
-    <div className="card-content space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="form-label">Contact Person Name *</label>
-          <SmartDropdown
-            value={customerProfile.contactPersonName}
-            onChange={val => setCustomerProfile({ ...customerProfile, contactPersonName: val })}
-            fieldName="customerName"
-            placeholder="Enter contact person name"
-            inputClassName="input"
-          />
-        </div>
-        <div>
-          <label className="form-label">Contact Person Number *</label>
-          <SmartDropdown
-            value={customerProfile.contactPersonNumber}
-            onChange={val => setCustomerProfile({ ...customerProfile, contactPersonNumber: val })}
-            fieldName="contactPersonNumber"
-            placeholder="Enter phone number"
-            inputClassName="input"
-          />
-        </div>
-        <div>
-          <label className="form-label">Email ID *</label>
-          <SmartDropdown
-            value={customerProfile.emailId}
-            onChange={val => setCustomerProfile({ ...customerProfile, emailId: val })}
-            fieldName="emailId"
-            placeholder="Enter email address"
-            inputClassName="input"
-          />
-        </div>
-        <div>
-          <label className="form-label">Department</label>
-          <input
-            className="input"
-            value={customerProfile.department}
-            onChange={e => setCustomerProfile({ ...customerProfile, department: e.target.value })}
-            placeholder="Enter department"
-          />
-        </div>
-        <div>
-          <label className="form-label">Designation</label>
-          <input
-            className="input"
-            value={customerProfile.designation}
-            onChange={e => setCustomerProfile({ ...customerProfile, designation: e.target.value })}
-            placeholder="Enter designation"
-          />
-        </div>
-        <div>
-          <label className="form-label">Job Role</label>
-          <input
-            className="input"
-            value={customerProfile.jobRole}
-            onChange={e => setCustomerProfile({ ...customerProfile, jobRole: e.target.value })}
-            placeholder="Enter job role"
-          />
-        </div>
-        <div>
-          <label className="form-label">Segment</label>
-          <input
-            className="input"
-            value={customerProfile.segment}
-            onChange={e => setCustomerProfile({ ...customerProfile, segment: e.target.value })}
-            placeholder="Enter segment"
-          />
-        </div>
-      </div>
-    </div>
-  </section>
-)}
-        {/* Step 3: Payment Terms */}
+          <section className="card">
+            <div className="card-header">
+              <h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2>
+            </div>
+            <div className="card-content space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Logo</label>
+                  <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-secondary-800">Upload customer logo</p>
+                      <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
+                    </div>
+                    <label className="btn btn-outline btn-sm cursor-pointer">
+                      Choose File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          setCustomerProfile({ ...customerProfile, logo: file?.name || '' })
+                        }}
+                      />
+                    </label>
+                    {customerProfile.logo && (
+                      <div className="text-xs text-secondary-600 truncate">Selected: {customerProfile.logo}</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Customer Name *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.customerName}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, customerName: e.target.value })}
+                    placeholder="Enter customer name"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Legal Entity Name *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.legalEntityName}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, legalEntityName: e.target.value })}
+                    placeholder="Enter legal entity name"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Corporate Office Address *</label>
+                  <textarea
+                    className="input min-h-[80px]"
+                    value={customerProfile.corporateOfficeAddress}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, corporateOfficeAddress: e.target.value })}
+                    placeholder="Enter corporate office address"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Correspondence Address *</label>
+                  <textarea
+                    className="input min-h-[80px]"
+                    value={customerProfile.correspondenceAddress}
+                    onChange={(e) =>
+                      setCustomerProfile({ ...customerProfile, correspondenceAddress: e.target.value })
+                    }
+                    placeholder="Enter correspondence address"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">District *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.district}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, district: e.target.value })}
+                    placeholder="Enter district"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">State *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.state}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, state: e.target.value })}
+                    placeholder="Enter state"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Country *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.country}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, country: e.target.value })}
+                    placeholder="Enter country"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Pin Code *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.pinCode}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, pinCode: e.target.value })}
+                    placeholder="Enter pin code"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Segment *</label>
+                  <select
+                    className="input"
+                    value={customerProfile.segment}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, segment: e.target.value })}
+                  >
+                    <option value="">Select segment</option>
+                    <option value="Domestic">Domestic</option>
+                    <option value="Export">Export</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">GST No *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.gstNumber}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, gstNumber: e.target.value })}
+                    placeholder="Enter GST number"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">PO Issuing Authority / Contact Person Name *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.poIssuingAuthority}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, poIssuingAuthority: e.target.value })}
+                    placeholder="Enter PO issuing authority / contact name"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Designation *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.designation}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, designation: e.target.value })}
+                    placeholder="Enter designation"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Contact Person Contact No *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.contactNumber}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, contactNumber: e.target.value })}
+                    placeholder="Enter contact number"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Email ID *</label>
+                  <input
+                    className="input"
+                    value={customerProfile.emailId}
+                    onChange={(e) => setCustomerProfile({ ...customerProfile, emailId: e.target.value })}
+                    placeholder="Enter email address"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {/* Step 3: Consignee Profile */}
         {currentStep === 2 && (
+          <section className="card">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-secondary-900">Creation of Consignee Profile</h2>
+              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addConsignee}>
+                <Plus className="h-4 w-4" /> Add +
+              </button>
+            </div>
+            <div className="card-content space-y-4">
+              {consigneeProfiles.map((consignee, index) => (
+                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Logo</label>
+                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-secondary-800">Upload consignee logo</p>
+                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
+                        </div>
+                        <label className="btn btn-outline btn-sm cursor-pointer">
+                          Choose File
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              updateConsignee(index, 'logo', file?.name || '')
+                            }}
+                          />
+                        </label>
+                        {consignee.logo && (
+                          <div className="text-xs text-secondary-600 truncate">Selected: {consignee.logo}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label">Consignee Name *</label>
+                      <input
+                        className="input"
+                        value={consignee.consigneeName}
+                        onChange={(e) => updateConsignee(index, 'consigneeName', e.target.value)}
+                        placeholder="Enter consignee name"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="form-label">Consignee Address *</label>
+                      <textarea
+                        className="input min-h-[80px]"
+                        value={consignee.consigneeAddress}
+                        onChange={(e) => updateConsignee(index, 'consigneeAddress', e.target.value)}
+                        placeholder="Enter consignee address"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Customer Name *</label>
+                      <input
+                        className="input"
+                        value={consignee.customerName}
+                        onChange={(e) => updateConsignee(index, 'customerName', e.target.value)}
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Legal Entity Name *</label>
+                      <input
+                        className="input"
+                        value={consignee.legalEntityName}
+                        onChange={(e) => updateConsignee(index, 'legalEntityName', e.target.value)}
+                        placeholder="Enter legal entity name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">City *</label>
+                      <input
+                        className="input"
+                        value={consignee.city}
+                        onChange={(e) => updateConsignee(index, 'city', e.target.value)}
+                        placeholder="Enter city"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">State *</label>
+                      <input
+                        className="input"
+                        value={consignee.state}
+                        onChange={(e) => updateConsignee(index, 'state', e.target.value)}
+                        placeholder="Enter state"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Consignee GST No *</label>
+                      <input
+                        className="input"
+                        value={consignee.gstNumber}
+                        onChange={(e) => updateConsignee(index, 'gstNumber', e.target.value)}
+                        placeholder="Enter GST number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact Person Name *</label>
+                      <input
+                        className="input"
+                        value={consignee.contactPersonName}
+                        onChange={(e) => updateConsignee(index, 'contactPersonName', e.target.value)}
+                        placeholder="Enter contact person name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Designation *</label>
+                      <input
+                        className="input"
+                        value={consignee.designation}
+                        onChange={(e) => updateConsignee(index, 'designation', e.target.value)}
+                        placeholder="Enter designation"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact Person Contact No *</label>
+                      <input
+                        className="input"
+                        value={consignee.contactNumber}
+                        onChange={(e) => updateConsignee(index, 'contactNumber', e.target.value)}
+                        placeholder="Enter contact number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Email ID *</label>
+                      <input
+                        className="input"
+                        value={consignee.emailId}
+                        onChange={(e) => updateConsignee(index, 'emailId', e.target.value)}
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {/* Step 4: Payer Profile */}
+        {currentStep === 3 && (
+          <section className="card">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-secondary-900">Creation of Payer Profile</h2>
+              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addPayer}>
+                <Plus className="h-4 w-4" /> Add +
+              </button>
+            </div>
+            <div className="card-content space-y-4">
+              {payerProfiles.map((payer, index) => (
+                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Logo</label>
+                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-secondary-800">Upload payer logo</p>
+                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
+                        </div>
+                        <label className="btn btn-outline btn-sm cursor-pointer">
+                          Choose File
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              updatePayer(index, 'logo', file?.name || '')
+                            }}
+                          />
+                        </label>
+                        {payer.logo && <div className="text-xs text-secondary-600 truncate">Selected: {payer.logo}</div>}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label">Payer Name *</label>
+                      <input
+                        className="input"
+                        value={payer.payerName}
+                        onChange={(e) => updatePayer(index, 'payerName', e.target.value)}
+                        placeholder="Enter payer name"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="form-label">Payer Address *</label>
+                      <textarea
+                        className="input min-h-[80px]"
+                        value={payer.payerAddress}
+                        onChange={(e) => updatePayer(index, 'payerAddress', e.target.value)}
+                        placeholder="Enter payer address"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Customer Name *</label>
+                      <input
+                        className="input"
+                        value={payer.customerName}
+                        onChange={(e) => updatePayer(index, 'customerName', e.target.value)}
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Legal Entity Name *</label>
+                      <input
+                        className="input"
+                        value={payer.legalEntityName}
+                        onChange={(e) => updatePayer(index, 'legalEntityName', e.target.value)}
+                        placeholder="Enter legal entity name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">City *</label>
+                      <input
+                        className="input"
+                        value={payer.city}
+                        onChange={(e) => updatePayer(index, 'city', e.target.value)}
+                        placeholder="Enter city"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">State *</label>
+                      <input
+                        className="input"
+                        value={payer.state}
+                        onChange={(e) => updatePayer(index, 'state', e.target.value)}
+                        placeholder="Enter state"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Payer GST No *</label>
+                      <input
+                        className="input"
+                        value={payer.gstNumber}
+                        onChange={(e) => updatePayer(index, 'gstNumber', e.target.value)}
+                        placeholder="Enter GST number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact Person Name *</label>
+                      <input
+                        className="input"
+                        value={payer.contactPersonName}
+                        onChange={(e) => updatePayer(index, 'contactPersonName', e.target.value)}
+                        placeholder="Enter contact person name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Designation *</label>
+                      <input
+                        className="input"
+                        value={payer.designation}
+                        onChange={(e) => updatePayer(index, 'designation', e.target.value)}
+                        placeholder="Enter designation"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact Person Contact No *</label>
+                      <input
+                        className="input"
+                        value={payer.contactNumber}
+                        onChange={(e) => updatePayer(index, 'contactNumber', e.target.value)}
+                        placeholder="Enter contact number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Email ID *</label>
+                      <input
+                        className="input"
+                        value={payer.emailId}
+                        onChange={(e) => updatePayer(index, 'emailId', e.target.value)}
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {/* Step 5: Employee Profile */}
+        {currentStep === 4 && (
+          <section className="card">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-secondary-900">Creation of Employee Profile</h2>
+              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addTeamProfile}>
+                <Plus className="h-4 w-4" /> Add Employee
+              </button>
+            </div>
+            <div className="card-content space-y-4">
+              {teamProfiles.map((member, index) => (
+                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-secondary-800">Employee {index + 1}</span>
+                    {teamProfiles.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-danger-600 hover:text-danger-700 text-xs"
+                        onClick={() => removeTeamProfile(index)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Role</label>
+                      <select
+                        className="input"
+                        value={member.role}
+                        onChange={(e) => updateTeamProfile(index, 'role', e.target.value)}
+                      >
+                        {MASTER_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Photo</label>
+                      <div className="flex items-center gap-3">
+                        <label className="btn btn-outline btn-sm cursor-pointer">
+                          Upload
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              updateTeamProfile(index, 'photo', file?.name || '')
+                            }}
+                          />
+                        </label>
+                        {member.photo && <span className="text-xs text-secondary-600 truncate">{member.photo}</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label">Name of Employee</label>
+                      <input
+                        className="input"
+                        value={member.name}
+                        onChange={(e) => updateTeamProfile(index, 'name', e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Designation</label>
+                      <input
+                        className="input"
+                        value={member.designation}
+                        onChange={(e) => updateTeamProfile(index, 'designation', e.target.value)}
+                        placeholder="Designation"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Contact No</label>
+                      <input
+                        className="input"
+                        value={member.contactNumber}
+                        onChange={(e) => updateTeamProfile(index, 'contactNumber', e.target.value)}
+                        placeholder="Contact number"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Email ID</label>
+                      <input
+                        className="input"
+                        type="email"
+                        value={member.email}
+                        onChange={(e) => updateTeamProfile(index, 'email', e.target.value)}
+                        placeholder="Email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Department</label>
+                      <input
+                        className="input"
+                        value={member.department}
+                        onChange={(e) => updateTeamProfile(index, 'department', e.target.value)}
+                        placeholder="Department"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Job Role</label>
+                      <input
+                        className="input"
+                        value={member.jobRole}
+                        onChange={(e) => updateTeamProfile(index, 'jobRole', e.target.value)}
+                        placeholder="Job role"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {/* Step 6: Payment Terms */}
+        {currentStep === 5 && (
           <section className="card">
             <div className="card-header flex items-center justify-between">
               <h2 className="text-lg font-semibold text-secondary-900">Creation of Payment Terms</h2>
@@ -831,55 +1473,80 @@ export default function CustomerNew() {
                       >Remove</button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="form-label">Payment Term Title</label>
+                      <label className="form-label">Basic</label>
                       <input
                         className="input"
-                        value={term.title}
-                        onChange={e => updatePaymentTerm(index, 'title', e.target.value)}
-                        placeholder="e.g., Advance 50%, Balance at Delivery"
+                        value={term.basic}
+                        onChange={e => updatePaymentTerm(index, 'basic', e.target.value)}
+                        placeholder="Enter basic"
                       />
                     </div>
                     <div>
-                      <label className="form-label">Payment Type</label>
-                      <select
-                        className="input"
-                        value={term.type}
-                        onChange={e => updatePaymentTerm(index, 'type', e.target.value)}
-                      >
-                        <option value="Milestone Based">Milestone Based</option>
-                        <option value="Time Based">Time Based</option>
-                        <option value="Fixed">Fixed</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label">Credit Days</label>
+                      <label className="form-label">Freight</label>
                       <input
                         className="input"
-                        type="number"
-                        value={term.creditDays === '' ? '' : term.creditDays ?? ''}
-                        onChange={e => updatePaymentTerm(index, 'creditDays', e.target.value)}
-                        placeholder="0"
+                        value={term.freight}
+                        onChange={e => updatePaymentTerm(index, 'freight', e.target.value)}
+                        placeholder="Enter freight"
                       />
                     </div>
                     <div>
-                      <label className="form-label">Description</label>
+                      <label className="form-label">Taxes</label>
                       <input
                         className="input"
-                        value={term.description}
-                        onChange={e => updatePaymentTerm(index, 'description', e.target.value)}
-                        placeholder="Payment description"
+                        value={term.taxes}
+                        onChange={e => updatePaymentTerm(index, 'taxes', e.target.value)}
+                        placeholder="Enter taxes"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="form-label">1st Due</label>
+                      <input
+                        className="input"
+                        value={term.due1}
+                        onChange={e => updatePaymentTerm(index, 'due1', e.target.value)}
+                        placeholder="Enter 1st due"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">2nd Due</label>
+                      <input
+                        className="input"
+                        value={term.due2}
+                        onChange={e => updatePaymentTerm(index, 'due2', e.target.value)}
+                        placeholder="Enter 2nd due"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">3rd Due</label>
+                      <input
+                        className="input"
+                        value={term.due3}
+                        onChange={e => updatePaymentTerm(index, 'due3', e.target.value)}
+                        placeholder="Enter 3rd due"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Final Due</label>
+                      <input
+                        className="input"
+                        value={term.finalDue}
+                        onChange={e => updatePaymentTerm(index, 'finalDue', e.target.value)}
+                        placeholder="Enter final due"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="form-label">Notes</label>
+                    <label className="form-label">Payment Terms Description</label>
                     <textarea
                       className="input min-h-[80px]"
-                      value={term.notes}
-                      onChange={e => updatePaymentTerm(index, 'notes', e.target.value)}
-                      placeholder="Additional notes for this payment term"
+                      value={term.description}
+                      onChange={e => updatePaymentTerm(index, 'description', e.target.value)}
+                      placeholder="Describe the payment terms"
                     />
                   </div>
                 </div>
@@ -894,82 +1561,8 @@ export default function CustomerNew() {
             </div>
           </section>
         )}
-        {/* Step 4: Team Profiles */}
-        {currentStep === 3 && (
-          <section className="card">
-            <div className="card-header">
-              <h2 className="text-lg font-semibold text-secondary-900">Sales / Collection Master Profiles</h2>
-            </div>
-            <div className="card-content space-y-4">
-              {teamProfiles.map((member, index) => (
-                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-secondary-800">Profile: {member.role}</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Name</label>
-                      <input
-                        className="input"
-                        value={member.name}
-                        onChange={e => updateTeamProfile(index, 'name', e.target.value)}
-                        placeholder="Full name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact Number</label>
-                      <input
-                        className="input"
-                        value={member.contactNumber}
-                        onChange={e => updateTeamProfile(index, 'contactNumber', e.target.value)}
-                        placeholder="10-digit phone number"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Email</label>
-                      <input
-                        className="input"
-                        type="email"
-                        value={member.email}
-                        onChange={e => updateTeamProfile(index, 'email', e.target.value)}
-                        placeholder="Email address"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Department</label>
-                      <input
-                        className="input"
-                        value={member.department}
-                        onChange={e => updateTeamProfile(index, 'department', e.target.value)}
-                        placeholder="Department"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Designation</label>
-                      <input
-                        className="input"
-                        value={member.designation}
-                        onChange={e => updateTeamProfile(index, 'designation', e.target.value)}
-                        placeholder="Designation"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Job Role</label>
-                      <input
-                        className="input"
-                        value={member.jobRole}
-                        onChange={e => updateTeamProfile(index, 'jobRole', e.target.value)}
-                        placeholder="Job role"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {/* Step 5: Additional Step */}
-        {currentStep === 4 && (
+        {/* Step 7: Additional Step */}
+        {currentStep === 6 && (
           <section className="card">
             <div className="card-header">
               <h2 className="text-lg font-semibold text-secondary-900">Additional Configuration</h2>
@@ -990,11 +1583,19 @@ export default function CustomerNew() {
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Payment Terms configured</span>
+                    <span className="text-secondary-700">Consignee Profile configured</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Team Profiles configured</span>
+                    <span className="text-secondary-700">Payer Profile configured</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Employee Profile configured</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+                    <span className="text-secondary-700">Payment Terms configured</span>
                   </div>
                 </div>
               </div>
@@ -1017,7 +1618,7 @@ export default function CustomerNew() {
       type="button"
       className="btn btn-primary px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       onClick={onNext}
-      disabled={!canGoNext()}
+      disabled={!DEV_BYPASS_VALIDATION && !canGoNext()}
       style={{ minWidth: 120 }}
     >
       Next
@@ -1101,16 +1702,26 @@ export default function CustomerNew() {
                     primaryContact: emptyContact()
                   })
                   setCustomerProfile({
-                    department: '',
-                    designation: '',
-                    jobRole: '',
+                    logo: '',
+                    customerName: '',
+                    legalEntityName: '',
+                    corporateOfficeAddress: '',
+                    correspondenceAddress: '',
+                    district: '',
+                    state: '',
+                    country: '',
+                    pinCode: '',
                     segment: '',
-                    contactPersonName: '',
-                    contactPersonNumber: '',
+                    gstNumber: '',
+                    poIssuingAuthority: '',
+                    designation: '',
+                    contactNumber: '',
                     emailId: ''
                   })
+                  setConsigneeProfiles([emptyConsignee()])
+                  setPayerProfiles([emptyPayer()])
                   setPaymentTerms([defaultPaymentTerm()])
-                  setTeamProfiles(MASTER_ROLES.map((role) => ({ role, ...emptyContact() })))
+                  setTeamProfiles([{ role: MASTER_ROLES[0], ...emptyContact() }])
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
               >

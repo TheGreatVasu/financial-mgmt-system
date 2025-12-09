@@ -2,28 +2,26 @@ import React from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
+
+const phoneRegex = /^\+?\d{7,15}$/
+const pinCodeRegex = /^\d{4,10}$/
 
 const customerProfileSchema = z.object({
+  logo: z.string().optional(),
   customerName: z.string().min(1, 'Customer name is required'),
-  customerCode: z.string().min(1, 'Customer code is required'),
-  gstin: z.string().min(0, 'GSTIN').optional().or(z.literal('')),
-  panNumber: z.string().min(0, 'PAN').optional().or(z.literal('')),
-  companyType: z.string().min(1, 'Company type is required'),
-  segment: z.string().min(1, 'Segment is required'),
-  region: z.string().min(1, 'Region is required'),
-  zone: z.string().min(1, 'Zone is required'),
-  billingAddress: z.string().min(1, 'Billing address is required'),
-  shippingAddress: z.string().min(1, 'Shipping address is required'),
-  contactPersonName: z.string().min(1, 'Contact person name is required'),
-  contactPersonNumber: z.string().min(1, 'Phone number is required'),
-  contactEmailId: z.string().email('Valid email required'),
-  creditPeriod: z.string().min(1, 'Credit period is required'),
-  paymentTerms: z.string().min(1, 'Payment terms are required'),
-  deliveryTerms: z.string().min(1, 'Delivery terms are required'),
-  projectManager: z.string().min(1, 'Project manager is required'),
-  anyHold: z.string().min(1, 'Please select Yes or No'),
-  remarks: z.string().optional().or(z.literal('')),
+  legalEntityName: z.string().min(1, 'Legal entity name is required'),
+  corporateOfficeAddress: z.string().min(1, 'Corporate office address is required'),
+  correspondenceAddress: z.string().min(1, 'Correspondence address is required'),
+  district: z.string().min(1, 'District is required'),
+  state: z.string().min(1, 'State is required'),
+  country: z.string().min(1, 'Country is required'),
+  pinCode: z.string().regex(pinCodeRegex, 'Pin code must be 4-10 digits'),
+  segment: z.enum(['Domestic', 'Export']),
+  gstNumber: z.string().min(1, 'GST No is required'),
+  poIssuingAuthority: z.string().min(1, 'PO Issuing Authority / Contact Person Name is required'),
+  designation: z.string().min(1, 'Designation is required'),
+  contactNumber: z.string().regex(phoneRegex, 'Enter a valid contact number'),
+  emailId: z.string().email('Valid email required'),
 })
 
 type CustomerProfileFormData = z.infer<typeof customerProfileSchema>
@@ -71,51 +69,60 @@ export default function Step2CustomerProfile({
       <Controller
         name={name}
         control={formControl}
-        render={({ field }) =>
-          isTextarea ? (
-            <textarea
-              {...field}
-              placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-              rows={3}
-            />
-          ) : options ? (
-            <select
-              {...field}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">Select {label}</option>
-              {options.map((opt: string) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          ) : name === 'customerName' || name === 'contactPersonNumber' || name === 'contactEmailId' ? (
-            <SmartDropdown
-              value={field.value as string}
-              onChange={field.onChange}
-              fieldName={name}
-              placeholder={placeholder}
-              inputClassName={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-          ) : (
+        render={({ field }) => {
+          const baseClasses = `px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            error ? 'border-red-500' : 'border-gray-300'
+          }`
+
+          if (type === 'file') {
+            return (
+              <div className="space-y-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => field.onChange(e.target.files?.[0]?.name || '')}
+                  className={baseClasses}
+                />
+                {field.value && (
+                  <p className="text-xs text-gray-500">Selected file: {field.value}</p>
+                )}
+              </div>
+            )
+          }
+
+          if (isTextarea) {
+            return (
+              <textarea
+                {...field}
+                placeholder={placeholder}
+                className={baseClasses}
+                rows={3}
+              />
+            )
+          }
+
+          if (options) {
+            return (
+              <select {...field} className={baseClasses}>
+                <option value="">Select {label}</option>
+                {options.map((opt: string) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            )
+          }
+
+          return (
             <input
               {...field}
               type={type}
               placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={baseClasses}
             />
           )
-        }
+        }}
       />
       {error && <span className="text-xs text-red-500">{error.message}</span>}
     </div>
@@ -127,7 +134,15 @@ export default function Step2CustomerProfile({
         <h2 className="text-2xl font-bold text-gray-900 mb-8">Creation of Customer Profile</h2>
 
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              label="Logo"
+              name="logo"
+              type="file"
+              placeholder="Upload logo"
+              control={control}
+              error={errors.logo}
+            />
             <FormField
               label="Customer Name"
               name="customerName"
@@ -136,135 +151,98 @@ export default function Step2CustomerProfile({
               error={errors.customerName}
             />
             <FormField
-              label="Customer Code"
-              name="customerCode"
-              placeholder="Enter customer code"
+              label="Legal Entity Name"
+              name="legalEntityName"
+              placeholder="Enter legal entity name"
               control={control}
-              error={errors.customerCode}
+              error={errors.legalEntityName}
             />
             <FormField
-              label="GSTIN"
-              name="gstin"
-              placeholder="Enter GSTIN"
+              label="Corporate Office Address"
+              name="corporateOfficeAddress"
+              placeholder="Enter corporate office address"
               control={control}
-              error={errors.gstin}
+              error={errors.corporateOfficeAddress}
+              isTextarea
             />
             <FormField
-              label="PAN Number"
-              name="panNumber"
-              placeholder="Enter PAN"
+              label="Correspondence Address"
+              name="correspondenceAddress"
+              placeholder="Enter correspondence address"
               control={control}
-              error={errors.panNumber}
+              error={errors.correspondenceAddress}
+              isTextarea
             />
             <FormField
-              label="Company Type"
-              name="companyType"
+              label="District"
+              name="district"
+              placeholder="Enter district"
               control={control}
-              error={errors.companyType}
-              options={['Proprietorship', 'Partnership', 'Pvt Ltd', 'Public Ltd', 'Individual']}
+              error={errors.district}
+            />
+            <FormField
+              label="State"
+              name="state"
+              placeholder="Enter state"
+              control={control}
+              error={errors.state}
+            />
+            <FormField
+              label="Country"
+              name="country"
+              placeholder="Enter country"
+              control={control}
+              error={errors.country}
+            />
+            <FormField
+              label="Pin Code"
+              name="pinCode"
+              placeholder="Enter pin code"
+              control={control}
+              error={errors.pinCode}
             />
             <FormField
               label="Segment"
               name="segment"
-              placeholder="Enter segment"
               control={control}
               error={errors.segment}
+              options={['Domestic', 'Export']}
             />
             <FormField
-              label="Region"
-              name="region"
-              placeholder="Enter region"
+              label="GST No"
+              name="gstNumber"
+              placeholder="Enter GST number"
               control={control}
-              error={errors.region}
+              error={errors.gstNumber}
             />
             <FormField
-              label="Zone"
-              name="zone"
-              placeholder="Enter zone"
+              label="PO Issuing Authority / Contact Person Name"
+              name="poIssuingAuthority"
+              placeholder="Enter PO issuing authority or contact person"
               control={control}
-              error={errors.zone}
+              error={errors.poIssuingAuthority}
             />
             <FormField
-              label="Billing Address"
-              name="billingAddress"
-              placeholder="Enter billing address"
+              label="Designation"
+              name="designation"
+              placeholder="Enter designation"
               control={control}
-              error={errors.billingAddress}
-              isTextarea
+              error={errors.designation}
             />
             <FormField
-              label="Shipping Address"
-              name="shippingAddress"
-              placeholder="Enter shipping address"
+              label="Contact Person Contact No"
+              name="contactNumber"
+              placeholder="Enter contact number"
               control={control}
-              error={errors.shippingAddress}
-              isTextarea
+              error={errors.contactNumber}
             />
             <FormField
-              label="Contact Person Name"
-              name="contactPersonName"
-              placeholder="Enter contact person name"
-              control={control}
-              error={errors.contactPersonName}
-            />
-            <FormField
-              label="Contact Person Number"
-              name="contactPersonNumber"
-              placeholder="Enter 10-digit phone"
-              control={control}
-              error={errors.contactPersonNumber}
-            />
-            <FormField
-              label="Contact Email ID"
-              name="contactEmailId"
+              label="Email ID"
+              name="emailId"
               type="email"
               placeholder="Enter email"
               control={control}
-              error={errors.contactEmailId}
-            />
-            <FormField
-              label="Credit Period (Days)"
-              name="creditPeriod"
-              type="number"
-              placeholder="Enter credit period"
-              control={control}
-              error={errors.creditPeriod}
-            />
-            <FormField
-              label="Payment Terms"
-              name="paymentTerms"
-              placeholder="Enter payment terms"
-              control={control}
-              error={errors.paymentTerms}
-            />
-            <FormField
-              label="Delivery Terms"
-              name="deliveryTerms"
-              placeholder="Enter delivery terms"
-              control={control}
-              error={errors.deliveryTerms}
-            />
-            <FormField
-              label="Project Manager"
-              name="projectManager"
-              placeholder="Enter project manager"
-              control={control}
-              error={errors.projectManager}
-            />
-            <FormField
-              label="Any Hold"
-              name="anyHold"
-              control={control}
-              error={errors.anyHold}
-              options={['Yes', 'No']}
-            />
-            <FormField
-              label="Remarks"
-              name="remarks"
-              placeholder="Enter remarks (optional)"
-              control={control}
-              error={errors.remarks}
-              isTextarea
+              error={errors.emailId}
             />
           </div>
 

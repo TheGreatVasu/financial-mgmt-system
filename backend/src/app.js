@@ -26,6 +26,7 @@ const poEntryRoutes = require('./routes/poEntryRoutes');
 const googleSheetsRoutes = require('./routes/googleSheetsRoutes');
 const importRoutes = require('./routes/importRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const masterDataRoutes = require('./routes/masterDataRoutes');
 
 // Connect to database (async, but don't block server startup)
 connectDB().then(() => {
@@ -124,6 +125,7 @@ app.use('/api/po-entry', poEntryRoutes);
 app.use('/api/google-sheets', googleSheetsRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/admin/master-data', masterDataRoutes);
 
 // 404 handler
 app.use(notFound);

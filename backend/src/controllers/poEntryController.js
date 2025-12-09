@@ -1,6 +1,52 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { getDb } = require('../config/db');
 
+function mapPOEntry(row) {
+  if (!row) return null;
+  const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    customerAddress: row.customer_address,
+    state: row.state,
+    country: row.country,
+    gstNo: row.gst_no,
+    businessType: row.business_type,
+    segment: row.segment,
+    zone: row.zone,
+    contractAgreementNo: row.contract_agreement_no,
+    caDate: row.ca_date,
+    poNo: row.po_no,
+    poDate: row.po_date,
+    letterOfIntentNo: row.letter_of_intent_no,
+    tenderReferenceNo: row.tender_reference_no,
+    tenderDate: row.tender_date,
+    description: row.description,
+    paymentType: row.payment_type,
+    paymentTerms: row.payment_terms,
+    insuranceTypes: row.insurance_types,
+    advanceBankGuaranteeNo: row.advance_bank_guarantee_no,
+    abgDate: row.abg_date,
+    performanceBankGuaranteeNo: row.performance_bank_guarantee_no,
+    pbgDate: row.pbg_date,
+    salesManager: row.sales_manager,
+    salesHead: row.sales_head,
+    agentName: row.agent_name,
+    agentCommission: toNumber(row.agent_commission),
+    deliverySchedule: row.delivery_schedule,
+    liquidatedDamages: row.liquidated_damages,
+    poSignedConcernName: row.po_signed_concern_name,
+    boqAsPerPO: row.boq_as_per_po,
+    totalExWorks: toNumber(row.total_ex_works),
+    freightAmount: toNumber(row.freight_amount),
+    gst: toNumber(row.gst),
+    totalPOValue: toNumber(row.total_po_value),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // @desc    Get all PO entries
 // @route   GET /api/po-entry
 // @access  Private
@@ -23,7 +69,7 @@ const getPOEntries = asyncHandler(async (req, res) => {
     const [{ c }] = await qb.clone().count({ c: '*' });
     return res.json({ 
       success: true, 
-      data: rows, 
+      data: rows.map(mapPOEntry), 
       meta: { 
         page: Number(page), 
         limit: Number(limit), 
@@ -47,7 +93,7 @@ const getPOEntry = asyncHandler(async (req, res) => {
     if (!row) {
       return res.status(404).json({ success: false, message: 'PO Entry not found' });
     }
-    return res.json({ success: true, data: row });
+    return res.json({ success: true, data: mapPOEntry(row) });
   }
   
   res.status(500).json({ success: false, message: 'Database not available' });
@@ -107,7 +153,7 @@ const createPOEntry = asyncHandler(async (req, res) => {
     const [id] = await db('po_entries').insert(row);
     const newRow = await db('po_entries').where({ id }).first();
     
-    return res.status(201).json({ success: true, data: newRow });
+    return res.status(201).json({ success: true, data: mapPOEntry(newRow) });
   }
   
   res.status(500).json({ success: false, message: 'Database not available' });
@@ -170,7 +216,7 @@ const updatePOEntry = asyncHandler(async (req, res) => {
     await db('po_entries').where({ id }).update(updates);
     const updated = await db('po_entries').where({ id }).first();
     
-    return res.json({ success: true, data: updated });
+    return res.json({ success: true, data: mapPOEntry(updated) });
   }
   
   res.status(500).json({ success: false, message: 'Database not available' });

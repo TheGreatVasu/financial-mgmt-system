@@ -260,6 +260,11 @@ export default function CustomerPOEntry() {
         { name: 'totalExWorks', label: 'Total Ex Works', type: 'number', required: true },
         { name: 'freightAmount', label: 'Freight Amount', type: 'number' },
         { name: 'gst', label: 'GST', type: 'number' },
+        { name: 'totalPOValue', label: 'Total PO Value', type: 'number', required: true }
+      ]
+    }
+  ]
+
   return (
     <DashboardLayout>
       <div className="space-y-4">

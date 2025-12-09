@@ -1,57 +1,50 @@
 const { getDb } = require('../config/db');
 
-/**
- * Generates a sequential invoice number in the format: INV-YYYYNNNN
- * Where:
- * - INV: Invoice prefix
- * - YYYY: 4-digit year
- * - NNNN: 4-digit sequential number (resets each year)
- * 
- * Examples:
- * - INV-20250001
- * - INV-20250002
- * - INV-20260001 (resets when year changes)
- * 
- * @param {Date} issueDate - The issue date of the invoice (defaults to current date)
- * @returns {Promise<string>} The generated invoice number
- */
-async function generateInvoiceNumber(issueDate = new Date()) {
-  const db = getDb();
-  const year = new Date(issueDate).getFullYear();
-  const yearPrefix = `INV-${year}`;
-  
-  if (db) {
-    // MySQL/Knex implementation
-    // Find all invoices that match the year prefix pattern
-    const invoices = await db('invoices')
-      .where('invoice_number', 'like', `${yearPrefix}%`)
-      .orderBy('id', 'desc')
-      .select('invoice_number');
-    
-    // Extract the sequence number from existing invoices
-    let maxSequence = 0;
-    
-    invoices.forEach(inv => {
-      const invNum = inv.invoice_number || '';
-      if (invNum.startsWith(yearPrefix)) {
-        // Extract sequence part after the year (e.g., "INV-2025" -> "0001")
-        const sequencePart = invNum.substring(yearPrefix.length);
-        const sequence = parseInt(sequencePart, 10);
-        if (!isNaN(sequence) && sequence > maxSequence) {
-          maxSequence = sequence;
-        }
-      }
-    });
-    
-    // Generate next sequence number
-    const nextSequence = maxSequence + 1;
-    return `${yearPrefix}${String(nextSequence).padStart(4, '0')}`;
-  } else {
-    // Database not available - return a timestamp-based number
-    const timestamp = Date.now();
-    return `${yearPrefix}${String(timestamp % 10000).padStart(4, '0')}`;
-  }
+function formatSequence(prefix, sequence, width = 4) {
+  return `${prefix}${String(sequence).padStart(width, '0')}`;
 }
 
-module.exports = { generateInvoiceNumber };
+async function getNextSequence(db, table, column, prefix, width) {
+  const likeValue = `${prefix}%`;
+  const substringStart = prefix.length + 1; // SUBSTRING positions are 1-based
+  const [{ maxSeq }] = await db(table)
+    .where(column, 'like', likeValue)
+    .max({
+      maxSeq: db.raw('CAST(SUBSTRING(??, ?) AS UNSIGNED)', [column, substringStart])
+    });
+
+  return (maxSeq || 0) + 1;
+}
+
+function fallbackSequence(prefix, width) {
+  const suffix = String(Date.now()).slice(-width);
+  return `${prefix}${suffix}`;
+}
+
+async function generateInvoiceNumber(issueDate = new Date()) {
+  const year = issueDate.getFullYear();
+  const prefix = `INV-${year}`;
+  const db = getDb();
+
+  if (!db) {
+    return fallbackSequence(prefix, 4);
+  }
+
+  const sequence = await getNextSequence(db, 'invoices', 'invoice_number', prefix, 4);
+  return formatSequence(prefix, sequence, 4);
+}
+
+async function generateInvoiceKeyId(prefix = 'KID') {
+  const normalizedPrefix = `${prefix.toUpperCase()}-`;
+  const db = getDb();
+
+  if (!db) {
+    return fallbackSequence(normalizedPrefix, 5);
+  }
+
+  const sequence = await getNextSequence(db, 'invoices', 'key_id', normalizedPrefix, 5);
+  return formatSequence(normalizedPrefix, sequence, 5);
+}
+
+module.exports = { generateInvoiceNumber, generateInvoiceKeyId };
 

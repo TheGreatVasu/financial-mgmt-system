@@ -1,26 +1,37 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
+import masterDataService from '../../../services/masterDataService'
 
 const companyProfileSchema = z.object({
+  logo: z.any().optional(),
   companyName: z.string().min(1, 'Company name is required'),
   legalEntityName: z.string().min(1, 'Legal entity name is required'),
-  corporateOfficeAddress: z.string().min(1, 'Corporate address is required'),
-  district: z.string().min(1, 'District is required'),
-  state: z.string().min(1, 'State is required'),
-  country: z.string().min(1, 'Country is required'),
-  pinCode: z.string().min(1, 'Pin code is required'),
+
+  corporateAddress: z.string().min(1, 'Corporate address is required'),
+  corporateDistrict: z.string().min(1, 'District is required'),
+  corporateState: z.string().min(1, 'State is required'),
+  corporateCountry: z.string().min(1, 'Country is required'),
+  corporatePinCode: z.string().min(1, 'Pin code is required'),
+
   correspondenceAddress: z.string().min(1, 'Correspondence address is required'),
-  gstin: z.string().min(0, 'GSTIN').optional().or(z.literal('')),
-  panNumber: z.string().min(0, 'PAN').optional().or(z.literal('')),
-  cinNumber: z.string().min(0, 'CIN').optional().or(z.literal('')),
-  businessType: z.string().min(1, 'Business type is required'),
-  businessUnit: z.string().min(1, 'Business unit is required'),
-  website: z.string().min(0, 'Website').optional().or(z.literal('')),
-  emailId: z.string().email('Valid email required'),
-  contactNumber: z.string().min(10, 'Phone number is required'),
+  correspondenceDistrict: z.string().min(1, 'District is required'),
+  correspondenceState: z.string().min(1, 'State is required'),
+  correspondenceCountry: z.string().min(1, 'Country is required'),
+  correspondencePinCode: z.string().min(1, 'Pin code is required'),
+
+  otherOfficeType: z.string().min(1, 'Select an office type'),
+  otherOfficeAddress: z.string().min(1, 'Office address is required'),
+  otherOfficeGst: z.string().min(1, 'GST No. is required'),
+  otherOfficeDistrict: z.string().min(1, 'District is required'),
+  otherOfficeState: z.string().min(1, 'State is required'),
+  otherOfficeCountry: z.string().min(1, 'Country is required'),
+  otherOfficePinCode: z.string().min(1, 'Pin code is required'),
+
+  primaryContactName: z.string().min(1, 'Contact person is required'),
+  primaryContactNumber: z.string().min(10, 'Contact number is required'),
+  primaryContactEmail: z.string().email('Valid email required'),
 })
 
 type CompanyProfileFormData = z.infer<typeof companyProfileSchema>
@@ -36,22 +47,67 @@ export default function Step1CompanyProfile({
   onPrevious,
   initialData,
 }: Step1CompanyProfileProps) {
+  const [saving, setSaving] = useState(false)
   const {
     control,
     handleSubmit,
+    trigger,
     formState: { errors },
+    setError,
   } = useForm<CompanyProfileFormData>({
     resolver: zodResolver(companyProfileSchema),
-    defaultValues: initialData || {},
+    mode: 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'all',
+    defaultValues: {
+      logo: initialData?.logo || null,
+      companyName: initialData?.companyName || '',
+      legalEntityName: initialData?.legalEntityName || '',
+
+      corporateAddress:
+        initialData?.corporateAddress ||
+        // Fallback to previous single-field name if it existed
+        (initialData as any)?.corporateOfficeAddress ||
+        '',
+      corporateDistrict: initialData?.corporateDistrict || '',
+      corporateState: initialData?.corporateState || '',
+      corporateCountry: initialData?.corporateCountry || '',
+      corporatePinCode: initialData?.corporatePinCode || '',
+
+      correspondenceAddress: initialData?.correspondenceAddress || '',
+      correspondenceDistrict: initialData?.correspondenceDistrict || '',
+      correspondenceState: initialData?.correspondenceState || '',
+      correspondenceCountry: initialData?.correspondenceCountry || '',
+      correspondencePinCode: initialData?.correspondencePinCode || '',
+
+      otherOfficeType: initialData?.otherOfficeType || '',
+      otherOfficeAddress: initialData?.otherOfficeAddress || '',
+      otherOfficeGst: initialData?.otherOfficeGst || '',
+      otherOfficeDistrict: initialData?.otherOfficeDistrict || '',
+      otherOfficeState: initialData?.otherOfficeState || '',
+      otherOfficeCountry: initialData?.otherOfficeCountry || '',
+      otherOfficePinCode: initialData?.otherOfficePinCode || '',
+
+      primaryContactName: initialData?.primaryContactName || '',
+      primaryContactNumber: initialData?.primaryContactNumber || '',
+      primaryContactEmail: initialData?.primaryContactEmail || '',
+    },
   })
 
-  const onSubmit = (data: CompanyProfileFormData) => {
-    if (onNext) {
-      onNext(data)
-    } else {
-      console.log('Company Profile Data:', data)
+  const onSubmit = async (data: CompanyProfileFormData) => {
+    try {
+      setSaving(true)
+      const valid = await trigger()
+      if (!valid) return
+      await masterDataService.updateCompanyProfile(data as any)
+      onNext?.(data)
+    } finally {
+      setSaving(false)
     }
   }
+
+  const baseInputClasses =
+    'w-full px-4 py-3 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition'
 
   const FormField = ({
     label,
@@ -60,11 +116,15 @@ export default function Step1CompanyProfile({
     placeholder,
     isTextarea = false,
     options,
+    required = true,
     control: formControl,
     error,
   }: any) => (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label className="text-sm font-semibold text-gray-800">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
       <Controller
         name={name}
         control={formControl}
@@ -73,17 +133,25 @@ export default function Step1CompanyProfile({
             <textarea
               {...field}
               placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
+              className={`${baseInputClasses} ${
+                error ? 'border-red-500 ring-red-200' : 'border-gray-200'
               }`}
               rows={3}
+              onBlur={(e) => {
+                field.onBlur()
+                trigger(name)
+              }}
             />
           ) : options ? (
             <select
               {...field}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
+              className={`${baseInputClasses} ${
+                error ? 'border-red-500 ring-red-200' : 'border-gray-200'
               }`}
+              onBlur={(e) => {
+                field.onBlur()
+                trigger(name)
+              }}
             >
               <option value="">Select {label}</option>
               {options.map((opt: string) => (
@@ -92,24 +160,19 @@ export default function Step1CompanyProfile({
                 </option>
               ))}
             </select>
-          ) : name === 'emailId' || name === 'contactNumber' ? (
-            <SmartDropdown
-              value={field.value as string}
-              onChange={field.onChange}
-              fieldName={name}
-              placeholder={placeholder}
-              inputClassName={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
           ) : (
             <input
               {...field}
               type={type}
               placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
+              className={`${baseInputClasses} ${
+                error ? 'border-red-500 ring-red-200' : 'border-gray-200'
               }`}
+              onBlur={(e) => {
+                field.onBlur()
+                trigger(name)
+              }}
+              aria-invalid={Boolean(error)}
             />
           )
         }
@@ -119,143 +182,306 @@ export default function Step1CompanyProfile({
   )
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="bg-white rounded-xl shadow-sm p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-8">Creation of Company Profile</h2>
+    <div className="w-full max-w-5xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-md p-8 border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="text-sm font-medium text-blue-600 uppercase tracking-wide">Step 1</p>
+            <h2 className="text-2xl font-bold text-gray-900">Creation of Company Profile</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Upload your brand identity and capture all locations and contacts in one view.
+            </p>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid grid-cols-2 gap-6">
-            <FormField
-              label="Company Name"
-              name="companyName"
-              placeholder="Enter company name"
-              control={control}
-              error={errors.companyName}
-            />
-            <FormField
-              label="Legal Entity Name"
-              name="legalEntityName"
-              placeholder="Enter legal entity name"
-              control={control}
-              error={errors.legalEntityName}
-            />
-            <FormField
-              label="Corporate Office Address"
-              name="corporateOfficeAddress"
-              placeholder="Enter corporate address"
-              control={control}
-              error={errors.corporateOfficeAddress}
-              isTextarea
-            />
-            <FormField
-              label="Correspondence Address"
-              name="correspondenceAddress"
-              placeholder="Enter correspondence address"
-              control={control}
-              error={errors.correspondenceAddress}
-              isTextarea
-            />
-            <FormField
-              label="District"
-              name="district"
-              placeholder="Enter district"
-              control={control}
-              error={errors.district}
-            />
-            <FormField
-              label="State"
-              name="state"
-              placeholder="Enter state"
-              control={control}
-              error={errors.state}
-            />
-            <FormField
-              label="Country"
-              name="country"
-              placeholder="Enter country"
-              control={control}
-              error={errors.country}
-            />
-            <FormField
-              label="Pin Code"
-              name="pinCode"
-              placeholder="Enter pin code"
-              control={control}
-              error={errors.pinCode}
-            />
-            <FormField
-              label="GSTIN"
-              name="gstin"
-              placeholder="Enter GSTIN"
-              control={control}
-              error={errors.gstin}
-            />
-            <FormField
-              label="PAN Number"
-              name="panNumber"
-              placeholder="Enter PAN"
-              control={control}
-              error={errors.panNumber}
-            />
-            <FormField
-              label="CIN Number"
-              name="cinNumber"
-              placeholder="Enter CIN"
-              control={control}
-              error={errors.cinNumber}
-            />
-            <FormField
-              label="Business Type"
-              name="businessType"
-              control={control}
-              error={errors.businessType}
-              options={['Proprietorship', 'Partnership', 'Pvt Ltd', 'Public Ltd']}
-            />
-            <FormField
-              label="Business Unit"
-              name="businessUnit"
-              placeholder="Enter business unit"
-              control={control}
-              error={errors.businessUnit}
-            />
-            <FormField
-              label="Website"
-              name="website"
-              type="url"
-              placeholder="https://example.com"
-              control={control}
-              error={errors.website}
-            />
-            <FormField
-              label="Email ID"
-              name="emailId"
-              type="email"
-              placeholder="Enter email"
-              control={control}
-              error={errors.emailId}
-            />
-            <FormField
-              label="Contact Number"
-              name="contactNumber"
-              placeholder="Enter 10-digit phone"
-              control={control}
-              error={errors.contactNumber}
-            />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {/* Logo & Basic Info */}
+          <div className="rounded-xl border border-gray-100 p-6 bg-gray-50/60">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Brand & Identity</h3>
+                <p className="text-sm text-gray-600">Logo plus Company Name / Legal Entity Name.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-1">
+                <label className="text-sm font-semibold text-gray-800 block mb-2">
+                  Company Logo <span className="text-red-500">*</span>
+                </label>
+                <Controller
+                  name="logo"
+                  control={control}
+                  render={({ field: { onChange, value } }) => (
+                    <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
+                      <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-semibold text-base uppercase">
+                        {value instanceof File ? value.name.substring(0, 2) : 'Logo'}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-800">Upload company logo</p>
+                        <p className="text-xs text-gray-500">PNG/JPG, max 2MB</p>
+                      </div>
+                      <label className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-700 transition">
+                        Choose File
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => onChange(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                      {value && (
+                        <span className="text-xs text-gray-600 truncate max-w-full">
+                          {(value as File)?.name}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
+
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  label="Company Name"
+                  name="companyName"
+                  placeholder="e.g., Acme Industries Pvt. Ltd."
+                  control={control}
+                  error={errors.companyName}
+                />
+                <FormField
+                  label="Legal Entity Name"
+                  name="legalEntityName"
+                  placeholder="Registered legal entity"
+                  control={control}
+                  error={errors.legalEntityName}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-between mt-8">
+          {/* Corporate Office Address */}
+          <div className="rounded-xl border border-gray-100 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Corporate Office Address</h3>
+                <p className="text-sm text-gray-600">
+                  Headquarters address and location details.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                label="Address"
+                name="corporateAddress"
+                placeholder="Street, building, landmark"
+                control={control}
+                error={errors.corporateAddress}
+                isTextarea
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  label="District"
+                  name="corporateDistrict"
+                  placeholder="District"
+                  control={control}
+                  error={errors.corporateDistrict}
+                />
+                <FormField
+                  label="State"
+                  name="corporateState"
+                  placeholder="State"
+                  control={control}
+                  error={errors.corporateState}
+                />
+                <FormField
+                  label="Country"
+                  name="corporateCountry"
+                  placeholder="Country"
+                  control={control}
+                  error={errors.corporateCountry}
+                />
+                <FormField
+                  label="Pin Code"
+                  name="corporatePinCode"
+                  placeholder="e.g., 400001"
+                  control={control}
+                  error={errors.corporatePinCode}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Correspondence Address */}
+          <div className="rounded-xl border border-gray-100 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Correspondence Address</h3>
+                <p className="text-sm text-gray-600">
+                  Postal communication address (if different from corporate).
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                label="Address"
+                name="correspondenceAddress"
+                placeholder="Street, building, landmark"
+                control={control}
+                error={errors.correspondenceAddress}
+                isTextarea
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  label="District"
+                  name="correspondenceDistrict"
+                  placeholder="District"
+                  control={control}
+                  error={errors.correspondenceDistrict}
+                />
+                <FormField
+                  label="State"
+                  name="correspondenceState"
+                  placeholder="State"
+                  control={control}
+                  error={errors.correspondenceState}
+                />
+                <FormField
+                  label="Country"
+                  name="correspondenceCountry"
+                  placeholder="Country"
+                  control={control}
+                  error={errors.correspondenceCountry}
+                />
+                <FormField
+                  label="Pin Code"
+                  name="correspondencePinCode"
+                  placeholder="e.g., 400001"
+                  control={control}
+                  error={errors.correspondencePinCode}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Other Office / Plant Details */}
+          <div className="rounded-xl border border-gray-100 p-6 bg-gray-50/60">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Other Office / Plant Details</h3>
+                <p className="text-sm text-gray-600">
+                  Capture plants, site offices, or marketing offices with GST details.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FormField
+                label="Location Type"
+                name="otherOfficeType"
+                control={control}
+                error={errors.otherOfficeType}
+                options={['Plant Address', 'Site Office', 'Marketing Office']}
+              />
+              <FormField
+                label="GST No."
+                name="otherOfficeGst"
+                placeholder="Enter GST number"
+                control={control}
+                error={errors.otherOfficeGst}
+              />
+              <FormField
+                label="Pin Code"
+                name="otherOfficePinCode"
+                placeholder="e.g., 400001"
+                control={control}
+                error={errors.otherOfficePinCode}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <FormField
+                label="Office Address"
+                name="otherOfficeAddress"
+                placeholder="Street, building, landmark"
+                control={control}
+                error={errors.otherOfficeAddress}
+                isTextarea
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  label="District"
+                  name="otherOfficeDistrict"
+                  placeholder="District"
+                  control={control}
+                  error={errors.otherOfficeDistrict}
+                />
+                <FormField
+                  label="State"
+                  name="otherOfficeState"
+                  placeholder="State"
+                  control={control}
+                  error={errors.otherOfficeState}
+                />
+                <FormField
+                  label="Country"
+                  name="otherOfficeCountry"
+                  placeholder="Country"
+                  control={control}
+                  error={errors.otherOfficeCountry}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Primary Contact Details */}
+          <div className="rounded-xl border border-gray-100 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Primary Contact Details</h3>
+                <p className="text-sm text-gray-600">
+                  Who should we reach out to for this profile?
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FormField
+                label="Contact Person Name"
+                name="primaryContactName"
+                placeholder="Full name"
+                control={control}
+                error={errors.primaryContactName}
+              />
+              <FormField
+                label="Contact Number"
+                name="primaryContactNumber"
+                placeholder="+91 98765 43210"
+                control={control}
+                error={errors.primaryContactNumber}
+              />
+              <FormField
+                label="Email ID"
+                name="primaryContactEmail"
+                type="email"
+                placeholder="name@company.com"
+                control={control}
+                error={errors.primaryContactEmail}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-between pt-2">
             <button
               type="button"
               onClick={onPrevious}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold"
             >
               Previous
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              disabled={saving}
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-sm disabled:opacity-60"
             >
-              Next
+              {saving ? 'Saving...' : 'Next'}
             </button>
           </div>
         </form>

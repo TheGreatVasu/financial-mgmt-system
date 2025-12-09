@@ -21,21 +21,23 @@ Captures essential company information including legal details, location, and co
 **Validation:** Zod schema with regex patterns for GSTIN, PAN, phone numbers, URLs
 
 ### Step 2: Customer Profile
-Customer master data configuration with location, address, and contact information.
+Customer master data configuration with the fields required by the master data page.
 
 **Fields:**
-- Customer Name & Code
-- GSTIN, PAN Number
-- Company Type
-- Segment, Region, Zone
-- Billing & Shipping Addresses
-- Contact Person (Name, Number, Email)
-- Credit Period, Payment Terms, Delivery Terms
-- Project Manager
-- Any Hold (Yes/No)
-- Remarks
+- Logo
+- Customer Name
+- Legal Entity Name
+- Corporate Office Address
+- Correspondence Address
+- District, State, Country, Pin Code
+- Segment (Domestic / Export)
+- GST No
+- PO Issuing Authority / Contact Person Name
+- Designation
+- Contact Person Contact No
+- Email ID
 
-**Validation:** Email, phone, and other format validations
+**Validation:** Email, phone, pin code, and required field validations
 
 ### Step 3: Payment Terms
 Payment configuration including bank details and billing cycles.

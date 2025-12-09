@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 
@@ -57,6 +57,21 @@ const requiredFields = [
   'totalPOValue'
 ]
 
+function createEmptyForm() {
+  return { ...initialForm }
+}
+
+function hydrateForm(entry) {
+  if (!entry) return createEmptyForm()
+  const hydrated = createEmptyForm()
+  Object.keys(hydrated).forEach((key) => {
+    if (entry[key] !== undefined && entry[key] !== null) {
+      hydrated[key] = typeof entry[key] === 'number' ? entry[key].toString() : entry[key]
+    }
+  })
+  return hydrated
+}
+
 const fallbackMasterSeeds = {
   segments: ['Infrastructure', 'Industrial', 'Residential', 'Government', 'Retail'],
   zones: ['North', 'South', 'East', 'West', 'Central'],
@@ -105,11 +120,14 @@ function Field({ label, required, children, hint }) {
 export default function POEntry() {
   const { token } = useAuthContext()
   const navigate = useNavigate()
+  const { id } = useParams()
   const customerService = useMemo(() => createCustomerService(token), [token])
   const poEntryService = useMemo(() => createPOEntryService(token), [token])
-  const [form, setForm] = useState(initialForm)
+  const isEditing = Boolean(id)
+  const [form, setForm] = useState(() => createEmptyForm())
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [masterOptions, setMasterOptions] = useState({
@@ -127,6 +145,42 @@ export default function POEntry() {
     if (!token) return
     loadMasterData()
   }, [token, customerService])
+
+  useEffect(() => {
+    if (!token) return
+    if (!isEditing) {
+      setForm(createEmptyForm())
+      setCurrentStep(0)
+      return
+    }
+
+    let cancelled = false
+    async function loadEntry() {
+      setIsLoadingEntry(true)
+      try {
+        const response = await poEntryService.get(id)
+        const entry = response?.data || response
+        if (!cancelled && entry) {
+          setForm(hydrateForm(entry))
+          setCurrentStep(0)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error?.response?.data?.message || error?.message || 'Failed to load PO entry'
+          toast.error(message)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingEntry(false)
+        }
+      }
+    }
+
+    loadEntry()
+    return () => {
+      cancelled = true
+    }
+  }, [id, isEditing, poEntryService, token])
 
   async function loadMasterData() {
     try {
@@ -209,13 +263,15 @@ export default function POEntry() {
       numericFields.forEach((field) => {
         payload[field] = form[field] ? Number(form[field]) : null
       })
-      const response = await poEntryService.create(payload)
+      const response = isEditing
+        ? await poEntryService.update(id, payload)
+        : await poEntryService.create(payload)
       if (response?.success) {
-        toast.success('Purchase Order entry saved successfully!')
+        toast.success(isEditing ? 'Purchase Order entry updated successfully!' : 'Purchase Order entry saved successfully!')
       } else {
-        toast.success('Purchase Order entry created')
+        toast.success(isEditing ? 'Purchase Order entry updated' : 'Purchase Order entry created')
       }
-      setForm(initialForm)
+      setForm(createEmptyForm())
       setErrors({})
       setCurrentStep(0)
       setConfirmOpen(false)
@@ -252,6 +308,12 @@ export default function POEntry() {
   
       {/* PAGE WRAPPER */}
       <div className="space-y-6">
+        {isLoadingEntry ? (
+          <div className="rounded-2xl border border-secondary-200 bg-white p-5 text-center shadow-sm text-secondary-600">
+            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-primary-600" />
+            Loading PO entry...
+          </div>
+        ) : null}
   
         {/* HEADER + STEPS BOX */}
         <div className="rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm space-y-4 relative">
