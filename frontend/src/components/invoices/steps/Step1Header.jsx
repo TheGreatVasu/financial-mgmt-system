@@ -1,3 +1,12 @@
+const BUSINESS_UNIT_OPTIONS = [
+  'Automation',
+  'Energy',
+  'Manufacturing',
+  'Services',
+  'Projects',
+  'Other'
+]
+
 export default function Step1Header({ formData, updateFormData, errors, customers = [] }) {
   return (
     <div className="space-y-6">
@@ -78,13 +87,18 @@ export default function Step1Header({ formData, updateFormData, errors, customer
           <label className="block text-sm font-medium text-secondary-700 mb-1">
             Business Unit
           </label>
-          <input
-            type="text"
+          <select
             className={`input ${errors.businessUnit ? 'border-danger-500' : ''}`}
             value={formData.businessUnit || ''}
             onChange={(e) => updateFormData('businessUnit', e.target.value)}
-            placeholder="Enter Business Unit"
-          />
+          >
+            <option value="">Select Business Unit</option>
+            {BUSINESS_UNIT_OPTIONS.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}
+              </option>
+            ))}
+          </select>
           {errors.businessUnit && <p className="text-xs text-danger-500 mt-1">{errors.businessUnit}</p>}
         </div>
 
@@ -115,19 +129,7 @@ export default function Step1Header({ formData, updateFormData, errors, customer
           {errors.customerId && <p className="text-xs text-danger-500 mt-1">{errors.customerId}</p>}
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-1">
-            Customer Name
-          </label>
-          <input
-            type="text"
-            className={`input ${errors.customerName ? 'border-danger-500' : ''}`}
-            value={formData.customerName || ''}
-            onChange={(e) => updateFormData('customerName', e.target.value)}
-            placeholder="Customer name (auto-filled from selection)"
-          />
-          {errors.customerName && <p className="text-xs text-danger-500 mt-1">{errors.customerName}</p>}
-        </div>
+        {/* Customer name now derives from selection, so no duplicate input */}
 
         <div>
           <label className="block text-sm font-medium text-secondary-700 mb-1">

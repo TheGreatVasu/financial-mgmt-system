@@ -1,3 +1,13 @@
+const PAYMENT_TEXT_OPTIONS = [
+  'Advance Payment',
+  'Progress Billing',
+  'Milestone Based',
+  'Partial Payment',
+  'Final Settlement'
+]
+
+const PAYMENT_TERM_OPTIONS = ['Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90', 'Immediate', 'Custom']
+
 export default function Step4FirstDue({ formData, updateFormData, errors }) {
   return (
     <div className="space-y-6">
@@ -11,13 +21,18 @@ export default function Step4FirstDue({ formData, updateFormData, errors }) {
           <label className="block text-sm font-medium text-secondary-700 mb-1">
             Payment Text
           </label>
-          <input
-            type="text"
+          <select
             className={`input ${errors.paymentText ? 'border-danger-500' : ''}`}
             value={formData.paymentText || ''}
             onChange={(e) => updateFormData('paymentText', e.target.value)}
-            placeholder="Enter Payment Text"
-          />
+          >
+            <option value="">Select Payment Text</option>
+            {PAYMENT_TEXT_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           {errors.paymentText && <p className="text-xs text-danger-500 mt-1">{errors.paymentText}</p>}
         </div>
 
@@ -30,11 +45,11 @@ export default function Step4FirstDue({ formData, updateFormData, errors }) {
             value={formData.paymentTerms || 'Net 30'}
             onChange={(e) => updateFormData('paymentTerms', e.target.value)}
           >
-            <option value="Net 15">Net 15</option>
-            <option value="Net 30">Net 30</option>
-            <option value="Net 45">Net 45</option>
-            <option value="Net 60">Net 60</option>
-            <option value="Net 90">Net 90</option>
+            {PAYMENT_TERM_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
           {errors.paymentTerms && <p className="text-xs text-danger-500 mt-1">{errors.paymentTerms}</p>}
         </div>

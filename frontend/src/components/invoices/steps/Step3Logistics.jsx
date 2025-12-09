@@ -1,4 +1,8 @@
-export default function Step3Logistics({ formData, updateFormData, errors }) {
+export default function Step3Logistics({ formData, updateFormData, errors, consigneeOptions = [], payerOptions = [] }) {
+  const handleAddressSelect = (field, value) => {
+    updateFormData(field, value || '')
+  }
+
   return (
     <div className="space-y-6">
       <div className="border-b border-secondary-200 pb-3">
@@ -7,17 +11,33 @@ export default function Step3Logistics({ formData, updateFormData, errors }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-secondary-700 mb-1">
-            Consignee Name & Address
-          </label>
+        <div className="md:col-span-2 space-y-2">
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1">
+              Consignee Name & Address
+            </label>
+            <select
+              className="input"
+              value=""
+              onChange={(e) => handleAddressSelect('consigneeNameAddress', e.target.value)}
+              disabled={!consigneeOptions.length}
+            >
+              <option value="">{consigneeOptions.length ? 'Select from Master Data' : 'No master data available'}</option>
+              {consigneeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label || option.value}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-secondary-500 mt-1">Selecting an option will auto-fill the address below.</p>
+          </div>
           <textarea
             className={`input min-h-[80px] ${errors.consigneeNameAddress ? 'border-danger-500' : ''}`}
             value={formData.consigneeNameAddress || ''}
             onChange={(e) => updateFormData('consigneeNameAddress', e.target.value)}
-            placeholder="Enter Consignee Name & Address"
+            placeholder="Select from master data or enter Consignee Name & Address"
           />
-          {errors.consigneeNameAddress && <p className="text-xs text-danger-500 mt-1">{errors.consigneeNameAddress}</p>}
+          {errors.consigneeNameAddress && <p className="text-xs text-danger-500">{errors.consigneeNameAddress}</p>}
         </div>
 
         <div>
@@ -34,17 +54,33 @@ export default function Step3Logistics({ formData, updateFormData, errors }) {
           {errors.consigneeCity && <p className="text-xs text-danger-500 mt-1">{errors.consigneeCity}</p>}
         </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-secondary-700 mb-1">
-            Payer Name & Address
-          </label>
+        <div className="md:col-span-2 space-y-2">
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1">
+              Payer Name & Address
+            </label>
+            <select
+              className="input"
+              value=""
+              onChange={(e) => handleAddressSelect('payerNameAddress', e.target.value)}
+              disabled={!payerOptions.length}
+            >
+              <option value="">{payerOptions.length ? 'Select from Master Data' : 'No master data available'}</option>
+              {payerOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label || option.value}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-secondary-500 mt-1">Selecting an option will auto-fill the address below.</p>
+          </div>
           <textarea
             className={`input min-h-[80px] ${errors.payerNameAddress ? 'border-danger-500' : ''}`}
             value={formData.payerNameAddress || ''}
             onChange={(e) => updateFormData('payerNameAddress', e.target.value)}
-            placeholder="Enter Payer Name & Address"
+            placeholder="Select from master data or enter Payer Name & Address"
           />
-          {errors.payerNameAddress && <p className="text-xs text-danger-500 mt-1">{errors.payerNameAddress}</p>}
+          {errors.payerNameAddress && <p className="text-xs text-danger-500">{errors.payerNameAddress}</p>}
         </div>
 
         <div>

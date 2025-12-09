@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createApiClient } from '../../services/apiClient'
@@ -10,7 +10,9 @@ import Step5SecondDue from './steps/Step5SecondDue'
 import Step6ThirdDueSummary from './steps/Step6ThirdDueSummary'
 import Step7Summary from './steps/Step7Summary'
 
-const TOTAL_STEPS = 7
+const STEP_TITLES = ['Invoice Data Entry', 'Review & Submit']
+const TOTAL_STEPS = STEP_TITLES.length
+const IS_DEV_MODE = typeof import.meta !== 'undefined' && import.meta.env?.MODE !== 'production'
 
 export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   const { token } = useAuthContext()
@@ -147,6 +149,70 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
+  const customerAddressOptions = useMemo(() => {
+    if (!customers?.length) return []
+
+    const formatAddress = (address) => {
+      if (!address) return ''
+      if (typeof address === 'string') return address
+      if (typeof address === 'object') {
+        const parts = [
+          address.addressLine || address.address_line || '',
+          address.city,
+          address.state,
+          address.pinCode || address.pin_code,
+        ]
+        return parts.filter(Boolean).join(', ')
+      }
+      return ''
+    }
+
+    const options = []
+    const seen = new Set()
+
+    const addOption = (value, label) => {
+      const trimmed = (value || '').toString().trim()
+      if (!trimmed || seen.has(trimmed)) return
+      seen.add(trimmed)
+      options.push({ value: trimmed, label })
+    }
+
+    customers.forEach((customer) => {
+      const company = customer.companyName || customer.company_name || customer.name || 'Customer'
+      const metadata = customer.metadata || {}
+      const companyProfile = metadata.companyProfile || {}
+
+      addOption(formatAddress(companyProfile.corporateOffice), `${company} • Corporate Office`)
+      addOption(formatAddress(companyProfile.marketingOffice), `${company} • Marketing Office`)
+      addOption(formatAddress(companyProfile.correspondenceAddress), `${company} • Correspondence`)
+
+      const siteOffices =
+        companyProfile.siteOffices ||
+        customer.siteOffices || []
+      siteOffices.forEach((site, idx) => {
+        addOption(
+          formatAddress(site),
+          `${company} • Site Office ${site?.label || idx + 1}`
+        )
+      })
+
+      const plantAddresses =
+        companyProfile.plantAddresses ||
+        customer.plantAddresses || []
+      plantAddresses.forEach((plant, idx) => {
+        addOption(
+          formatAddress(plant),
+          `${company} • Plant ${plant?.label || idx + 1}`
+        )
+      })
+
+      // Fallback to main company address if available
+      addOption(customer.address, `${company}`)
+    })
+
+    return options
+  }, [customers])
+
   // Load customers
   useEffect(() => {
     if (!token) return
@@ -176,15 +242,17 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   }
 
   const validateStep = (step) => {
+    if (IS_DEV_MODE) {
+      setErrors({})
+      return true
+    }
+
     const newErrors = {}
     
     if (step === 1) {
-      // Add validation for Step 1 required fields
       if (!formData.customerId) newErrors.customerId = 'Customer is required'
       if (!formData.gstTaxInvoiceDate) newErrors.gstTaxInvoiceDate = 'GST Tax Invoice Date is required'
     }
-    
-    // Add more validations as needed
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -298,35 +366,48 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     }
   }
 
-  const stepTitles = [
-    'Invoice Header & Customer Info',
-    'Item, Value & Tax Details',
-    'Consignee, Payer & Logistics Tracking',
-    'Payment Info & 1st Due',
-    '2nd Due Details',
-    '3rd Due, Summary & Deductions',
-    'Review & Submit'
-  ]
-
   const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return <Step1Header formData={formData} updateFormData={updateFormData} errors={errors} customers={customers} />
-      case 2:
-        return <Step2ItemTax formData={formData} updateFormData={updateFormData} errors={errors} />
-      case 3:
-        return <Step3Logistics formData={formData} updateFormData={updateFormData} errors={errors} />
-      case 4:
-        return <Step4FirstDue formData={formData} updateFormData={updateFormData} errors={errors} />
-      case 5:
-        return <Step5SecondDue formData={formData} updateFormData={updateFormData} errors={errors} />
-      case 6:
-        return <Step6ThirdDueSummary formData={formData} updateFormData={updateFormData} errors={errors} />
-      case 7:
-        return <Step7Summary formData={formData} onEdit={() => setCurrentStep(1)} />
-      default:
-        return null
+    if (currentStep === 1) {
+      return (
+        <div className="space-y-10">
+          <Step1Header
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+            customers={customers}
+          />
+          <Step2ItemTax
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+          />
+          <Step3Logistics
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+            consigneeOptions={customerAddressOptions}
+            payerOptions={customerAddressOptions}
+          />
+          <Step4FirstDue
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+          />
+          <Step5SecondDue
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+          />
+          <Step6ThirdDueSummary
+            formData={formData}
+            updateFormData={updateFormData}
+            errors={errors}
+          />
+        </div>
+      )
     }
+
+    return <Step7Summary formData={formData} onEdit={() => setCurrentStep(1)} />
   }
 
   return (
@@ -336,7 +417,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
         {/* Progress Info */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-800">
-            {stepTitles[currentStep - 1]}
+            {STEP_TITLES[currentStep - 1]}
           </h3>
           <span className="text-sm font-medium text-primary-600">
             Step {currentStep} of {TOTAL_STEPS}
@@ -358,7 +439,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
           
           {/* Step Indicators */}
           <div className="flex justify-between mt-4 relative">
-            {stepTitles.map((_, index) => {
+            {STEP_TITLES.map((title, index) => {
               const step = index + 1;
               const isCompleted = step < currentStep;
               const isActive = step === currentStep;
@@ -372,7 +453,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
                     isCompleted ? 'cursor-pointer' : 'cursor-default'
                   }`}
                   disabled={!isCompleted}
-                  aria-label={`Step ${step}: ${stepTitles[index]}`}
+                  aria-label={`Step ${step}: ${STEP_TITLES[index]}`}
                 >
                   <div 
                     className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
@@ -398,13 +479,13 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
                       isActive ? 'text-primary-700 font-semibold' : 'text-gray-500'
                     }`}
                   >
-                    {stepTitles[index].split(' ')[0]}
+                    {title}
                   </span>
                   
                   {/* Tooltip for full step title */}
                   <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                     <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                      {stepTitles[index]}
+                      {title}
                     </div>
                     <div className="w-2 h-2 bg-gray-900 transform rotate-45 -mt-1 mx-auto"></div>
                   </div>

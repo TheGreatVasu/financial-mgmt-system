@@ -1,3 +1,13 @@
+const MATERIAL_DESCRIPTION_OPTIONS = [
+  'Goods - Equipment',
+  'Goods - Consumables',
+  'Services - Installation',
+  'Services - AMC',
+  'Works Contract',
+  'Freight & Logistics',
+  'Others'
+]
+
 export default function Step2ItemTax({ formData, updateFormData, errors }) {
   return (
     <div className="space-y-6">
@@ -11,14 +21,19 @@ export default function Step2ItemTax({ formData, updateFormData, errors }) {
           <label className="block text-sm font-medium text-secondary-700 mb-1">
             Material Description Type <span className="text-danger-500">*</span>
           </label>
-          <input
-            type="text"
+          <select
             className={`input ${errors.materialDescriptionType ? 'border-danger-500' : ''}`}
             value={formData.materialDescriptionType || ''}
             onChange={(e) => updateFormData('materialDescriptionType', e.target.value)}
-            placeholder="Enter Material Description Type"
             required
-          />
+          >
+            <option value="">Select Material Description Type</option>
+            {MATERIAL_DESCRIPTION_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           {errors.materialDescriptionType && <p className="text-xs text-danger-500 mt-1">{errors.materialDescriptionType}</p>}
         </div>
 
