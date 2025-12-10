@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createPOEntryService } from '../../services/poEntryService'
-import { Loader2, Search, Plus, FileText, Calendar, DollarSign, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Loader2, Search, Plus, FileText, Calendar, DollarSign, ArrowLeft, RefreshCw, Trash2, AlertCircle } from 'lucide-react'
+import Modal from '../../components/ui/Modal.jsx'
 import toast from 'react-hot-toast'
 
-function Card({ entry }) {
+function Card({ entry, onDelete }) {
   return (
     <div className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -48,12 +49,22 @@ function Card({ entry }) {
 
       <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
         <div className="text-xs text-secondary-500">Last updated: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—'}</div>
-        <Link
-          to={`/po-entry/${entry.id || entry._id || entry.poNo}`}
-          className="text-primary-700 text-sm font-semibold hover:text-primary-800 inline-flex items-center gap-1"
-        >
-          Edit / View
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/po-entry/${entry.id || entry._id || entry.poNo}`}
+            className="text-primary-700 text-sm font-semibold hover:text-primary-800 inline-flex items-center gap-1"
+          >
+            Edit / View
+          </Link>
+          <button
+            type="button"
+            onClick={() => onDelete?.(entry)}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-danger-600 hover:text-danger-700"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -66,6 +77,8 @@ export default function POEntryListPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
+  const [deletingEntry, setDeletingEntry] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -85,6 +98,22 @@ export default function POEntryListPage() {
       toast.error(msg)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletingEntry) return
+    setIsDeleting(true)
+    try {
+      await poEntryService.remove(deletingEntry.id || deletingEntry._id || deletingEntry.poNo)
+      toast.success('PO entry deleted successfully!')
+      setDeletingEntry(null)
+      await load()
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete PO entry'
+      toast.error(msg)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -164,10 +193,70 @@ export default function POEntryListPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filtered.map((entry) => (
-              <Card key={entry._id || entry.id || entry.poNo} entry={entry} />
+              <Card
+                key={entry._id || entry.id || entry.poNo}
+                entry={entry}
+                onDelete={() => setDeletingEntry(entry)}
+              />
             ))}
           </div>
         )}
+
+        <Modal
+          open={!!deletingEntry}
+          onClose={() => !isDeleting && setDeletingEntry(null)}
+          title="Delete PO Entry"
+          variant="dialog"
+          size="sm"
+          footer={(
+            <>
+              <button
+                className="btn btn-outline"
+                onClick={() => setDeletingEntry(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary bg-danger-600 hover:bg-danger-700"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </>
+          )}
+        >
+          {deletingEntry && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-danger-100">
+                    <AlertCircle className="h-5 w-5 text-danger-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-secondary-900 mb-1">
+                    Are you sure you want to delete this PO entry?
+                  </h3>
+                  <p className="text-sm text-secondary-700 mb-2">
+                    PO <strong>{deletingEntry.poNo || deletingEntry.id || deletingEntry._id || 'N/A'}</strong> will be permanently deleted.
+                  </p>
+                  <p className="text-xs text-secondary-500">
+                    This action cannot be undone and will remove the purchase order from your records.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal>
       </div>
     </DashboardLayout>
   )

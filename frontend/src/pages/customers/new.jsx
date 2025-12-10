@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
@@ -97,6 +97,9 @@ export default function CustomerNew() {
   const navigate = useNavigate()
 
   const [currentStep, setCurrentStep] = useState(0)
+
+  const [logoPreview, setLogoPreview] = useState(null)
+  const fileInputRef = useRef(null)
 
   const [companyProfile, setCompanyProfile] = useState({
     logo: null,
@@ -342,45 +345,56 @@ export default function CustomerNew() {
     }
   }
 
-  const updateCompany = useCallback((field, value) => {
-    try {
-      setCompanyProfile((prev) => {
-        if (!prev) {
-          console.warn('Company profile state is null, initializing...')
-          return {
-            logo: null,
-            companyName: '',
-            legalEntityName: '',
-            corporateOffice: emptyAddress('Corporate Office'),
-            marketingOffice: emptyAddress('Marketing Office'),
-            correspondenceAddress: '',
-            gstNumbers: [''],
-            siteOffices: [emptyAddress('Site Office 1')],
-            plantAddresses: [emptyAddress('Plant Address 1')],
-            primaryContact: emptyContact(),
-            [field]: value
-          }
+const updateCompany = useCallback((field, value) => {
+  try {
+    setCompanyProfile((prev) => {
+      if (!prev) {
+        console.warn('Company profile state is null, initializing...')
+        return {
+          logo: null,
+          companyName: '',
+          legalEntityName: '',
+          corporateOffice: emptyAddress('Corporate Office'),
+          marketingOffice: emptyAddress('Marketing Office'),
+          correspondenceAddress: '',
+          gstNumbers: [''],
+          siteOffices: [emptyAddress('Site Office 1')],
+          plantAddresses: [emptyAddress('Plant Address 1')],
+          primaryContact: emptyContact(),
+          [field]: value
         }
-        return { ...prev, [field]: value }
-      })
-    } catch (err) {
-      console.error('Error updating company field:', field, err)
-      // Don't throw - just log the error to prevent blank page
-    }
-  }, [])
+      }
+      return { ...prev, [field]: value }
+    })
 
-  function updatePaymentTerm(index, field, value) {
-    setPaymentTerms((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              [field]: value,
-            }
-          : item
-      )
-    )
+    // Handle logo preview
+    if (field === 'logo' && value instanceof File) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setLogoPreview(reader.result)
+      }
+      reader.readAsDataURL(value)
+    } else if (field === 'logo' && !value) {
+      setLogoPreview(null)
+    }
+  } catch (err) {
+    console.error('Error updating company profile:', err)
   }
+}, [])
+
+function updatePaymentTerm(index, field, value) {
+  setPaymentTerms((prev) =>
+    prev.map((item, i) =>
+      i === index
+        ? {
+            ...item,
+            [field]: value,
+            primaryContact: emptyContact()
+          }
+        : item
+    )
+  )
+}
 
   function addPaymentTerm() {
     setPaymentTerms((prev) => [...prev, defaultPaymentTerm()])
@@ -432,170 +446,149 @@ export default function CustomerNew() {
     setCurrentStep((s) => Math.max(s - 1, 0))
   }
 
-  async function onSubmit(e) {
-    e.preventDefault()
-    setError('')
-    if (!companyProfile.companyName?.trim() && !companyProfile.legalEntityName?.trim()) {
-      setError('Company / legal entity name is required')
-      return
-    }
-    const requiredCompany = [
-      'corporateAddress',
-      'corporateDistrict',
-      'corporateState',
-      'corporateCountry',
-      'corporatePinCode',
-      'correspondenceAddress',
-      'correspondenceDistrict',
-      'correspondenceState',
-      'correspondenceCountry',
-      'correspondencePinCode'
-    ]
-    const missingCompany = requiredCompany.some((key) => !companyProfile?.[key]?.trim())
-    if (missingCompany) {
-      setError('Please fill all required company profile fields')
-      return
-    }
-    const requiredFields = [
-      'customerName',
-      'legalEntityName',
-      'corporateOfficeAddress',
-      'correspondenceAddress',
-      'district',
-      'state',
-      'country',
-      'pinCode',
-      'segment',
-      'gstNumber',
-      'poIssuingAuthority',
-      'designation',
-      'contactNumber',
-      'emailId'
-    ]
-    const missing = requiredFields.some((key) => !customerProfile?.[key]?.trim())
-    if (missing) {
-      setError('Please fill all required customer profile fields')
-      return
-    }
-    const firstConsignee = consigneeProfiles?.[0] || emptyConsignee()
-    const requiredConsignee = [
-      'consigneeName',
-      'consigneeAddress',
-      'customerName',
-      'legalEntityName',
-      'city',
-      'state',
-      'gstNumber',
-      'contactPersonName',
-      'designation',
-      'contactNumber',
-      'emailId'
-    ]
-    const missingConsignee = requiredConsignee.some((key) => !firstConsignee?.[key]?.trim())
-    if (missingConsignee) {
-      setError('Please fill all required consignee profile fields')
-      return
-    }
-    const firstPayer = payerProfiles?.[0] || emptyPayer()
-    const requiredPayer = [
-      'payerName',
-      'payerAddress',
-      'customerName',
-      'legalEntityName',
-      'city',
-      'state',
-      'gstNumber',
-      'contactPersonName',
-      'designation',
-      'contactNumber',
-      'emailId'
-    ]
-    const missingPayer = requiredPayer.some((key) => !firstPayer?.[key]?.trim())
-    if (missingPayer) {
-      setError('Please fill all required payer profile fields')
-      return
-    }
-    if (!validateAllSteps()) {
-      return
-    }
+  // Load saved data from localStorage on component mount
+  const loadSavedData = useCallback(() => {
     try {
-      setSaving(true)
-      const payload = {
-        companyName: companyProfile.companyName || companyProfile.legalEntityName || null,
-        name: customerProfile.poIssuingAuthority || customerProfile.customerName || companyProfile.primaryContact.name || null,
-        email: customerProfile.emailId || companyProfile.primaryContact.email || null,
-        phone: customerProfile.contactNumber || companyProfile.primaryContact.contactNumber || null,
-        gstNumber:
-          companyProfile.gstNumbers.find((gst) => gst?.trim()) ||
-          companyProfile.corporateOffice.gstNumber ||
-          null,
-        metadata: {
-          companyProfile,
-          customerProfile,
-          consigneeProfiles,
-          payerProfiles,
-          paymentTerms,
-          teamProfiles
-        }
+      const savedData = localStorage.getItem('customerFormData')
+      if (savedData) {
+        return JSON.parse(savedData)
       }
-      const res = await svc.create(payload)
-      const created = res?.data
-      const recordId = created?.id ?? created?._id ?? ''
-      setCreatedRecordId(recordId)
-      setShowSuccessPopup(true)
-    } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to create master record')
-    } finally {
-      setSaving(false)
+    } catch (error) {
+      console.error('Error loading saved data:', error)
+      localStorage.removeItem('customerFormData')
     }
-  }
-
-  function handleDone() {
-    setShowSuccessPopup(false)
-    navigate(`/customers/${createdRecordId}`)
-  }
-
-  // Prevent blank page crashes by catching errors early
-  useEffect(() => {
-    const errorHandler = (event) => {
-      console.error('Global error caught:', event.error)
-      // Prevent blank page by logging error but not crashing
-      event.preventDefault()
-      return true
-    }
-    
-    const unhandledRejectionHandler = (event) => {
-      console.error('Unhandled promise rejection:', event.reason)
-      event.preventDefault()
-    }
-    
-    window.addEventListener('error', errorHandler)
-    window.addEventListener('unhandledrejection', unhandledRejectionHandler)
-    
-    return () => {
-      window.removeEventListener('error', errorHandler)
-      window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
-    }
+    return null
   }, [])
 
-  // Ensure state is always initialized
-  useEffect(() => {
-    if (!companyProfile) {
-      setCompanyProfile({
-        companyName: '',
-        legalEntityName: '',
-        corporateOffice: emptyAddress('Corporate Office'),
-        marketingOffice: emptyAddress('Marketing Office'),
-        correspondenceAddress: '',
-        gstNumbers: [''],
-        siteOffices: [emptyAddress('Site Office 1')],
-        plantAddresses: [emptyAddress('Plant Address 1')],
-        primaryContact: emptyContact()
-      })
-    }
-  }, [])
+async function onSubmit(e) {
+  e.preventDefault();
+  setError("");
 
-  return (
+  try {
+    // Basic validation
+    if (!companyProfile.companyName?.trim() && !companyProfile.legalEntityName?.trim()) {
+      setError("Company / legal entity name is required");
+      return;
+    }
+
+    // Required company fields
+    const requiredCompany = [
+      "corporateAddress",
+      "corporateDistrict",
+      "corporateState",
+      "corporateCountry",
+      "corporatePinCode",
+      "correspondenceAddress",
+      "correspondenceDistrict",
+      "correspondenceState",
+      "correspondenceCountry",
+      "correspondencePinCode",
+    ];
+
+    const missingCompany = requiredCompany.some((key) => !companyProfile?.[key]?.trim());
+    if (missingCompany) {
+      setError("Please fill all required company profile fields");
+      return;
+    }
+
+    // Required customer fields
+    const requiredCustomer = [
+      "customerName",
+      "legalEntityName",
+      "corporateOfficeAddress",
+      "correspondenceAddress",
+      "district",
+      "state",
+      "country",
+      "pinCode",
+      "segment",
+      "gstNumber",
+      "poIssuingAuthority",
+      "designation",
+      "contactNumber",
+      "emailId",
+    ];
+
+    const missingCust = requiredCustomer.some((key) => !customerProfile?.[key]?.trim());
+    if (missingCust) {
+      setError("Please fill all required customer profile fields");
+      return;
+    }
+
+    // Consignee validation
+    const c = consigneeProfiles[0];
+    const requiredConFields = [
+      "consigneeName",
+      "consigneeAddress",
+      "customerName",
+      "legalEntityName",
+      "city",
+      "state",
+      "gstNumber",
+      "contactPersonName",
+      "designation",
+      "contactNumber",
+      "emailId",
+    ];
+
+    const missingCon = requiredConFields.some((key) => !c?.[key]?.trim());
+    if (missingCon) {
+      setError("Please fill all required consignee profile fields");
+      return;
+    }
+
+    // Payer validation
+    const p = payerProfiles[0];
+    const requiredPayerFields = [
+      "payerName",
+      "payerAddress",
+      "customerName",
+      "legalEntityName",
+      "city",
+      "state",
+      "gstNumber",
+      "contactPersonName",
+      "designation",
+      "contactNumber",
+      "emailId",
+    ];
+
+    const missingPay = requiredPayerFields.some((key) => !p?.[key]?.trim());
+    if (missingPay) {
+      setError("Please fill all required payer profile fields");
+      return;
+    }
+
+    // FINAL validation
+    if (!validateAllSteps()) return;
+
+    // ---- SUBMIT PAYLOAD ----
+    setSaving(true);
+
+    const payload = {
+      companyProfile,
+      customerProfile,
+      consigneeProfiles,
+      payerProfiles,
+      paymentTerms,
+      teamProfiles,
+    };
+
+    const response = await svc.createCustomer(payload);
+
+    setCreatedRecordId(response?.id || "N/A");
+    setShowSuccessPopup(true);
+
+  } catch (err) {
+    console.error("Submit error:", err);
+    setError("Something went wrong while saving data.");
+  } finally {
+    setSaving(false);
+  }
+}
+
+return (
+// ...
     <ErrorBoundary>
       <DashboardLayout>
       <div className="mb-8 rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm">
@@ -678,18 +671,31 @@ export default function CustomerNew() {
           <div className="md:col-span-1">
             <label className="form-label">Company Logo</label>
             <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-lg font-semibold">
-                {companyProfile.logo instanceof File
-                  ? companyProfile.logo.name.substring(0, 2).toUpperCase()
-                  : 'Logo'}
+              <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                {logoPreview ? (
+                  <img 
+                    src={logoPreview} 
+                    alt="Logo preview" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-primary-700 text-lg font-semibold">
+                    {companyProfile.logo instanceof File 
+                      ? companyProfile.logo.name.substring(0, 2).toUpperCase()
+                      : 'Logo'}
+                  </span>
+                )}
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium text-secondary-800">Upload company logo</p>
+                <p className="text-sm font-medium text-secondary-800">
+                  {logoPreview ? 'Logo uploaded' : 'Upload company logo'}
+                </p>
                 <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
               </div>
               <label className="btn btn-primary btn-sm cursor-pointer">
-                Choose File
+                {logoPreview ? 'Change Logo' : 'Choose File'}
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
@@ -700,7 +706,7 @@ export default function CustomerNew() {
                 />
               </label>
               {companyProfile.logo && (
-                <div className="text-xs text-secondary-600 truncate">
+                <div className="text-xs text-secondary-600 truncate max-w-full">
                   {companyProfile.logo instanceof File ? companyProfile.logo.name : companyProfile.logo}
                 </div>
               )}

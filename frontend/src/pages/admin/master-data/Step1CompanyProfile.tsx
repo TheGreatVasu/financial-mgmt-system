@@ -48,6 +48,7 @@ export default function Step1CompanyProfile({
   initialData,
 }: Step1CompanyProfileProps) {
   const [saving, setSaving] = useState(false)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const {
     control,
     handleSubmit,
@@ -214,11 +215,23 @@ export default function Step1CompanyProfile({
                   control={control}
                   render={({ field: { onChange, value } }) => (
                     <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
-                      <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-semibold text-base uppercase">
-                        {value instanceof File ? value.name.substring(0, 2) : 'Logo'}
+                      <div className="w-16 h-16 rounded-full bg-blue-50 overflow-hidden flex items-center justify-center font-semibold text-base">
+                        {logoPreview ? (
+                          <img 
+                            src={logoPreview} 
+                            alt="Logo preview" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-blue-600">
+                            {value instanceof File ? value.name.substring(0, 2) : 'Logo'}
+                          </span>
+                        )}
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-800">Upload company logo</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {logoPreview ? 'Logo uploaded' : 'Upload company logo'}
+                        </p>
                         <p className="text-xs text-gray-500">PNG/JPG, max 2MB</p>
                       </div>
                       <label className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-700 transition">
@@ -227,7 +240,19 @@ export default function Step1CompanyProfile({
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => onChange(e.target.files?.[0] || null)}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) {
+                              const reader = new FileReader()
+                              reader.onloadend = () => {
+                                setLogoPreview(reader.result as string)
+                              }
+                              reader.readAsDataURL(file)
+                            } else {
+                              setLogoPreview(null)
+                            }
+                            onChange(file || null)
+                          }}
                         />
                       </label>
                       {value && (
