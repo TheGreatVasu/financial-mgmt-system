@@ -4,13 +4,19 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { fetchDashboard } from '../../services/dashboardService.js'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { Calendar, TrendingUp, Target, DollarSign, Download, RefreshCw } from 'lucide-react'
+import { Calendar, TrendingUp, Target, DollarSign, Download, RefreshCw, ChevronDown, ChevronUp, Filter } from 'lucide-react'
 
 export default function MonthlyPlanPage() {
   const { token } = useAuthContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [isDetailOpen, setIsDetailOpen] = useState(true)
+  const [filters, setFilters] = useState({
+    person: '',
+    businessUnit: '',
+    role: '',
+  })
 
   useEffect(() => {
     let mounted = true
@@ -51,6 +57,41 @@ export default function MonthlyPlanPage() {
   const totalActual = actual.reduce((sum, val) => sum + (val || 0), 0)
   const achievementRate = totalTarget > 0 ? ((totalActual / totalTarget) * 100).toFixed(1) : 0
   const variance = totalActual - totalTarget
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const roleOptions = [
+    'Sales Manager',
+    'Sales Head',
+    'Project Manager',
+    'Project Head',
+    'Collection Head',
+    'Business Head',
+    'Collection Agent',
+    'Collection Incharge',
+  ]
+
+  const collectionDetail = {
+    collectionIncharge: monthlyPlan.collectionIncharge || 'Default',
+    customerName: monthlyPlan.customerName || 'Default',
+    segment: monthlyPlan.segment || 'Default',
+    packageName: monthlyPlan.packageName || 'Default',
+    totalOutstanding: monthlyPlan.totalOutstanding ?? totalTarget ?? 0,
+    notDue: monthlyPlan.notDue ?? 0,
+    overdue: monthlyPlan.overdue ?? 0,
+    dueThisMonth: monthlyPlan.dueThisMonth ?? 0,
+    totalDueForPlan: monthlyPlan.totalDueForPlan ?? totalTarget ?? 0,
+    planFinalised: monthlyPlan.planFinalised ?? totalTarget ?? 0,
+    received: monthlyPlan.received ?? totalActual ?? 0,
+    statutoryDeductions: monthlyPlan.statutoryDeductions ?? 0,
+  }
+
+  const balance = (collectionDetail.planFinalised || 0) - (collectionDetail.received || 0) - (collectionDetail.statutoryDeductions || 0)
+  const targetAchieved = (collectionDetail.planFinalised || 0) > 0
+    ? (((collectionDetail.received || 0) + (collectionDetail.statutoryDeductions || 0)) / (collectionDetail.planFinalised || 1)) * 100
+    : 0
 
   return (
     <DashboardLayout>
@@ -142,6 +183,92 @@ export default function MonthlyPlanPage() {
               {loading ? '—' : `${variance >= 0 ? '+' : ''}${formatCurrency(variance)}`}
             </p>
           </div>
+        </div>
+
+        {/* View in System (Horizontal) */}
+        <div className="rounded-xl sm:rounded-2xl border border-secondary-200/70 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-4 sm:px-5 md:px-6 py-3 sm:py-4 border-b border-secondary-100 text-left"
+            onClick={() => setIsDetailOpen((prev) => !prev)}
+          >
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-primary-600" />
+              <div>
+                <p className="text-sm font-semibold text-secondary-900">View in System (Horizontal)</p>
+                <p className="text-xs text-secondary-500">Collection detail & quick filters</p>
+              </div>
+            </div>
+            {isDetailOpen ? <ChevronUp className="w-5 h-5 text-secondary-500" /> : <ChevronDown className="w-5 h-5 text-secondary-500" />}
+          </button>
+
+          {isDetailOpen && (
+            <div className="space-y-4 sm:space-y-6 p-4 sm:p-5 md:p-6">
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4 bg-secondary-50 rounded-lg border border-secondary-100">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-secondary-600">Person Wise Filter</label>
+                  <input
+                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
+                    placeholder="Search person..."
+                    value={filters.person}
+                    onChange={(e) => handleFilterChange('person', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-secondary-600">Business Unit Filter</label>
+                  <select
+                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
+                    value={filters.businessUnit}
+                    onChange={(e) => handleFilterChange('businessUnit', e.target.value)}
+                  >
+                    <option value="">Select Business Unit</option>
+                    <option value="BU-1">BU-1</option>
+                    <option value="BU-2">BU-2</option>
+                    <option value="BU-3">BU-3</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-secondary-600">Role</label>
+                  <select
+                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
+                    value={filters.role}
+                    onChange={(e) => handleFilterChange('role', e.target.value)}
+                  >
+                    <option value="">Select Role</option>
+                    {roleOptions.map((role) => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Details grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {[
+                  { label: 'Collection Incharge', value: `${collectionDetail.collectionIncharge} (Default)` },
+                  { label: 'Customer Name', value: `${collectionDetail.customerName} (Default)` },
+                  { label: 'Segment', value: `${collectionDetail.segment} (Default)` },
+                  { label: 'Package Name', value: `${collectionDetail.packageName} (Default)` },
+                  { label: 'Total Outstanding', value: `${formatCurrency(collectionDetail.totalOutstanding)} (Default)` },
+                  { label: 'Not Due', value: `${formatCurrency(collectionDetail.notDue)} (Default)` },
+                  { label: 'Overdue', value: `${formatCurrency(collectionDetail.overdue)} (Default)` },
+                  { label: 'Due for this Month', value: `${formatCurrency(collectionDetail.dueThisMonth)} (Default)` },
+                  { label: 'Total Due for Plan', value: `${formatCurrency(collectionDetail.totalDueForPlan)} (Default)` },
+                  { label: 'Plan Finalised', value: `${formatCurrency(collectionDetail.planFinalised)} (Manual Entry)` },
+                  { label: 'Received', value: `${formatCurrency(collectionDetail.received)} (Link with Payment Advice)` },
+                  { label: 'Statutory Deductions', value: `${formatCurrency(collectionDetail.statutoryDeductions)} (Link with Payment Advice)` },
+                  { label: 'Balance', value: `${formatCurrency(balance)} (Plan – Received – Deductions)` },
+                  { label: 'Target Achieved %', value: `${targetAchieved.toFixed(2)}% ((Received + Deductions) / Plan)` },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between rounded-lg border border-secondary-200/70 bg-secondary-50 px-3 sm:px-4 py-3">
+                    <p className="text-sm font-semibold text-secondary-700">{item.label}</p>
+                    <p className="text-sm font-bold text-secondary-900 text-right">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Target vs Actual Chart */}

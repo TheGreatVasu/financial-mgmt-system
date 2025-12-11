@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
 const additionalStepSchema = z.object({
+  additionalDocument: z.any().optional(),
   defaultCurrency: z.string().min(1, 'Default currency is required'),
   defaultTax: z.string().min(1, 'Default tax is required'),
   invoicePrefix: z.string().min(1, 'Invoice prefix is required'),
@@ -30,13 +31,18 @@ export default function Step5AdditionalStep({
   onPrevious,
   initialData,
 }: Step5AdditionalStepProps) {
+  const [documentPreview, setDocumentPreview] = useState<string | null>(null);
+  
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<AdditionalStepFormData>({
     resolver: zodResolver(additionalStepSchema),
-    defaultValues: initialData || {},
+    defaultValues: {
+      ...initialData,
+      additionalDocument: initialData?.additionalDocument || null,
+    },
   })
 
   const onSubmit = (data: AdditionalStepFormData) => {
@@ -61,46 +67,110 @@ export default function Step5AdditionalStep({
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium text-gray-700">
         {label}
-        {!required && <span className="text-gray-500 text-xs ml-1">(optional)</span>}
+        {name === 'additionalDocument' && <span className="text-red-500 ml-1">*</span>}
       </label>
       <Controller
         name={name}
         control={formControl}
-        render={({ field }) =>
-          isTextarea ? (
-            <textarea
-              {...field}
-              placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-              rows={3}
-            />
-          ) : options ? (
-            <select
-              {...field}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">Select {label}</option>
-              {options.map((opt: string) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          ) : (
+        render={({ field }) => {
+          const baseClasses = `px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            error ? 'border-red-500' : 'border-gray-300'
+          }`
+
+          if (type === 'file') {
+            return (
+              <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
+                <div className="w-16 h-16 rounded-lg bg-blue-50 overflow-hidden flex items-center justify-center">
+                  {documentPreview ? (
+                    <img
+                      src={documentPreview}
+                      alt="Document preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-blue-600 text-2xl">
+                      DOC
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-800">
+                    {documentPreview ? 'Document uploaded' : 'Upload additional document'}
+                  </p>
+                  <p className="text-xs text-gray-500">PNG/JPG/PDF, max 5MB</p>
+                </div>
+                <label className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-700 transition">
+                  Choose File
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setDocumentPreview(reader.result as string)
+                        }
+                        if (file.type.startsWith('image/')) {
+                          reader.readAsDataURL(file)
+                        } else {
+                          // For non-image files like PDF, use a placeholder
+                          setDocumentPreview('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxRTQwQjciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBjbGFzcz0ibHVjaWRlIGx1Y2lkZS1maWxlLXRleHQiPjxwYXRoIGQ9Ik0xNCAySDZhMiAyIDAgMCAwLTIgMnYxNmEyIDIgMCAwIDAgMiAyaDEyYTIgMiAwIDAgMCAyLTJWOXoiLz48cGF0aCBkPSJNMTQgMnY2aDYiLz48cGF0aCBkPSJNMTYgMTNIOCIvPjxwYXRoIGQ9Ik0xNiAxN0gxNCIvPjxwYXRoIGQ9Ik0xMCAxN0g4di4wMSIvPjwvc3ZnPg==')
+                        }
+                        field.onChange(file)
+                      } else {
+                        setDocumentPreview(null)
+                        field.onChange(null)
+                      }
+                    }}
+                  />
+                </label>
+                {field.value && (
+                  <span className="text-xs text-gray-600 truncate max-w-full">
+                    {typeof field.value === 'string' ? field.value : field.value?.name}
+                  </span>
+                )}
+              </div>
+            )
+          }
+
+          if (isTextarea) {
+            return (
+              <textarea
+                {...field}
+                placeholder={placeholder}
+                className={baseClasses}
+                rows={3}
+              />
+            )
+          }
+
+          if (options) {
+            return (
+              <select
+                {...field}
+                className={baseClasses}
+              >
+                <option value="">Select {label}</option>
+                {options.map((opt: string) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            )
+          }
+
+          return (
             <input
               {...field}
               type={type}
               placeholder={placeholder}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={baseClasses}
             />
           )
-        }
+        }}
       />
       {error && <span className="text-xs text-red-500">{error.message}</span>}
     </div>
@@ -109,11 +179,20 @@ export default function Step5AdditionalStep({
   return (
     <div className="w-full max-w-4xl mx-auto">
       <div className="bg-white rounded-xl shadow-sm p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-8">Additional Step</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-8">Additional Details</h2>
         <p className="text-gray-600 mb-6">Configure additional settings for your system</p>
 
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <FormField
+                label="Additional Document"
+                name="additionalDocument"
+                type="file"
+                control={control}
+                error={errors.additionalDocument}
+              />
+            </div>
             <FormField
               label="Default Currency"
               name="defaultCurrency"

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,7 +7,7 @@ const phoneRegex = /^\+?\d{7,15}$/
 const pinCodeRegex = /^\d{4,10}$/
 
 const customerProfileSchema = z.object({
-  logo: z.string().optional(),
+  logo: z.any().optional(),
   customerName: z.string().min(1, 'Customer name is required'),
   legalEntityName: z.string().min(1, 'Legal entity name is required'),
   corporateOfficeAddress: z.string().min(1, 'Corporate office address is required'),
@@ -37,13 +37,18 @@ export default function Step2CustomerProfile({
   onPrevious,
   initialData,
 }: Step2CustomerProfileProps) {
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<CustomerProfileFormData>({
     resolver: zodResolver(customerProfileSchema),
-    defaultValues: initialData || {},
+    defaultValues: {
+      ...initialData,
+      logo: initialData?.logo || null,
+    },
   })
 
   const onSubmit = (data: CustomerProfileFormData) => {
@@ -65,7 +70,10 @@ export default function Step2CustomerProfile({
     error,
   }: any) => (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label className="text-sm font-medium text-gray-700">
+        {label}
+        {name === 'logo' && <span className="text-red-500 ml-1">*</span>}
+      </label>
       <Controller
         name={name}
         control={formControl}
@@ -76,15 +84,59 @@ export default function Step2CustomerProfile({
 
           if (type === 'file') {
             return (
-              <div className="space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => field.onChange(e.target.files?.[0]?.name || '')}
-                  className={baseClasses}
-                />
+              <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
+                <div className="w-16 h-16 rounded-full bg-blue-50 overflow-hidden flex items-center justify-center font-semibold text-base">
+                  {logoPreview ? (
+                    <img 
+                      src={logoPreview} 
+                      alt="Logo preview" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-blue-600">
+                      {field.value ? 'LO' : 'Logo'}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-800">
+                    {logoPreview ? 'Logo uploaded' : 'Upload customer logo'}
+                  </p>
+                  <p className="text-xs text-gray-500">PNG/JPG/TIF, max 2MB</p>
+                </div>
+                <label className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-700 transition">
+                  Choose File
+                  <input
+                    type="file"
+                    accept="image/*,.tif,.tiff"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setLogoPreview(reader.result as string)
+                        }
+                        if (file.type.startsWith('image/') || 
+                            file.name.toLowerCase().endsWith('.tif') || 
+                            file.name.toLowerCase().endsWith('.tiff')) {
+                          reader.readAsDataURL(file)
+                        } else {
+                          // For unsupported file types, still store the file but show a placeholder
+                          setLogoPreview(null)
+                        }
+                        field.onChange(file)
+                      } else {
+                        setLogoPreview(null)
+                        field.onChange(null)
+                      }
+                    }}
+                  />
+                </label>
                 {field.value && (
-                  <p className="text-xs text-gray-500">Selected file: {field.value}</p>
+                  <span className="text-xs text-gray-600 truncate max-w-full">
+                    {typeof field.value === 'string' ? field.value : field.value?.name}
+                  </span>
                 )}
               </div>
             )

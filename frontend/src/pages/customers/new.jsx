@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
+import MasterDataForm from './MasterDataForm'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
@@ -84,11 +85,10 @@ const defaultPaymentTerm = () => ({
 const STEPS = [
   { label: 'Company Profile', required: true },
   { label: 'Customer Profile', required: true },
+  { label: 'Master Data', required: true },
   { label: 'Consignee Profile', required: true },
   { label: 'Payer Profile', required: true },
-  { label: 'Employee Profile', required: false },
-  { label: 'Payment Terms', required: false },
-  { label: 'Additional Step', required: false },
+  { label: 'Employee Profile', required: false }
 ]
 
 export default function CustomerNew() {
@@ -148,6 +148,14 @@ export default function CustomerNew() {
 
   const [consigneeProfiles, setConsigneeProfiles] = useState([emptyConsignee()])
   const [payerProfiles, setPayerProfiles] = useState([emptyPayer()])
+
+  const [masterData, setMasterData] = useState({
+    companyProfile: {},
+    customerProfile: {},
+    paymentTerms: [defaultPaymentTerm()],
+    teamProfiles: [{ role: MASTER_ROLES[0], ...emptyContact() }],
+    additionalData: {}
+  })
 
   const [paymentTerms, setPaymentTerms] = useState([defaultPaymentTerm()])
   const [teamProfiles, setTeamProfiles] = useState([{ role: MASTER_ROLES[0], ...emptyContact() }])
@@ -241,6 +249,12 @@ export default function CustomerNew() {
 
   const canGoNext = useCallback(() => {
     if (DEV_BYPASS_VALIDATION) return true
+
+    // For master data step, always allow proceeding
+    if (currentStep === 2) {
+      return true
+    }
+
     try {
       if (currentStep === 0) {
         // Company Profile required fields - basic gating
