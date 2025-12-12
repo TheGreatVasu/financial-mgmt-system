@@ -96,11 +96,81 @@ async function getStatus(userId) {
   };
 }
 
+/**
+ * Sync customer profile from master data to customers table
+ * This ensures customer data from master data wizard is available in the customers table
+ */
+async function syncMasterDataToCustomers(userId, masterData) {
+  const db = getDb();
+  if (!db) {
+    console.warn('Database not available, skipping customer sync');
+    return null;
+  }
+
+  const customerProfile = masterData.customerProfile || {};
+  if (!customerProfile.customerName && !customerProfile.legalEntityName) {
+    // No customer data to sync
+    return null;
+  }
+
+  const companyName = customerProfile.customerName || customerProfile.legalEntityName;
+  const legalEntityName = customerProfile.legalEntityName || customerProfile.customerName;
+  
+  // Check if customer already exists by name or GST
+  let existingCustomer = null;
+  if (customerProfile.gstNumber) {
+    existingCustomer = await db('customers')
+      .where('gst_number', customerProfile.gstNumber)
+      .first();
+  }
+  
+  if (!existingCustomer && companyName) {
+    existingCustomer = await db('customers')
+      .where('company_name', companyName)
+      .first();
+  }
+
+  const customerData = {
+    company_name: companyName,
+    legal_entity_name: legalEntityName,
+    customer_address: customerProfile.corporateOfficeAddress || customerProfile.customerAddress || '',
+    district: customerProfile.district || '',
+    state: customerProfile.state || '',
+    country: customerProfile.country || 'India',
+    pin_code: customerProfile.pinCode || '',
+    gst_number: customerProfile.gstNumber || null,
+    segment: customerProfile.segment || null,
+    zone: customerProfile.zone || null,
+    contact_email: customerProfile.emailId || customerProfile.contactEmail || null,
+    contact_phone: customerProfile.contactNumber || customerProfile.contactPhone || null,
+    status: 'active',
+    created_by: userId,
+    updated_at: db.fn.now(),
+  };
+
+  if (existingCustomer) {
+    // Update existing customer
+    await db('customers')
+      .where('id', existingCustomer.id)
+      .update({
+        ...customerData,
+        updated_at: db.fn.now(),
+      });
+    return { id: existingCustomer.id, action: 'updated' };
+  } else {
+    // Create new customer
+    customerData.created_at = db.fn.now();
+    const [id] = await db('customers').insert(customerData);
+    return { id, action: 'created' };
+  }
+}
+
 module.exports = {
   hasDb,
   getMasterData,
   saveMasterData,
   mergeSection,
   getStatus,
+  syncMasterDataToCustomers,
 };
 

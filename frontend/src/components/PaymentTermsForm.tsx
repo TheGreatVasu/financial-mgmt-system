@@ -2,13 +2,14 @@ import React from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import SelectWithOther from '../ui/SelectWithOther'
 
 const paymentMethods = ['Bank Transfer', 'Cheque', 'UPI', 'Cash', 'Other']
 
 const paymentTermsSchema = z.object({
   paymentTermName: z.string().min(1, 'Payment Term Name is required'),
   creditPeriod: z.coerce.number().min(0, 'Credit Period is required'),
-  advanceRequired: z.enum(['Yes', 'No'], { required_error: 'Advance Required is required' }),
+  advanceRequired: z.string().min(1, 'Advance Required is required'),
   advancePercentage: z.coerce.number().min(0).max(100),
   balancePaymentDueDays: z.coerce.number().min(0, 'Balance Payment Due Days is required'),
   latePaymentInterest: z.coerce.number().min(0),
@@ -58,11 +59,17 @@ const PaymentTermsForm: React.FC<Props> = ({ defaultValues, onPrevious, onNext, 
           </div>
           <div>
             <label className="form-label">Advance Required *</label>
-            <select className="input" {...register('advanceRequired')}>
-              <option value="">Select</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
+            <SelectWithOther
+              className="input"
+              {...register('advanceRequired')}
+              options={[
+                { value: 'Yes', label: 'Yes' },
+                { value: 'No', label: 'No' }
+              ]}
+              placeholder="Select"
+              otherLabel="Other"
+              otherInputPlaceholder="Please specify"
+            />
             {errors.advanceRequired && <p className="text-danger-600 text-xs mt-1">{errors.advanceRequired.message}</p>}
           </div>
           <div>
@@ -87,12 +94,14 @@ const PaymentTermsForm: React.FC<Props> = ({ defaultValues, onPrevious, onNext, 
           </div>
           <div>
             <label className="form-label">Payment Method *</label>
-            <select className="input" {...register('paymentMethod')}>
-              <option value="">Select</option>
-              {paymentMethods.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+            <SelectWithOther
+              className="input"
+              {...register('paymentMethod')}
+              options={paymentMethods.filter(m => m !== 'Other').map(m => ({ value: m, label: m }))}
+              placeholder="Select"
+              otherLabel="Other"
+              otherInputPlaceholder="Enter payment method"
+            />
             {errors.paymentMethod && <p className="text-danger-600 text-xs mt-1">{errors.paymentMethod.message}</p>}
           </div>
           <div>

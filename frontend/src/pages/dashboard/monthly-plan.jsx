@@ -4,19 +4,23 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { fetchDashboard } from '../../services/dashboardService.js'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { Calendar, TrendingUp, Target, DollarSign, Download, RefreshCw, ChevronDown, ChevronUp, Filter } from 'lucide-react'
+import { Calendar, TrendingUp, Target, DollarSign, Download, Search, RefreshCw } from 'lucide-react'
+import CollectionDataTable from '../../components/tables/CollectionDataTable.jsx'
+import SelectWithOther from '../../components/ui/SelectWithOther.jsx'
 
 export default function MonthlyPlanPage() {
   const { token } = useAuthContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [isDetailOpen, setIsDetailOpen] = useState(true)
+  const [tableData, setTableData] = useState([])
   const [filters, setFilters] = useState({
-    person: '',
+    personWise: '',
     businessUnit: '',
-    role: '',
+    search: '',
   })
+  
+  const [filteredTableData, setFilteredTableData] = useState([])
 
   useEffect(() => {
     let mounted = true
@@ -58,13 +62,10 @@ export default function MonthlyPlanPage() {
   const achievementRate = totalTarget > 0 ? ((totalActual / totalTarget) * 100).toFixed(1) : 0
   const variance = totalActual - totalTarget
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const roleOptions = [
-    'Sales Manager',
-    'Sales Head',
+  // Define filter options before they're used
+  const personWiseOptions = [
+    'Sales Manager Name',
+    'Sales Head Name',
     'Project Manager',
     'Project Head',
     'Collection Head',
@@ -72,6 +73,124 @@ export default function MonthlyPlanPage() {
     'Collection Agent',
     'Collection Incharge',
   ]
+  
+  const businessUnitOptions = [
+    'BU-1',
+    'BU-2',
+    'BU-3',
+    'BU-4',
+    'BU-5',
+  ]
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+  
+  // Apply filters to table data
+  useEffect(() => {
+    if (tableData.length === 0) {
+      setFilteredTableData([])
+      return
+    }
+    
+    let filtered = [...tableData]
+    
+    // Search filter
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase()
+      filtered = filtered.filter(row => {
+        return (
+          (row.collectionIncharge || '').toLowerCase().includes(searchTerm) ||
+          (row.customerName || '').toLowerCase().includes(searchTerm) ||
+          (row.segment || '').toLowerCase().includes(searchTerm) ||
+          (row.packageName || '').toLowerCase().includes(searchTerm)
+        )
+      })
+    }
+    
+    // Person Wise filter
+    if (filters.personWise) {
+      const personValue = filters.personWise.toLowerCase()
+      filtered = filtered.filter(row => {
+        const incharge = (row.collectionIncharge || '').toLowerCase()
+        const roleMatch = personWiseOptions.some(option => {
+          const optionLower = option.toLowerCase().replace(' name', '').trim()
+          return personValue.includes(optionLower) || optionLower.includes(personValue.replace(' name', ''))
+        })
+        return roleMatch || incharge.includes(personValue.replace(' name', ''))
+      })
+    }
+    
+    // Business Unit filter
+    if (filters.businessUnit && filters.businessUnit !== '') {
+      filtered = filtered.filter(row => {
+        if (row.businessUnit) {
+          return row.businessUnit === filters.businessUnit
+        }
+        return true
+      })
+    }
+    
+    setFilteredTableData(filtered)
+  }, [tableData, filters, personWiseOptions])
+  
+  // CSV generation and download functions
+  const generateCSV = (data) => {
+    if (!data || data.length === 0) return ''
+    
+    const headers = [
+      'Collection Incharge', 'Customer Name', 'Segment', 'Package Name',
+      'Total Outstanding', 'Not Due', 'Overdue', 'Due for this Month',
+      'Total Due for Plan', 'Plan Finalised', 'Received', 'Statutory Deductions',
+      'Balance', 'Target Achieved %'
+    ]
+    
+    const rows = data.map(row => [
+      row.collectionIncharge || '',
+      row.customerName || '',
+      row.segment || '',
+      row.packageName || '',
+      row.totalOutstanding || 0,
+      row.notDue || 0,
+      row.overdue || 0,
+      row.dueThisMonth || 0,
+      row.totalDueForPlan || 0,
+      row.planFinalised || 0,
+      row.received || 0,
+      row.statutoryDeductions || 0,
+      row.balance || 0,
+      `${(row.targetAchieved || 0).toFixed(2)}%`
+    ])
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+    
+    return csvContent
+  }
+  
+  const downloadCSV = (content, filename) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+  
+  // Get unique person names from table data for filtering
+  const getPersonNamesFromData = () => {
+    const names = new Set()
+    tableData.forEach(row => {
+      if (row.collectionIncharge) names.add(row.collectionIncharge)
+      if (row.customerName) names.add(row.customerName)
+    })
+    return Array.from(names).sort()
+  }
 
   const collectionDetail = {
     collectionIncharge: monthlyPlan.collectionIncharge || 'Default',
@@ -92,6 +211,105 @@ export default function MonthlyPlanPage() {
   const targetAchieved = (collectionDetail.planFinalised || 0) > 0
     ? (((collectionDetail.received || 0) + (collectionDetail.statutoryDeductions || 0)) / (collectionDetail.planFinalised || 1)) * 100
     : 0
+
+  // Initialize table data from collectionDetail - always show at least one row
+  useEffect(() => {
+    if (!loading) {
+      const plan = data?.monthlyCollectionPlan || {}
+      const detail = {
+        collectionIncharge: plan.collectionIncharge || collectionDetail.collectionIncharge || 'Default',
+        customerName: plan.customerName || collectionDetail.customerName || 'Default',
+        segment: plan.segment || collectionDetail.segment || 'Default',
+        packageName: plan.packageName || collectionDetail.packageName || 'Default',
+        totalOutstanding: plan.totalOutstanding ?? collectionDetail.totalOutstanding ?? totalTarget ?? 0,
+        notDue: plan.notDue ?? collectionDetail.notDue ?? 0,
+        overdue: plan.overdue ?? collectionDetail.overdue ?? 0,
+        dueThisMonth: plan.dueThisMonth ?? collectionDetail.dueThisMonth ?? 0,
+        totalDueForPlan: plan.totalDueForPlan ?? collectionDetail.totalDueForPlan ?? totalTarget ?? 0,
+        planFinalised: plan.planFinalised ?? collectionDetail.planFinalised ?? totalTarget ?? 0,
+        received: plan.received ?? collectionDetail.received ?? totalActual ?? 0,
+        statutoryDeductions: plan.statutoryDeductions ?? collectionDetail.statutoryDeductions ?? 0,
+      }
+      
+      const calculatedBalance = (detail.planFinalised || 0) - (detail.received || 0) - (detail.statutoryDeductions || 0)
+      const calculatedTargetAchieved = (detail.planFinalised || 0) > 0
+        ? (((detail.received || 0) + (detail.statutoryDeductions || 0)) / (detail.planFinalised || 1)) * 100
+        : 0
+      
+      const initialRow = {
+        id: Date.now(),
+        ...detail,
+        balance: calculatedBalance,
+        targetAchieved: calculatedTargetAchieved
+      }
+      
+      // Always set at least one row, even if tableData is empty
+      setTableData(prev => {
+        if (prev.length === 0) {
+          return [initialRow]
+        }
+        // Update first row if it exists, otherwise add new
+        const updated = prev.map((row, idx) => 
+          idx === 0 ? { ...row, ...initialRow, id: row.id } : row
+        )
+        return updated
+      })
+      
+      // Initialize filtered data
+      setFilteredTableData(prev => prev.length === 0 ? [initialRow] : prev)
+    }
+  }, [data, loading, totalTarget, totalActual])
+
+  // Handlers for table operations
+  const handleAddRow = (newRow) => {
+    const rowWithId = { ...newRow, id: Date.now() }
+    setTableData(prev => [...prev, rowWithId])
+  }
+
+  const handleEditRow = (editedRow) => {
+    setTableData(prev => prev.map(row => 
+      row.id === editedRow.id ? editedRow : row
+    ))
+  }
+
+  const handleDeleteRow = (rowToDelete) => {
+    setTableData(prev => {
+      const updated = prev.filter(row => row.id !== rowToDelete.id)
+      // Ensure at least one row remains
+      if (updated.length === 0) {
+        const defaultRow = {
+          id: Date.now(),
+          ...collectionDetail,
+          balance: balance,
+          targetAchieved: targetAchieved
+        }
+        return [defaultRow]
+      }
+      return updated
+    })
+  }
+
+  const handleViewRow = (row) => {
+    console.log('Viewing row:', row)
+    // Show detailed view in alert (can be replaced with modal)
+    const details = [
+      `Customer Name: ${row.customerName || 'N/A'}`,
+      `Collection Incharge: ${row.collectionIncharge || 'N/A'}`,
+      `Segment: ${row.segment || 'N/A'}`,
+      `Package Name: ${row.packageName || 'N/A'}`,
+      `Total Outstanding: ${formatCurrency(row.totalOutstanding || 0)}`,
+      `Not Due: ${formatCurrency(row.notDue || 0)}`,
+      `Overdue: ${formatCurrency(row.overdue || 0)}`,
+      `Due for this Month: ${formatCurrency(row.dueThisMonth || 0)}`,
+      `Total Due for Plan: ${formatCurrency(row.totalDueForPlan || 0)}`,
+      `Plan Finalised: ${formatCurrency(row.planFinalised || 0)} (Manual Entry)`,
+      `Received: ${formatCurrency(row.received || 0)} (Link with Payment Advice)`,
+      `Statutory Deductions: ${formatCurrency(row.statutoryDeductions || 0)} (Link with Payment Advice)`,
+      `Balance: ${formatCurrency(row.balance || 0)} (Plan – Received – Deductions)`,
+      `Target Achieved: ${(row.targetAchieved || 0).toFixed(2)}% ((Received + Deductions) / Plan)`
+    ].join('\n')
+    alert(`Collection Data Details:\n\n${details}`)
+  }
 
   return (
     <DashboardLayout>
@@ -185,87 +403,92 @@ export default function MonthlyPlanPage() {
           </div>
         </div>
 
-        {/* View in System (Horizontal) */}
-        <div className="rounded-xl sm:rounded-2xl border border-secondary-200/70 bg-white shadow-sm hover:shadow-md transition-all duration-300">
-          <button
-            type="button"
-            className="w-full flex items-center justify-between px-4 sm:px-5 md:px-6 py-3 sm:py-4 border-b border-secondary-100 text-left"
-            onClick={() => setIsDetailOpen((prev) => !prev)}
-          >
-            <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-primary-600" />
+        {/* Monthly Collection Plan Table - Invoice Master Table Style */}
+        <div className="rounded-3xl border border-secondary-200/60 bg-white shadow-xl shadow-secondary-500/10 overflow-hidden">
+          {/* Header */}
+          <div className="p-4 sm:p-6 border-b border-secondary-200 space-y-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-secondary-900">View in System (Horizontal)</p>
-                <p className="text-xs text-secondary-500">Collection detail & quick filters</p>
+                <h3 className="text-lg font-semibold text-secondary-900">Monthly Collection Plan Table</h3>
+                <p className="text-sm text-secondary-500 mt-1">
+                  Showing {filteredTableData.length > 0 ? filteredTableData.length : tableData.length} of {tableData.length} collection record{(filteredTableData.length > 0 ? filteredTableData.length : tableData.length) !== 1 ? 's' : ''}
+                </p>
               </div>
-            </div>
-            {isDetailOpen ? <ChevronUp className="w-5 h-5 text-secondary-500" /> : <ChevronDown className="w-5 h-5 text-secondary-500" />}
-          </button>
-
-          {isDetailOpen && (
-            <div className="space-y-4 sm:space-y-6 p-4 sm:p-5 md:p-6">
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4 bg-secondary-50 rounded-lg border border-secondary-100">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-secondary-600">Person Wise Filter</label>
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <button
+                  onClick={() => {
+                    const csvContent = generateCSV(filteredTableData.length > 0 ? filteredTableData : tableData)
+                    downloadCSV(csvContent, 'monthly-collection-plan.csv')
+                  }}
+                  disabled={tableData.length === 0}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-secondary-300 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
+                {/* Search */}
+                <div className="relative flex-1 sm:flex-initial sm:w-64">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-secondary-400" />
                   <input
-                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
-                    placeholder="Search person..."
-                    value={filters.person}
-                    onChange={(e) => handleFilterChange('person', e.target.value)}
+                    type="text"
+                    placeholder="Search collection records..."
+                    value={filters.search || ''}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-secondary-600">Business Unit Filter</label>
-                  <select
-                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
-                    value={filters.businessUnit}
-                    onChange={(e) => handleFilterChange('businessUnit', e.target.value)}
-                  >
-                    <option value="">Select Business Unit</option>
-                    <option value="BU-1">BU-1</option>
-                    <option value="BU-2">BU-2</option>
-                    <option value="BU-3">BU-3</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-secondary-600">Role</label>
-                  <select
-                    className="w-full rounded-lg border border-secondary-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 transition"
-                    value={filters.role}
-                    onChange={(e) => handleFilterChange('role', e.target.value)}
-                  >
-                    <option value="">Select Role</option>
-                    {roleOptions.map((role) => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
+            </div>
+            {/* Quick Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-[200px]">
+                <SelectWithOther
+                  value={filters.personWise || 'all'}
+                  onChange={(val) => handleFilterChange('personWise', val === 'all' ? '' : val)}
+                  options={[
+                    { value: 'all', label: 'All persons' },
+                    ...personWiseOptions.map(opt => ({ value: opt, label: opt }))
+                  ]}
+                  placeholder="Select person"
+                  otherLabel="Other"
+                  otherInputPlaceholder="Enter person name"
+                  className="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  inputClassName="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                />
+              </div>
+              <div className="min-w-[200px]">
+                <SelectWithOther
+                  value={filters.businessUnit || 'all'}
+                  onChange={(val) => handleFilterChange('businessUnit', val === 'all' ? '' : val)}
+                  options={[
+                    { value: 'all', label: 'All business units' },
+                    ...businessUnitOptions.map(unit => ({ value: unit, label: unit }))
+                  ]}
+                  placeholder="Select business unit"
+                  otherLabel="Other"
+                  otherInputPlaceholder="Enter business unit"
+                  className="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  inputClassName="px-3 py-1.5 border border-secondary-200 rounded-lg text-sm text-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                />
+              </div>
+            </div>
+          </div>
 
-              {/* Details grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                {[
-                  { label: 'Collection Incharge', value: `${collectionDetail.collectionIncharge} (Default)` },
-                  { label: 'Customer Name', value: `${collectionDetail.customerName} (Default)` },
-                  { label: 'Segment', value: `${collectionDetail.segment} (Default)` },
-                  { label: 'Package Name', value: `${collectionDetail.packageName} (Default)` },
-                  { label: 'Total Outstanding', value: `${formatCurrency(collectionDetail.totalOutstanding)} (Default)` },
-                  { label: 'Not Due', value: `${formatCurrency(collectionDetail.notDue)} (Default)` },
-                  { label: 'Overdue', value: `${formatCurrency(collectionDetail.overdue)} (Default)` },
-                  { label: 'Due for this Month', value: `${formatCurrency(collectionDetail.dueThisMonth)} (Default)` },
-                  { label: 'Total Due for Plan', value: `${formatCurrency(collectionDetail.totalDueForPlan)} (Default)` },
-                  { label: 'Plan Finalised', value: `${formatCurrency(collectionDetail.planFinalised)} (Manual Entry)` },
-                  { label: 'Received', value: `${formatCurrency(collectionDetail.received)} (Link with Payment Advice)` },
-                  { label: 'Statutory Deductions', value: `${formatCurrency(collectionDetail.statutoryDeductions)} (Link with Payment Advice)` },
-                  { label: 'Balance', value: `${formatCurrency(balance)} (Plan – Received – Deductions)` },
-                  { label: 'Target Achieved %', value: `${targetAchieved.toFixed(2)}% ((Received + Deductions) / Plan)` },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between rounded-lg border border-secondary-200/70 bg-secondary-50 px-3 sm:px-4 py-3">
-                    <p className="text-sm font-semibold text-secondary-700">{item.label}</p>
-                    <p className="text-sm font-bold text-secondary-900 text-right">{item.value}</p>
-                  </div>
-                ))}
+          {/* Data Table */}
+          {tableData.length > 0 || !loading ? (
+            <CollectionDataTable
+              data={filteredTableData.length > 0 ? filteredTableData : tableData}
+              onAddRow={handleAddRow}
+              onEditRow={handleEditRow}
+              onDeleteRow={handleDeleteRow}
+              onViewRow={handleViewRow}
+              loading={loading}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <p className="text-secondary-500 text-lg">No collection records found</p>
+                <p className="text-secondary-400 text-sm mt-2">Add a new record to get started</p>
               </div>
             </div>
           )}

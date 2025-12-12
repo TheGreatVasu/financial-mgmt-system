@@ -109,25 +109,77 @@ const createPOEntry = asyncHandler(async (req, res) => {
   const userId = req.user?.id || req.user?.userId;
   
   if (db) {
+    // Try to find customer by name or GST to link PO entry
+    let customerId = p.customerId || null;
+    if (!customerId && p.customerName) {
+      const customer = await db('customers')
+        .where('company_name', p.customerName)
+        .orWhere('legal_entity_name', p.customerName)
+        .where('created_by', userId)
+        .first();
+      if (customer) {
+        customerId = customer.id;
+      }
+    }
+    if (!customerId && p.gstNo) {
+      const customer = await db('customers')
+        .where('gst_number', p.gstNo)
+        .where('created_by', userId)
+        .first();
+      if (customer) {
+        customerId = customer.id;
+      }
+    }
+
+    // Handle BOQ items if provided
+    const boqItems = p.boqItems || [];
+    const boqData = boqItems.length > 0 ? JSON.stringify(boqItems) : null;
+
     const row = {
+      customer_id: customerId,
       customer_name: p.customerName || null,
+      legal_entity_name: p.legalEntityName || null,
       customer_address: p.customerAddress || null,
+      district: p.district || null,
       state: p.state || null,
       country: p.country || null,
+      pin_code: p.pinCode || null,
       gst_no: p.gstNo || null,
       business_type: p.businessType || null,
+      business_unit: p.businessUnit || null,
       segment: p.segment || null,
       zone: p.zone || null,
       contract_agreement_no: p.contractAgreementNo || null,
+      contract_agreement_date: p.contractAgreementDate || null,
       ca_date: p.caDate || null,
       po_no: p.poNo || null,
       po_date: p.poDate || null,
       letter_of_intent_no: p.letterOfIntentNo || null,
+      letter_of_intent_date: p.letterOfIntentDate || null,
+      letter_of_award_no: p.letterOfAwardNo || null,
+      letter_of_award_date: p.letterOfAwardDate || null,
       tender_reference_no: p.tenderReferenceNo || null,
       tender_date: p.tenderDate || null,
+      project_description: p.projectDescription || null,
       description: p.description || null,
       payment_type: p.paymentType || null,
       payment_terms: p.paymentTerms || null,
+      payment_terms_clause_in_po: p.paymentTermsClauseInPO || null,
+      insurance_type: p.insuranceType || null,
+      policy_no: p.policyNo || null,
+      policy_date: p.policyDate || null,
+      policy_company: p.policyCompany || null,
+      policy_valid_upto: p.policyValidUpto || null,
+      policy_clause_in_po: p.policyClauseInPO || null,
+      policy_remarks: p.policyRemarks || null,
+      bank_guarantee_type: p.bankGuaranteeType || null,
+      bank_guarantee_no: p.bankGuaranteeNo || null,
+      bank_guarantee_date: p.bankGuaranteeDate || null,
+      bank_guarantee_value: p.bankGuaranteeValue ? parseFloat(p.bankGuaranteeValue) : null,
+      bank_name: p.bankName || null,
+      bank_guarantee_validity: p.bankGuaranteeValidity || null,
+      bank_guarantee_release_validity_clause_in_po: p.bankGuaranteeReleaseValidityClauseInPO || null,
+      bank_guarantee_remarks: p.bankGuaranteeRemarks || null,
       insurance_types: p.insuranceTypes || null,
       advance_bank_guarantee_no: p.advanceBankGuaranteeNo || null,
       abg_date: p.abgDate || null,
@@ -135,13 +187,28 @@ const createPOEntry = asyncHandler(async (req, res) => {
       pbg_date: p.pbgDate || null,
       sales_manager: p.salesManager || null,
       sales_head: p.salesHead || null,
+      business_head: p.businessHead || null,
+      project_manager: p.projectManager || null,
+      project_head: p.projectHead || null,
+      collection_incharge: p.collectionIncharge || null,
+      sales_agent_name: p.salesAgentName || null,
+      sales_agent_commission: p.salesAgentCommission ? parseFloat(p.salesAgentCommission) : null,
+      collection_agent_name: p.collectionAgentName || null,
+      collection_agent_commission: p.collectionAgentCommission ? parseFloat(p.collectionAgentCommission) : null,
       agent_name: p.agentName || null,
-      agent_commission: p.agentCommission || null,
+      agent_commission: p.agentCommission ? parseFloat(p.agentCommission) : null,
       delivery_schedule: p.deliverySchedule || null,
+      delivery_schedule_clause: p.deliveryScheduleClause || null,
       liquidated_damages: p.liquidatedDamages || null,
+      liquidated_damages_clause: p.liquidatedDamagesClause || null,
+      last_date_of_delivery: p.lastDateOfDelivery || null,
+      po_validity: p.poValidity || null,
       po_signed_concern_name: p.poSignedConcernName || null,
       boq_as_per_po: p.boqAsPerPO || null,
+      boq_enabled: p.boqEnabled ? 1 : 0,
+      boq_items: boqData,
       total_ex_works: p.totalExWorks ? parseFloat(p.totalExWorks) : null,
+      total_freight_amount: p.totalFreightAmount ? parseFloat(p.totalFreightAmount) : null,
       freight_amount: p.freightAmount ? parseFloat(p.freightAmount) : null,
       gst: p.gst ? parseFloat(p.gst) : null,
       total_po_value: p.totalPOValue ? parseFloat(p.totalPOValue) : null,

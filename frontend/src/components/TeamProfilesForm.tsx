@@ -2,6 +2,7 @@ import React from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import SelectWithOther from '../ui/SelectWithOther'
 
 const accessLevels = ['Admin', 'Manager', 'User', 'Viewer']
 
@@ -85,12 +86,14 @@ const TeamProfilesForm: React.FC<Props> = ({ defaultValues, onPrevious, onNext, 
           </div>
           <div>
             <label className="form-label">Access Level *</label>
-            <select className="input" {...register('accessLevel')}>
-              <option value="">Select</option>
-              {accessLevels.map((level) => (
-                <option key={level} value={level}>{level}</option>
-              ))}
-            </select>
+            <SelectWithOther
+              className="input"
+              {...register('accessLevel')}
+              options={accessLevels.map(level => ({ value: level, label: level }))}
+              placeholder="Select"
+              otherLabel="Other"
+              otherInputPlaceholder="Enter access level"
+            />
             {errors.accessLevel && <p className="text-danger-600 text-xs mt-1">{errors.accessLevel.message}</p>}
           </div>
           <div className="md:col-span-2">

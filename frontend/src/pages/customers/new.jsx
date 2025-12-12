@@ -5,6 +5,7 @@ import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import MasterDataForm from './MasterDataForm'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
+import SelectWithOther from '../../components/ui/SelectWithOther.jsx'
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 
@@ -839,15 +840,19 @@ return (
         <div className="space-y-3">
           <label className="form-label">Other Office / Plant Details</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select
+            <SelectWithOther
               className="input"
-              value={companyProfile.otherOfficeType}
-              onChange={(e) => updateCompany('otherOfficeType', e.target.value)}
-            >
-              <option value="Plant Address">Plant Address</option>
-              <option value="Site Office">Site Office</option>
-              <option value="Marketing Office">Marketing Office</option>
-            </select>
+              value={companyProfile.otherOfficeType || ''}
+              onChange={(val) => updateCompany('otherOfficeType', val)}
+              options={[
+                { value: 'Plant Address', label: 'Plant Address' },
+                { value: 'Site Office', label: 'Site Office' },
+                { value: 'Marketing Office', label: 'Marketing Office' }
+              ]}
+              placeholder="Select office type"
+              otherLabel="Other"
+              otherInputPlaceholder="Enter office type"
+            />
             <input
               className="input"
               placeholder="GST No"
@@ -1019,15 +1024,18 @@ return (
                 </div>
                 <div>
                   <label className="form-label">Segment *</label>
-                  <select
+                  <SelectWithOther
                     className="input"
-                    value={customerProfile.segment}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, segment: e.target.value })}
-                  >
-                    <option value="">Select segment</option>
-                    <option value="Domestic">Domestic</option>
-                    <option value="Export">Export</option>
-                  </select>
+                    value={customerProfile.segment || ''}
+                    onChange={(val) => setCustomerProfile({ ...customerProfile, segment: val })}
+                    options={[
+                      { value: 'Domestic', label: 'Domestic' },
+                      { value: 'Export', label: 'Export' }
+                    ]}
+                    placeholder="Select segment"
+                    otherLabel="Other"
+                    otherInputPlaceholder="Enter segment"
+                  />
                 </div>
                 <div>
                   <label className="form-label">GST No *</label>
@@ -1387,17 +1395,15 @@ return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="form-label">Role</label>
-                      <select
+                      <SelectWithOther
                         className="input"
-                        value={member.role}
-                        onChange={(e) => updateTeamProfile(index, 'role', e.target.value)}
-                      >
-                        {MASTER_ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
+                        value={member.role || ''}
+                        onChange={(val) => updateTeamProfile(index, 'role', val)}
+                        options={MASTER_ROLES.map(role => ({ value: role, label: role }))}
+                        placeholder="Select role"
+                        otherLabel="Other"
+                        otherInputPlaceholder="Enter role"
+                      />
                     </div>
                     <div>
                       <label className="form-label">Photo</label>

@@ -7,12 +7,53 @@ const BUSINESS_UNIT_OPTIONS = [
   'Other'
 ]
 
-export default function Step1Header({ formData, updateFormData, errors, customers = [] }) {
+export default function Step1Header({ formData, updateFormData, errors, customers = [], poEntries = [], paymentTerms = [] }) {
+  
+  // Handle PO Entry selection - auto-fill customer and related fields
+  const handlePOEntrySelect = (poEntryId) => {
+    if (!poEntryId) return
+    
+    const selectedPO = poEntries.find(po => (po.id || po._id) == poEntryId)
+    if (!selectedPO) return
+    
+    // Auto-fill customer from PO entry
+    if (selectedPO.customerId || selectedPO.customer_id) {
+      updateFormData('customerId', selectedPO.customerId || selectedPO.customer_id)
+    }
+    if (selectedPO.customerName || selectedPO.customer_name) {
+      updateFormData('customerName', selectedPO.customerName || selectedPO.customer_name)
+    }
+    
+    // Auto-fill PO details
+    if (selectedPO.poNo || selectedPO.po_no) {
+      updateFormData('poNoReference', selectedPO.poNo || selectedPO.po_no)
+    }
+    if (selectedPO.poDate || selectedPO.po_date) {
+      updateFormData('poDate', selectedPO.poDate || selectedPO.po_date)
+    }
+    
+    // Auto-fill segment, zone, business unit
+    if (selectedPO.segment) {
+      updateFormData('segment', selectedPO.segment)
+    }
+    if (selectedPO.zone) {
+      updateFormData('zone', selectedPO.zone)
+    }
+    if (selectedPO.businessUnit || selectedPO.business_unit) {
+      updateFormData('businessUnit', selectedPO.businessUnit || selectedPO.business_unit)
+    }
+    
+    // Auto-fill payment terms
+    if (selectedPO.paymentTerms || selectedPO.payment_terms) {
+      updateFormData('paymentTerms', selectedPO.paymentTerms || selectedPO.payment_terms)
+    }
+  }
+  
   return (
     <div className="space-y-6">
       <div className="border-b border-secondary-200 pb-3">
         <h3 className="text-lg font-semibold text-secondary-900">Invoice Header & Customer Info</h3>
-        <p className="text-sm text-secondary-600 mt-1">Enter basic invoice and customer information</p>
+        <p className="text-sm text-secondary-600 mt-1">Enter basic invoice and customer information. Select a PO Entry to auto-fill related fields.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -199,6 +240,28 @@ export default function Step1Header({ formData, updateFormData, errors, customer
             placeholder="Enter Account Manager Name"
           />
           {errors.accountManagerName && <p className="text-xs text-danger-500 mt-1">{errors.accountManagerName}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            PO Entry (Select to auto-fill)
+          </label>
+          <select
+            className={`input ${errors.poEntryId ? 'border-danger-500' : ''}`}
+            value={formData.poEntryId || ''}
+            onChange={(e) => {
+              updateFormData('poEntryId', e.target.value)
+              handlePOEntrySelect(e.target.value)
+            }}
+          >
+            <option value="">Select PO Entry (Optional)</option>
+            {poEntries.map((po) => (
+              <option key={po.id || po._id} value={po.id || po._id}>
+                {po.poNo || po.po_no || 'PO'} - {po.customerName || po.customer_name || 'Customer'} ({po.totalPOValue || po.total_po_value || 0})
+              </option>
+            ))}
+          </select>
+          {errors.poEntryId && <p className="text-xs text-danger-500 mt-1">{errors.poEntryId}</p>}
         </div>
 
         <div>

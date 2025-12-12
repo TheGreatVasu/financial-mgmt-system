@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import Step1CompanyProfile from './Step1CompanyProfile'
 import Step2CustomerProfile from './Step2CustomerProfile'
 import Step3ConsigneeProfile from './Step3ConsigneeProfile'
@@ -17,6 +19,7 @@ interface MasterDataState {
 }
 
 export default function MasterDataWizard() {
+  const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [masterData, setMasterData] = useState<MasterDataState>({})
   const [error, setError] = useState<string | null>(null)
@@ -39,14 +42,16 @@ export default function MasterDataWizard() {
 
   const handleNext = (data: any) => {
     try {
+      setError(null) // Clear any previous errors
       handleStepComplete(currentStep, data)
-      if (currentStep < 6) {
+      if (currentStep < 7) {
         setCurrentStep(currentStep + 1)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.')
       console.error('Error:', err)
+      toast.error(err.message || 'An error occurred. Please try again.')
     }
   }
 
@@ -58,22 +63,55 @@ export default function MasterDataWizard() {
     }
   }
 
-  const handleFinalSubmit = (data: any) => {
+  const handleFinalSubmit = async (data: any) => {
     try {
+      setError(null) // Clear any previous errors
+      
       const finalData = {
         ...masterData,
       }
-      console.log('All Master Data:', finalData)
-      // Here you would typically send all data to your backend API
-      alert('Master Data Wizard Completed! Check console for data.')
-      // Optional: Reset wizard or redirect
-      // setCurrentStep(1)
-      // setMasterData({})
+      
+      // Validate that we have at least the required sections
+      if (!finalData.companyProfile || !finalData.customerProfile || !finalData.paymentTerms) {
+        const missing = []
+        if (!finalData.companyProfile) missing.push('Company Profile')
+        if (!finalData.customerProfile) missing.push('Customer Profile')
+        if (!finalData.paymentTerms) missing.push('Payment Terms')
+        throw new Error(`Please complete the following required sections: ${missing.join(', ')}`)
+      }
+      
+      // Import master data service
+      const masterDataService = (await import('../../services/masterDataService')).default
+      
+      // Submit to backend
+      const response = await masterDataService.submitMasterData(finalData)
+      
+      // Show success message
+      toast.success('Master Data Wizard Completed! Customer data has been synced to the system.')
+      
+      // Reset wizard after successful submission
+      setTimeout(() => {
+        setCurrentStep(1)
+        setMasterData({})
+        setError(null)
+        // Redirect to customers page
+        navigate('/customers')
+      }, 2000)
+      
     } catch (err: any) {
-      setError(err.message || 'Failed to complete wizard. Please try again.')
-      console.error('Error:', err)
+      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to complete wizard. Please try again.'
+      setError(errorMessage)
+      console.error('Error submitting master data:', err)
+      toast.error(errorMessage)
     }
   }
+
+  // Clear errors when reaching review step (step 7)
+  useEffect(() => {
+    if (currentStep === 7) {
+      setError(null) // Clear any stale errors when reaching review step
+    }
+  }, [currentStep])
 
   const progressPercentage = ((currentStep - 1) / 6) * 100 // Adjusted for 6 steps (0-100%)
   const steps = [
@@ -281,3 +319,4 @@ export default function MasterDataWizard() {
     </div>
   )
 }
+

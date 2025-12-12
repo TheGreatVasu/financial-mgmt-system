@@ -2,6 +2,7 @@ import React from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import SelectWithOther from '../ui/SelectWithOther'
 
 const companyTypes = [
   'Private Limited',
@@ -84,12 +85,14 @@ const CustomerProfileForm: React.FC<Props> = ({ defaultValues, onPrevious, onNex
           </div>
           <div>
             <label className="form-label">Company Type *</label>
-            <select className="input" {...register('companyType')}>
-              <option value="">Select</option>
-              {companyTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+            <SelectWithOther
+              className="input"
+              {...register('companyType')}
+              options={companyTypes.filter(type => type !== 'Other').map(type => ({ value: type, label: type }))}
+              placeholder="Select"
+              otherLabel="Other"
+              otherInputPlaceholder="Enter company type"
+            />
             {errors.companyType && <p className="text-danger-600 text-xs mt-1">{errors.companyType.message}</p>}
           </div>
           <div>
@@ -164,12 +167,14 @@ const CustomerProfileForm: React.FC<Props> = ({ defaultValues, onPrevious, onNex
           </div>
           <div>
             <label className="form-label">Any Hold *</label>
-            <select className="input" {...register('anyHold')}>
-              <option value="">Select</option>
-              {yesNo.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+            <SelectWithOther
+              className="input"
+              {...register('anyHold')}
+              options={yesNo.map(v => ({ value: v, label: v }))}
+              placeholder="Select"
+              otherLabel="Other"
+              otherInputPlaceholder="Please specify"
+            />
             {errors.anyHold && <p className="text-danger-600 text-xs mt-1">{errors.anyHold.message}</p>}
           </div>
           <div className="md:col-span-2">

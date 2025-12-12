@@ -17,6 +17,8 @@ const IS_DEV_MODE = typeof import.meta !== 'undefined' && import.meta.env?.MODE 
 export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   const { token } = useAuthContext()
   const [customers, setCustomers] = useState([])
+  const [poEntries, setPoEntries] = useState([])
+  const [paymentTerms, setPaymentTerms] = useState([])
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState(() => {
     // Initialize all 107 fields
@@ -213,20 +215,41 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     return options
   }, [customers])
 
-  // Load customers
+  // Load customers, PO entries, and payment terms
   useEffect(() => {
     if (!token) return
     
-    async function loadCustomers() {
+    async function loadData() {
       try {
         const api = createApiClient(token)
-        const { data } = await api.get('/customers?limit=100')
-        setCustomers(data?.data || [])
+        
+        // Load customers
+        const customersRes = await api.get('/customers?limit=100')
+        setCustomers(customersRes.data?.data || [])
+        
+        // Load PO entries
+        try {
+          const poRes = await api.get('/po-entry?limit=100')
+          setPoEntries(poRes.data?.data || [])
+        } catch (poErr) {
+          console.warn('Failed to load PO entries:', poErr)
+        }
+        
+        // Load master data options (includes payment terms)
+        try {
+          const masterRes = await api.get('/customers/master/options')
+          const masterData = masterRes.data?.data || {}
+          if (masterData.paymentTerms) {
+            setPaymentTerms(masterData.paymentTerms)
+          }
+        } catch (masterErr) {
+          console.warn('Failed to load master data options:', masterErr)
+        }
       } catch (err) {
-        console.error('Failed to load customers:', err)
+        console.error('Failed to load data:', err)
       }
     }
-    loadCustomers()
+    loadData()
   }, [token])
 
   const updateFormData = (field, value) => {
@@ -375,6 +398,8 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
             updateFormData={updateFormData}
             errors={errors}
             customers={customers}
+            poEntries={poEntries}
+            paymentTerms={paymentTerms}
           />
           <Step2ItemTax
             formData={formData}
