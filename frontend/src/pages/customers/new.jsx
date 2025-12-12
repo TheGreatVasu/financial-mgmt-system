@@ -85,10 +85,11 @@ const defaultPaymentTerm = () => ({
 const STEPS = [
   { label: 'Company Profile', required: true },
   { label: 'Customer Profile', required: true },
-  { label: 'Master Data', required: true },
   { label: 'Consignee Profile', required: true },
   { label: 'Payer Profile', required: true },
-  { label: 'Employee Profile', required: false }
+  { label: 'Employee Profile', required: false },
+  { label: 'Payment Terms', required: true },
+  { label: 'Review & Submit', required: false }
 ]
 
 export default function CustomerNew() {
@@ -227,7 +228,7 @@ export default function CustomerNew() {
           return false
         }
       }
-      // Step 4: Team Profiles
+      // Step 4: Employee Profile
       for (const member of (teamProfiles || [])) {
         if (member?.email && !validateEmail(member.email)) {
           setError('Team member email must be a valid @financialmgmt.com or @gmail.com address')
@@ -250,10 +251,7 @@ export default function CustomerNew() {
   const canGoNext = useCallback(() => {
     if (DEV_BYPASS_VALIDATION) return true
 
-    // For master data step, always allow proceeding
-    if (currentStep === 2) {
-      return true
-    }
+    // Payment Terms step validation can be added here if needed
 
     try {
       if (currentStep === 0) {
@@ -337,8 +335,14 @@ export default function CustomerNew() {
         if (missing) return false
         return true
       }
+      if (currentStep === 4) {
+        // Employee Profile step - skip validation during render
+        return true
+      }
       if (currentStep === 5) {
-        // Team Profiles step - skip validation during render
+        // Payment Terms step - basic validation
+        const target = paymentTerms?.[0] || defaultPaymentTerm()
+        // Add validation if needed
         return true
       }
       return true
@@ -624,7 +628,7 @@ return (
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-7">
             {STEPS.map((step, idx) => {
               const isCurrentStep = idx === currentStep
               const isPastStep = idx < currentStep
@@ -1581,11 +1585,11 @@ return (
             </div>
           </section>
         )}
-        {/* Step 7: Additional Step */}
+        {/* Step 7: Review & Submit */}
         {currentStep === 6 && (
           <section className="card">
             <div className="card-header">
-              <h2 className="text-lg font-semibold text-secondary-900">Additional Configuration</h2>
+              <h2 className="text-lg font-semibold text-secondary-900">Review & Submit</h2>
             </div>
             <div className="card-content space-y-4">
               <div className="rounded-lg border border-secondary-200 p-6 bg-secondary-50">

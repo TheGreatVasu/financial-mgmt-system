@@ -1,16 +1,19 @@
 import React, { useState } from 'react'
 import Step1CompanyProfile from './Step1CompanyProfile'
 import Step2CustomerProfile from './Step2CustomerProfile'
-import Step3PaymentTerms from './Step3PaymentTerms'
-import Step4TeamProfiles from './Step4TeamProfiles'
-import Step5AdditionalStep from './Step5AdditionalStep'
+import Step3ConsigneeProfile from './Step3ConsigneeProfile'
+import Step4PayerProfile from './Step4PayerProfile'
+import Step5EmployeeProfile from './Step5EmployeeProfile'
+import Step6PaymentTerms from './Step6PaymentTerms'
+import Step7ReviewSubmit from './Step7ReviewSubmit'
 
 interface MasterDataState {
   companyProfile?: any
   customerProfile?: any
+  consigneeProfile?: any
+  payerProfile?: any
+  employeeProfile?: any
   paymentTerms?: any
-  teamProfiles?: any
-  additionalStep?: any
 }
 
 export default function MasterDataWizard() {
@@ -22,9 +25,10 @@ export default function MasterDataWizard() {
     const stepKeys = [
       'companyProfile',
       'customerProfile',
+      'consigneeProfile',
+      'payerProfile',
+      'employeeProfile',
       'paymentTerms',
-      'teamProfiles',
-      'additionalStep',
     ]
     setMasterData((prev) => ({
       ...prev,
@@ -36,7 +40,7 @@ export default function MasterDataWizard() {
   const handleNext = (data: any) => {
     try {
       handleStepComplete(currentStep, data)
-      if (currentStep < 5) {
+      if (currentStep < 6) {
         setCurrentStep(currentStep + 1)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
@@ -56,10 +60,8 @@ export default function MasterDataWizard() {
 
   const handleFinalSubmit = (data: any) => {
     try {
-      handleStepComplete(5, data)
       const finalData = {
         ...masterData,
-        additionalStep: data,
       }
       console.log('All Master Data:', finalData)
       // Here you would typically send all data to your backend API
@@ -73,13 +75,15 @@ export default function MasterDataWizard() {
     }
   }
 
-  const progressPercentage = ((currentStep - 1) / 4) * 100 // Adjusted for 4 steps (0-100%)
+  const progressPercentage = ((currentStep - 1) / 6) * 100 // Adjusted for 6 steps (0-100%)
   const steps = [
     { number: 1, title: 'Company Profile', short: 'Company' },
     { number: 2, title: 'Customer Profile', short: 'Customer' },
-    { number: 3, title: 'Payment Terms', short: 'Payment' },
-    { number: 4, title: 'Team Profiles', short: 'Team' },
-    { number: 5, title: 'Additional Step', short: 'Additional' },
+    { number: 3, title: 'Consignee Profile', short: 'Consignee' },
+    { number: 4, title: 'Payer Profile', short: 'Payer' },
+    { number: 5, title: 'Employee Profile', short: 'Employee' },
+    { number: 6, title: 'Payment Terms', short: 'Payment' },
+    { number: 7, title: 'Review & Submit', short: 'Review' },
   ]
 
   return (
@@ -88,10 +92,10 @@ export default function MasterDataWizard() {
         {/* Header */}
         <div className="mb-8 text-center md:text-left">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Master Data Setup Wizard
+            Creation of Master Data
           </h1>
           <p className="text-gray-600 max-w-2xl mx-auto md:mx-0">
-            Complete all steps to configure your financial management system
+            Stepwise onboarding for company, customer, payment, and team details
           </p>
         </div>
 
@@ -233,31 +237,45 @@ export default function MasterDataWizard() {
             />
           )}
           {currentStep === 3 && (
-            <Step3PaymentTerms
+            <Step3ConsigneeProfile
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              initialData={masterData.consigneeProfile}
+            />
+          )}
+          {currentStep === 4 && (
+            <Step4PayerProfile
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              initialData={masterData.payerProfile}
+            />
+          )}
+          {currentStep === 5 && (
+            <Step5EmployeeProfile
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              initialData={masterData.employeeProfile}
+            />
+          )}
+          {currentStep === 6 && (
+            <Step6PaymentTerms
               onNext={handleNext}
               onPrevious={handlePrevious}
               initialData={masterData.paymentTerms}
             />
           )}
-          {currentStep === 4 && (
-            <Step4TeamProfiles
-              onNext={handleNext}
-              onPrevious={handlePrevious}
-              initialData={masterData.teamProfiles}
-            />
-          )}
-          {currentStep === 5 && (
-            <Step5AdditionalStep
+          {currentStep === 7 && (
+            <Step7ReviewSubmit
               onSubmit={handleFinalSubmit}
               onPrevious={handlePrevious}
-              initialData={masterData.additionalStep}
+              allData={masterData}
             />
           )}
         </div>
 
         {/* Step Counter */}
         <div className="text-center text-sm text-gray-600 py-4 border-t">
-          Step {currentStep} of 5 - {Math.round(progressPercentage)}% Complete
+          Step {currentStep} of 7 - {Math.round(progressPercentage)}% Complete
         </div>
       </div>
     </div>
