@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
+import masterDataService from '../../services/masterDataService'
 import MasterDataForm from './MasterDataForm'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import SelectWithOther from '../../components/ui/SelectWithOther.jsx'
-import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Save, Trash2, CheckCircle2, XCircle, Building2, Users, FileText, CreditCard, UserCheck } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 
-const DEV_BYPASS_VALIDATION = true
+const DEV_BYPASS_VALIDATION = false
+const STORAGE_KEY = 'masterDataFormDraft'
 
 const MASTER_ROLES = [
   'Sales Manager',
@@ -101,6 +103,10 @@ export default function CustomerNew() {
   const [currentStep, setCurrentStep] = useState(0)
 
   const [logoPreview, setLogoPreview] = useState(null)
+  const [customerLogoPreview, setCustomerLogoPreview] = useState(null)
+  const [consigneeLogoPreviews, setConsigneeLogoPreviews] = useState({})
+  const [payerLogoPreviews, setPayerLogoPreviews] = useState({})
+  const [employeePhotoPreviews, setEmployeePhotoPreviews] = useState({})
   const fileInputRef = useRef(null)
 
   const [companyProfile, setCompanyProfile] = useState({
@@ -164,12 +170,19 @@ export default function CustomerNew() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [createdRecordId, setCreatedRecordId] = useState(null)
+  const [submittedData, setSubmittedData] = useState(null)
 
   const progressPercent = Math.round(
     (currentStep / Math.max(1, STEPS.length - 1)) * 100
   )
+
+  // Helper function to get field error
+  const getFieldError = (fieldPath) => {
+    return fieldErrors[fieldPath] || ''
+  }
 
   function validateEmail(email) {
     // Accept only company domain or gmail.com
@@ -182,66 +195,121 @@ export default function CustomerNew() {
   }
 
   function validateAllSteps() {
+    const errors = {}
+    let isValid = true
+
     try {
       // Step 1: Company Profile
+      const requiredCompany = [
+        'companyName', 'legalEntityName', 'corporateAddress', 'corporateDistrict',
+        'corporateState', 'corporateCountry', 'corporatePinCode', 'correspondenceAddress',
+        'correspondenceDistrict', 'correspondenceState', 'correspondenceCountry', 'correspondencePinCode'
+      ]
+      
+      requiredCompany.forEach(field => {
+        if (!companyProfile?.[field]?.trim()) {
+          errors[`company.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
+          isValid = false
+        }
+      })
+
       if (companyProfile?.primaryContact?.email && !validateEmail(companyProfile.primaryContact.email)) {
-        setError('Primary contact email must be a valid @financialmgmt.com or @gmail.com address')
-        return false
+        errors['company.primaryContact.email'] = 'Primary contact email must be a valid @financialmgmt.com or @gmail.com address'
+        isValid = false
       }
       if (companyProfile?.primaryContact?.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
-        setError('Primary contact number must contain only digits and be 7-15 digits long')
-        return false
+        errors['company.primaryContact.contactNumber'] = 'Primary contact number must contain only digits and be 7-15 digits long'
+        isValid = false
       }
-      for (const site of (companyProfile?.siteOffices || [])) {
-        if (site?.contactNumber && !validatePhone(site.contactNumber)) {
-          setError('Site office contact number must contain only digits and be 7-15 digits long')
-          return false
-        }
-      }
+
       // Step 2: Customer Profile
+      const requiredCustomer = [
+        'customerName', 'legalEntityName', 'corporateOfficeAddress', 'correspondenceAddress',
+        'district', 'state', 'country', 'pinCode', 'segment', 'gstNumber',
+        'poIssuingAuthority', 'designation', 'contactNumber', 'emailId'
+      ]
+      
+      requiredCustomer.forEach(field => {
+        if (!customerProfile?.[field]?.trim()) {
+          errors[`customer.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
+          isValid = false
+        }
+      })
+
       if (customerProfile?.emailId && !validateEmail(customerProfile.emailId)) {
-        setError('Customer email must be a valid @financialmgmt.com or @gmail.com address')
-        return false
+        errors['customer.emailId'] = 'Customer email must be a valid @financialmgmt.com or @gmail.com address'
+        isValid = false
       }
       if (customerProfile?.contactNumber && !validatePhone(customerProfile.contactNumber)) {
-        setError('Customer contact number must contain only digits and be 7-15 digits long')
-        return false
+        errors['customer.contactNumber'] = 'Customer contact number must contain only digits and be 7-15 digits long'
+        isValid = false
       }
 
-      for (const consignee of consigneeProfiles || []) {
+      // Step 3: Consignee Profile
+      consigneeProfiles.forEach((consignee, index) => {
+        const requiredFields = [
+          'consigneeName', 'consigneeAddress', 'customerName', 'legalEntityName',
+          'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId'
+        ]
+        requiredFields.forEach(field => {
+          if (!consignee?.[field]?.trim()) {
+            errors[`consignee.${index}.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
+            isValid = false
+          }
+        })
         if (consignee?.emailId && !validateEmail(consignee.emailId)) {
-          setError('Consignee email must be a valid @financialmgmt.com or @gmail.com address')
-          return false
+          errors[`consignee.${index}.emailId`] = 'Consignee email must be a valid @financialmgmt.com or @gmail.com address'
+          isValid = false
         }
         if (consignee?.contactNumber && !validatePhone(consignee.contactNumber)) {
-          setError('Consignee contact number must contain only digits and be 7-15 digits long')
-          return false
+          errors[`consignee.${index}.contactNumber`] = 'Consignee contact number must contain only digits and be 7-15 digits long'
+          isValid = false
         }
-      }
+      })
 
-      for (const payer of payerProfiles || []) {
+      // Step 4: Payer Profile
+      payerProfiles.forEach((payer, index) => {
+        const requiredFields = [
+          'payerName', 'payerAddress', 'customerName', 'legalEntityName',
+          'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId'
+        ]
+        requiredFields.forEach(field => {
+          if (!payer?.[field]?.trim()) {
+            errors[`payer.${index}.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
+            isValid = false
+          }
+        })
         if (payer?.emailId && !validateEmail(payer.emailId)) {
-          setError('Payer email must be a valid @financialmgmt.com or @gmail.com address')
-          return false
+          errors[`payer.${index}.emailId`] = 'Payer email must be a valid @financialmgmt.com or @gmail.com address'
+          isValid = false
         }
         if (payer?.contactNumber && !validatePhone(payer.contactNumber)) {
-          setError('Payer contact number must contain only digits and be 7-15 digits long')
-          return false
+          errors[`payer.${index}.contactNumber`] = 'Payer contact number must contain only digits and be 7-15 digits long'
+          isValid = false
         }
-      }
-      // Step 4: Employee Profile
-      for (const member of (teamProfiles || [])) {
+      })
+
+      // Step 5: Employee Profile
+      teamProfiles.forEach((member, index) => {
         if (member?.email && !validateEmail(member.email)) {
-          setError('Team member email must be a valid @financialmgmt.com or @gmail.com address')
-          return false
+          errors[`team.${index}.email`] = 'Team member email must be a valid @financialmgmt.com or @gmail.com address'
+          isValid = false
         }
         if (member?.contactNumber && !validatePhone(member.contactNumber)) {
-          setError('Team member contact number must contain only digits and be 7-15 digits long')
-          return false
+          errors[`team.${index}.contactNumber`] = 'Team member contact number must contain only digits and be 7-15 digits long'
+          isValid = false
         }
+      })
+
+      setFieldErrors(errors)
+      if (isValid) {
+        setError('')
+        setFieldErrors({})
+      } else {
+        const firstError = Object.values(errors)[0]
+        setError(firstError || 'Please fix the errors below')
       }
-      setError('')
-      return true
+      return isValid
     } catch (err) {
       console.error('Validation error:', err)
       setError('Validation error occurred. Please check your input.')
@@ -249,7 +317,7 @@ export default function CustomerNew() {
     }
   }
 
-  const canGoNext = useCallback(() => {
+  const canGoNext = useMemo(() => {
     if (DEV_BYPASS_VALIDATION) return true
 
     // Payment Terms step validation can be added here if needed
@@ -271,8 +339,15 @@ export default function CustomerNew() {
           'correspondenceCountry',
           'correspondencePinCode'
         ]
-        const missing = requiredFields.some((key) => !companyProfile?.[key]?.trim())
-        return !missing
+        const missing = requiredFields.some((key) => {
+          const value = companyProfile?.[key]
+          // Check if value is missing or empty string
+          if (value === undefined || value === null) return true
+          if (typeof value === 'string' && value.trim() === '') return true
+          return false
+        })
+        const isValid = !missing
+        return isValid
       }
       if (currentStep === 1) {
         // Customer Profile required fields
@@ -292,7 +367,12 @@ export default function CustomerNew() {
           'contactNumber',
           'emailId'
         ]
-        const missing = requiredFields.some((key) => !customerProfile?.[key]?.trim())
+        const missing = requiredFields.some((key) => {
+          const value = customerProfile?.[key]
+          if (value === undefined || value === null) return true
+          if (typeof value === 'string' && value.trim() === '') return true
+          return false
+        })
         if (missing) return false
         return true
       }
@@ -312,7 +392,12 @@ export default function CustomerNew() {
           'contactNumber',
           'emailId'
         ]
-        const missing = requiredFields.some((key) => !target?.[key]?.trim())
+        const missing = requiredFields.some((key) => {
+          const value = target?.[key]
+          if (value === undefined || value === null) return true
+          if (typeof value === 'string' && value.trim() === '') return true
+          return false
+        })
         if (missing) return false
         return true
       }
@@ -332,7 +417,12 @@ export default function CustomerNew() {
           'contactNumber',
           'emailId'
         ]
-        const missing = requiredFields.some((key) => !target?.[key]?.trim())
+        const missing = requiredFields.some((key) => {
+          const value = target?.[key]
+          if (value === undefined || value === null) return true
+          if (typeof value === 'string' && value.trim() === '') return true
+          return false
+        })
         if (missing) return false
         return true
       }
@@ -351,14 +441,14 @@ export default function CustomerNew() {
       console.error('Error in canGoNext:', err)
       return false
     }
-  }, [currentStep, companyProfile, customerProfile])
+  }, [currentStep, companyProfile, customerProfile, consigneeProfiles, payerProfiles, paymentTerms])
 
   function goToStep(idx) {
     if (idx < currentStep) {
       setCurrentStep(idx)
     } else {
       // Only allow forward if current step is valid
-      if (DEV_BYPASS_VALIDATION || canGoNext()) {
+      if (DEV_BYPASS_VALIDATION || canGoNext) {
         setCurrentStep(idx)
       }
     }
@@ -453,11 +543,27 @@ function updatePaymentTerm(index, field, value) {
 
   function removeTeamProfile(index) {
     setTeamProfiles((prev) => prev.filter((_, i) => i !== index))
+    // Clean up photo preview for removed employee
+    setEmployeePhotoPreviews((prev) => {
+      const newPreviews = { ...prev }
+      delete newPreviews[index]
+      // Shift previews for indices after the removed one
+      const shiftedPreviews = {}
+      Object.keys(newPreviews).forEach((key) => {
+        const keyNum = parseInt(key)
+        if (keyNum > index) {
+          shiftedPreviews[keyNum - 1] = newPreviews[key]
+        } else if (keyNum < index) {
+          shiftedPreviews[keyNum] = newPreviews[key]
+        }
+      })
+      return shiftedPreviews
+    })
   }
 
   function onNext(e) {
     e?.preventDefault()
-    if (DEV_BYPASS_VALIDATION || canGoNext()) setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
+    if (DEV_BYPASS_VALIDATION || canGoNext) setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
 
   function onPrev(e) {
@@ -465,142 +571,134 @@ function updatePaymentTerm(index, field, value) {
     setCurrentStep((s) => Math.max(s - 1, 0))
   }
 
+  function handleDone() {
+    setShowSuccessPopup(false)
+    navigate('/customers')
+  }
+
   // Load saved data from localStorage on component mount
-  const loadSavedData = useCallback(() => {
+  useEffect(() => {
     try {
-      const savedData = localStorage.getItem('customerFormData')
+      const savedData = localStorage.getItem(STORAGE_KEY)
       if (savedData) {
-        return JSON.parse(savedData)
+        const parsed = JSON.parse(savedData)
+        if (parsed.companyProfile) setCompanyProfile(parsed.companyProfile)
+        if (parsed.customerProfile) setCustomerProfile(parsed.customerProfile)
+        if (parsed.consigneeProfiles) setConsigneeProfiles(parsed.consigneeProfiles)
+        if (parsed.payerProfiles) setPayerProfiles(parsed.payerProfiles)
+        if (parsed.paymentTerms) setPaymentTerms(parsed.paymentTerms)
+        if (parsed.teamProfiles) setTeamProfiles(parsed.teamProfiles)
+        if (parsed.currentStep !== undefined) setCurrentStep(parsed.currentStep)
       }
     } catch (error) {
       console.error('Error loading saved data:', error)
-      localStorage.removeItem('customerFormData')
+      localStorage.removeItem(STORAGE_KEY)
     }
-    return null
   }, [])
+
+  // Auto-save to localStorage whenever data changes
+  useEffect(() => {
+    try {
+      const dataToSave = {
+        companyProfile,
+        customerProfile,
+        consigneeProfiles,
+        payerProfiles,
+        paymentTerms,
+        teamProfiles,
+        currentStep
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave))
+    } catch (error) {
+      console.error('Error saving data:', error)
+    }
+  }, [companyProfile, customerProfile, consigneeProfiles, payerProfiles, paymentTerms, teamProfiles, currentStep])
 
 async function onSubmit(e) {
   e.preventDefault();
   setError("");
+  setFieldErrors({});
 
   try {
-    // Basic validation
-    if (!companyProfile.companyName?.trim() && !companyProfile.legalEntityName?.trim()) {
-      setError("Company / legal entity name is required");
-      return;
+    // Comprehensive validation
+    if (!validateAllSteps()) {
+      // Scroll to first error
+      const firstErrorField = Object.keys(fieldErrors)[0]
+      if (firstErrorField) {
+        const element = document.querySelector(`[data-field="${firstErrorField}"]`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }
+      return
     }
-
-    // Required company fields
-    const requiredCompany = [
-      "corporateAddress",
-      "corporateDistrict",
-      "corporateState",
-      "corporateCountry",
-      "corporatePinCode",
-      "correspondenceAddress",
-      "correspondenceDistrict",
-      "correspondenceState",
-      "correspondenceCountry",
-      "correspondencePinCode",
-    ];
-
-    const missingCompany = requiredCompany.some((key) => !companyProfile?.[key]?.trim());
-    if (missingCompany) {
-      setError("Please fill all required company profile fields");
-      return;
-    }
-
-    // Required customer fields
-    const requiredCustomer = [
-      "customerName",
-      "legalEntityName",
-      "corporateOfficeAddress",
-      "correspondenceAddress",
-      "district",
-      "state",
-      "country",
-      "pinCode",
-      "segment",
-      "gstNumber",
-      "poIssuingAuthority",
-      "designation",
-      "contactNumber",
-      "emailId",
-    ];
-
-    const missingCust = requiredCustomer.some((key) => !customerProfile?.[key]?.trim());
-    if (missingCust) {
-      setError("Please fill all required customer profile fields");
-      return;
-    }
-
-    // Consignee validation
-    const c = consigneeProfiles[0];
-    const requiredConFields = [
-      "consigneeName",
-      "consigneeAddress",
-      "customerName",
-      "legalEntityName",
-      "city",
-      "state",
-      "gstNumber",
-      "contactPersonName",
-      "designation",
-      "contactNumber",
-      "emailId",
-    ];
-
-    const missingCon = requiredConFields.some((key) => !c?.[key]?.trim());
-    if (missingCon) {
-      setError("Please fill all required consignee profile fields");
-      return;
-    }
-
-    // Payer validation
-    const p = payerProfiles[0];
-    const requiredPayerFields = [
-      "payerName",
-      "payerAddress",
-      "customerName",
-      "legalEntityName",
-      "city",
-      "state",
-      "gstNumber",
-      "contactPersonName",
-      "designation",
-      "contactNumber",
-      "emailId",
-    ];
-
-    const missingPay = requiredPayerFields.some((key) => !p?.[key]?.trim());
-    if (missingPay) {
-      setError("Please fill all required payer profile fields");
-      return;
-    }
-
-    // FINAL validation
-    if (!validateAllSteps()) return;
 
     // ---- SUBMIT PAYLOAD ----
     setSaving(true);
 
+    // Prepare payload for masterDataService
     const payload = {
-      companyProfile,
+      companyProfile: {
+        ...companyProfile,
+        primaryContactName: companyProfile.primaryContact?.name || '',
+        primaryContactNumber: companyProfile.primaryContact?.contactNumber || '',
+        primaryContactEmail: companyProfile.primaryContact?.email || ''
+      },
       customerProfile,
       consigneeProfiles,
       payerProfiles,
-      paymentTerms,
-      teamProfiles,
+      paymentTerms: paymentTerms.map(term => ({
+        paymentTermName: term.description || 'Default',
+        creditPeriod: term.due1 || '',
+        advanceRequired: term.basic || '',
+        balancePaymentDueDays: term.finalDue || '',
+        latePaymentInterest: term.taxes || '',
+        billingCycle: 'Monthly',
+        paymentMethod: 'Bank Transfer',
+        bankName: '',
+        bankAccountNumber: '',
+        ifscCode: '',
+        notes: term.description || ''
+      })),
+      teamProfiles: teamProfiles.map(member => ({
+        teamMemberName: member.name || '',
+        employeeId: '',
+        role: member.role || '',
+        department: member.department || '',
+        contactNumber: member.contactNumber || '',
+        emailId: member.email || '',
+        reportingManager: '',
+        location: '',
+        accessLevel: 'Standard',
+        remarks: member.jobRole || ''
+      })),
+      additionalStep: {
+        defaultCurrency: 'INR',
+        defaultTax: '18',
+        invoicePrefix: 'INV',
+        quotationPrefix: 'QUO',
+        enableBOQ: 'Yes',
+        enableAutoInvoice: 'No',
+        notificationEmail: customerProfile.emailId || '',
+        smsNotification: 'No',
+        allowPartialDelivery: 'Yes',
+        serviceCharge: '0',
+        remarks: ''
+      }
     };
 
-    const response = await svc.createCustomer(payload);
+    const response = await masterDataService.submitMasterData(payload);
 
-    setCreatedRecordId(response?.id || "N/A");
+    // Clear localStorage after successful submission
+    localStorage.removeItem(STORAGE_KEY);
+
+    setSubmittedData(payload);
+    setCreatedRecordId(response?.data?.id || Date.now().toString());
     setShowSuccessPopup(true);
 
   } catch (err) {
     console.error("Submit error:", err);
-    setError("Something went wrong while saving data.");
+    setError(err?.message || "Something went wrong while saving data. Please try again.");
   } finally {
     setSaving(false);
   }
@@ -633,13 +731,13 @@ return (
             {STEPS.map((step, idx) => {
               const isCurrentStep = idx === currentStep
               const isPastStep = idx < currentStep
-              const canNavigate = isPastStep || (isCurrentStep && canGoNext())
+              const canNavigate = isPastStep || (isCurrentStep && canGoNext)
               return (
                 <button
                   key={step.label}
                   type="button"
                   onClick={() => goToStep(idx)}
-                  disabled={idx > currentStep && !DEV_BYPASS_VALIDATION && !canGoNext()}
+                  disabled={idx > currentStep && !DEV_BYPASS_VALIDATION && !canGoNext}
                   className={`group relative flex flex-col rounded-xl border px-3 py-3 text-left shadow-sm transition-all focus:outline-none ${
                     isCurrentStep
                       ? 'border-primary-200 bg-white shadow-primary-100'
@@ -677,7 +775,10 @@ return (
       </div>
       <form onSubmit={onSubmit} className="space-y-6">
         {error && (
-          <div className="rounded-md border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</div>
+          <div className="rounded-md border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700 flex items-center gap-2">
+            <XCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
         {/* Step 1: Company Profile */}
         {currentStep === 0 && (
@@ -736,16 +837,27 @@ return (
             <div>
               <label className="form-label">Company Name *</label>
               <input
-                className="input"
+                data-field="company.companyName"
+                className={`input ${getFieldError('company.companyName') ? 'border-red-500' : ''}`}
                 type="text"
                 value={companyProfile?.companyName || ''}
                 onChange={(e) => {
                   const value = e.target.value
                   updateCompany('companyName', value)
+                  if (getFieldError('company.companyName')) {
+                    setFieldErrors(prev => {
+                      const newErrors = { ...prev }
+                      delete newErrors['company.companyName']
+                      return newErrors
+                    })
+                  }
                   if (value?.trim() || companyProfile?.legalEntityName?.trim()) setError('')
                 }}
                 placeholder="Company trading name"
               />
+              {getFieldError('company.companyName') && (
+                <p className="text-xs text-red-500 mt-1">{getFieldError('company.companyName')}</p>
+              )}
             </div>
             <div>
               <label className="form-label">Legal Entity Name *</label>
@@ -927,35 +1039,78 @@ return (
                 <div>
                   <label className="form-label">Logo</label>
                   <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                      {customerLogoPreview ? (
+                        <img 
+                          src={customerLogoPreview} 
+                          alt="Logo preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-primary-700 text-lg font-semibold">
+                          {customerProfile.logo instanceof File 
+                            ? customerProfile.logo.name.substring(0, 2).toUpperCase()
+                            : 'Logo'}
+                        </span>
+                      )}
+                    </div>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-secondary-800">Upload customer logo</p>
+                      <p className="text-sm font-medium text-secondary-800">
+                        {customerLogoPreview ? 'Logo uploaded' : 'Upload customer logo'}
+                      </p>
                       <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
                     </div>
                     <label className="btn btn-outline btn-sm cursor-pointer">
-                      Choose File
+                      {customerLogoPreview ? 'Change Logo' : 'Choose File'}
                       <input
                         type="file"
                         accept="image/*"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0]
-                          setCustomerProfile({ ...customerProfile, logo: file?.name || '' })
+                          if (file) {
+                            const reader = new FileReader()
+                            reader.onloadend = () => {
+                              setCustomerLogoPreview(reader.result)
+                            }
+                            reader.readAsDataURL(file)
+                            setCustomerProfile({ ...customerProfile, logo: file })
+                          } else {
+                            setCustomerLogoPreview(null)
+                            setCustomerProfile({ ...customerProfile, logo: '' })
+                          }
                         }}
                       />
                     </label>
                     {customerProfile.logo && (
-                      <div className="text-xs text-secondary-600 truncate">Selected: {customerProfile.logo}</div>
+                      <div className="text-xs text-secondary-600 truncate max-w-full">
+                        {customerProfile.logo instanceof File ? customerProfile.logo.name : customerProfile.logo}
+                      </div>
                     )}
                   </div>
                 </div>
                 <div>
                   <label className="form-label">Customer Name *</label>
                   <input
-                    className="input"
+                    data-field="customer.customerName"
+                    className={`input ${getFieldError('customer.customerName') ? 'border-red-500' : ''}`}
                     value={customerProfile.customerName}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, customerName: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setCustomerProfile({ ...customerProfile, customerName: value })
+                      if (getFieldError('customer.customerName')) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors['customer.customerName']
+                          return newErrors
+                        })
+                      }
+                    }}
                     placeholder="Enter customer name"
                   />
+                  {getFieldError('customer.customerName') && (
+                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.customerName')}</p>
+                  )}
                 </div>
                 <div>
                   <label className="form-label">Legal Entity Name *</label>
@@ -1076,11 +1231,26 @@ return (
                 <div>
                   <label className="form-label">Email ID *</label>
                   <input
-                    className="input"
+                    data-field="customer.emailId"
+                    type="email"
+                    className={`input ${getFieldError('customer.emailId') ? 'border-red-500' : ''}`}
                     value={customerProfile.emailId}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, emailId: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setCustomerProfile({ ...customerProfile, emailId: value })
+                      if (getFieldError('customer.emailId')) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors['customer.emailId']
+                          return newErrors
+                        })
+                      }
+                    }}
                     placeholder="Enter email address"
                   />
+                  {getFieldError('customer.emailId') && (
+                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.emailId')}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1102,24 +1272,57 @@ return (
                     <div>
                       <label className="form-label">Logo</label>
                       <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                          {consigneeLogoPreviews[index] ? (
+                            <img 
+                              src={consigneeLogoPreviews[index]} 
+                              alt="Logo preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-primary-700 text-lg font-semibold">
+                              {consignee.logo instanceof File 
+                                ? consignee.logo.name.substring(0, 2).toUpperCase()
+                                : 'Logo'}
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-1">
-                          <p className="text-sm font-medium text-secondary-800">Upload consignee logo</p>
+                          <p className="text-sm font-medium text-secondary-800">
+                            {consigneeLogoPreviews[index] ? 'Logo uploaded' : 'Upload consignee logo'}
+                          </p>
                           <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
                         </div>
                         <label className="btn btn-outline btn-sm cursor-pointer">
-                          Choose File
+                          {consigneeLogoPreviews[index] ? 'Change Logo' : 'Choose File'}
                           <input
                             type="file"
                             accept="image/*"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0]
-                              updateConsignee(index, 'logo', file?.name || '')
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  setConsigneeLogoPreviews(prev => ({ ...prev, [index]: reader.result }))
+                                }
+                                reader.readAsDataURL(file)
+                                updateConsignee(index, 'logo', file)
+                              } else {
+                                setConsigneeLogoPreviews(prev => {
+                                  const newPreviews = { ...prev }
+                                  delete newPreviews[index]
+                                  return newPreviews
+                                })
+                                updateConsignee(index, 'logo', '')
+                              }
                             }}
                           />
                         </label>
                         {consignee.logo && (
-                          <div className="text-xs text-secondary-600 truncate">Selected: {consignee.logo}</div>
+                          <div className="text-xs text-secondary-600 truncate max-w-full">
+                            {consignee.logo instanceof File ? consignee.logo.name : consignee.logo}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1244,23 +1447,58 @@ return (
                     <div>
                       <label className="form-label">Logo</label>
                       <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                          {payerLogoPreviews[index] ? (
+                            <img 
+                              src={payerLogoPreviews[index]} 
+                              alt="Logo preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-primary-700 text-lg font-semibold">
+                              {payer.logo instanceof File 
+                                ? payer.logo.name.substring(0, 2).toUpperCase()
+                                : 'Logo'}
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-1">
-                          <p className="text-sm font-medium text-secondary-800">Upload payer logo</p>
+                          <p className="text-sm font-medium text-secondary-800">
+                            {payerLogoPreviews[index] ? 'Logo uploaded' : 'Upload payer logo'}
+                          </p>
                           <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
                         </div>
                         <label className="btn btn-outline btn-sm cursor-pointer">
-                          Choose File
+                          {payerLogoPreviews[index] ? 'Change Logo' : 'Choose File'}
                           <input
                             type="file"
                             accept="image/*"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0]
-                              updatePayer(index, 'logo', file?.name || '')
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  setPayerLogoPreviews(prev => ({ ...prev, [index]: reader.result }))
+                                }
+                                reader.readAsDataURL(file)
+                                updatePayer(index, 'logo', file)
+                              } else {
+                                setPayerLogoPreviews(prev => {
+                                  const newPreviews = { ...prev }
+                                  delete newPreviews[index]
+                                  return newPreviews
+                                })
+                                updatePayer(index, 'logo', '')
+                              }
                             }}
                           />
                         </label>
-                        {payer.logo && <div className="text-xs text-secondary-600 truncate">Selected: {payer.logo}</div>}
+                        {payer.logo && (
+                          <div className="text-xs text-secondary-600 truncate max-w-full">
+                            {payer.logo instanceof File ? payer.logo.name : payer.logo}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1407,20 +1645,61 @@ return (
                     </div>
                     <div>
                       <label className="form-label">Photo</label>
-                      <div className="flex items-center gap-3">
+                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                          {employeePhotoPreviews[index] ? (
+                            <img 
+                              src={employeePhotoPreviews[index]} 
+                              alt="Photo preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-primary-700 text-lg font-semibold">
+                              {member.photo instanceof File 
+                                ? member.photo.name.substring(0, 2).toUpperCase()
+                                : member.name 
+                                  ? member.name.substring(0, 2).toUpperCase()
+                                  : 'Photo'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-secondary-800">
+                            {employeePhotoPreviews[index] ? 'Photo uploaded' : 'Upload employee photo'}
+                          </p>
+                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
+                        </div>
                         <label className="btn btn-outline btn-sm cursor-pointer">
-                          Upload
+                          {employeePhotoPreviews[index] ? 'Change Photo' : 'Choose File'}
                           <input
                             type="file"
                             accept="image/*"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0]
-                              updateTeamProfile(index, 'photo', file?.name || '')
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  setEmployeePhotoPreviews(prev => ({ ...prev, [index]: reader.result }))
+                                }
+                                reader.readAsDataURL(file)
+                                updateTeamProfile(index, 'photo', file)
+                              } else {
+                                setEmployeePhotoPreviews(prev => {
+                                  const newPreviews = { ...prev }
+                                  delete newPreviews[index]
+                                  return newPreviews
+                                })
+                                updateTeamProfile(index, 'photo', '')
+                              }
                             }}
                           />
                         </label>
-                        {member.photo && <span className="text-xs text-secondary-600 truncate">{member.photo}</span>}
+                        {member.photo && (
+                          <div className="text-xs text-secondary-600 truncate max-w-full">
+                            {member.photo instanceof File ? member.photo.name : member.photo}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1648,8 +1927,9 @@ return (
       type="button"
       className="btn btn-primary px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       onClick={onNext}
-      disabled={!DEV_BYPASS_VALIDATION && !canGoNext()}
+      disabled={!DEV_BYPASS_VALIDATION && !canGoNext}
       style={{ minWidth: 120 }}
+      title={!DEV_BYPASS_VALIDATION && !canGoNext ? 'Please fill all required fields' : ''}
     >
       Next
     </button>
@@ -1657,7 +1937,7 @@ return (
     <button
       type="submit"
       className="btn btn-success px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-      disabled={saving || !canGoNext()}
+      disabled={saving || !canGoNext}
       style={{ minWidth: 120 }}
     >
       {saving ? 'Saving...' : 'Submit'}
@@ -1666,69 +1946,174 @@ return (
 </div>
       </form>
       
-      {/* Success Popup Modal */}
-      {showSuccessPopup && (
+      {/* Success Popup Modal with Card Preview */}
+      {showSuccessPopup && submittedData && (
         <div
-          className="fixed inset-0 flex items-center justify-center z-[12000]"
+          className="fixed inset-0 flex items-center justify-center z-[12000] overflow-y-auto p-4"
           style={{
             backgroundColor: 'rgba(15, 23, 42, 0.55)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
           }}
+          onClick={(e) => e.target === e.currentTarget && setShowSuccessPopup(false)}
         >
-          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in relative">
-            {/* Success Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                <svg className="h-8 w-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8 animate-in fade-in zoom-in relative">
+            {/* Success Header */}
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                  <CheckCircle2 className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    Master Data Created Successfully! ✨
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Record ID: <span className="font-mono text-blue-600">{createdRecordId}</span>
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setShowSuccessPopup(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
             </div>
 
-            {/* Success Message */}
-            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
-              Master Data Created Successfully! ✨
-            </h3>
-            <p className="text-center text-gray-600 text-sm mb-6">
-              All your company, customer, payment terms, and team profile details have been saved successfully.
-            </p>
+            {/* Card Preview Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto pr-2">
+              {/* Company Profile Card */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-5 border border-blue-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="h-5 w-5 text-blue-600" />
+                  <h4 className="font-semibold text-blue-900">Company Profile</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div><span className="text-blue-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.companyProfile.companyName || submittedData.companyProfile.legalEntityName}</span></div>
+                  <div><span className="text-blue-700 font-medium">Legal Entity:</span> <span className="text-gray-800">{submittedData.companyProfile.legalEntityName}</span></div>
+                  <div><span className="text-blue-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.companyProfile.corporateState}</span></div>
+                  <div><span className="text-blue-700 font-medium">Country:</span> <span className="text-gray-800">{submittedData.companyProfile.corporateCountry}</span></div>
+                </div>
+              </div>
 
-            {/* Details Summary */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Company Name:</span>
-                <span className="font-semibold text-gray-900">{companyProfile.companyName || companyProfile.legalEntityName}</span>
+              {/* Customer Profile Card */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-5 border border-purple-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="h-5 w-5 text-purple-600" />
+                  <h4 className="font-semibold text-purple-900">Customer Profile</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div><span className="text-purple-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.customerProfile.customerName}</span></div>
+                  <div><span className="text-purple-700 font-medium">Segment:</span> <span className="text-gray-800">{submittedData.customerProfile.segment}</span></div>
+                  <div><span className="text-purple-700 font-medium">Contact:</span> <span className="text-gray-800">{submittedData.customerProfile.contactNumber}</span></div>
+                  <div><span className="text-purple-700 font-medium">Email:</span> <span className="text-gray-800 truncate block">{submittedData.customerProfile.emailId}</span></div>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Contact Person:</span>
-                <span className="font-semibold text-gray-900">{customerProfile.contactPersonName || 'N/A'}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Email:</span>
-                <span className="font-semibold text-gray-900 truncate">{customerProfile.emailId || 'N/A'}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-                <span className="text-gray-600">Record ID:</span>
-                <span className="font-mono text-blue-600 font-semibold">{createdRecordId}</span>
-              </div>
+
+              {/* Consignee Profile Card */}
+              {submittedData.consigneeProfiles?.[0] && (
+                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-5 border border-green-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-5 w-5 text-green-600" />
+                    <h4 className="font-semibold text-green-900">Consignee Profile</h4>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-green-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].consigneeName}</span></div>
+                    <div><span className="text-green-700 font-medium">City:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].city}</span></div>
+                    <div><span className="text-green-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].state}</span></div>
+                    <div><span className="text-green-700 font-medium">GST:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].gstNumber}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payer Profile Card */}
+              {submittedData.payerProfiles?.[0] && (
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-5 border border-orange-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CreditCard className="h-5 w-5 text-orange-600" />
+                    <h4 className="font-semibold text-orange-900">Payer Profile</h4>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-orange-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].payerName}</span></div>
+                    <div><span className="text-orange-700 font-medium">City:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].city}</span></div>
+                    <div><span className="text-orange-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].state}</span></div>
+                    <div><span className="text-orange-700 font-medium">GST:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].gstNumber}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Terms Card */}
+              {submittedData.paymentTerms?.[0] && (
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-5 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CreditCard className="h-5 w-5 text-indigo-600" />
+                    <h4 className="font-semibold text-indigo-900">Payment Terms</h4>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-indigo-700 font-medium">Term Name:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].paymentTermName}</span></div>
+                    <div><span className="text-indigo-700 font-medium">Credit Period:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].creditPeriod}</span></div>
+                    <div><span className="text-indigo-700 font-medium">Billing Cycle:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].billingCycle}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Team Profiles Card */}
+              {submittedData.teamProfiles?.length > 0 && (
+                <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-5 border border-pink-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <UserCheck className="h-5 w-5 text-pink-600" />
+                    <h4 className="font-semibold text-pink-900">Team Profiles ({submittedData.teamProfiles.length})</h4>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {submittedData.teamProfiles.slice(0, 3).map((member, idx) => (
+                      <div key={idx}>
+                        <span className="text-pink-700 font-medium">{member.teamMemberName}</span> - <span className="text-gray-800">{member.role}</span>
+                      </div>
+                    ))}
+                    {submittedData.teamProfiles.length > 3 && (
+                      <div className="text-pink-700 text-xs">+{submittedData.teamProfiles.length - 3} more</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-6 pt-4 border-t">
               <button
                 onClick={() => {
                   setShowSuccessPopup(false)
                   setCurrentStep(0)
+                  setLogoPreview(null)
+                  setCustomerLogoPreview(null)
+                  setConsigneeLogoPreviews({})
+                  setPayerLogoPreviews({})
+                  setEmployeePhotoPreviews({})
                   setCompanyProfile({
+                    logo: null,
                     companyName: '',
                     legalEntityName: '',
-                    corporateOffice: emptyAddress('Corporate Office'),
-                    marketingOffice: emptyAddress('Marketing Office'),
+                    corporateAddress: '',
+                    corporateDistrict: '',
+                    corporateState: '',
+                    corporateCountry: '',
+                    corporatePinCode: '',
                     correspondenceAddress: '',
-                    gstNumbers: [''],
-                    siteOffices: [emptyAddress('Site Office 1')],
-                    plantAddresses: [emptyAddress('Plant Address 1')],
+                    correspondenceDistrict: '',
+                    correspondenceState: '',
+                    correspondenceCountry: '',
+                    correspondencePinCode: '',
+                    otherOfficeType: 'Plant Address',
+                    otherOfficeAddress: '',
+                    otherOfficeGst: '',
+                    otherOfficeDistrict: '',
+                    otherOfficeState: '',
+                    otherOfficeCountry: '',
+                    otherOfficePinCode: '',
+                    otherOfficeContactName: '',
+                    otherOfficeContactNumber: '',
+                    otherOfficeEmail: '',
                     primaryContact: emptyContact()
                   })
                   setCustomerProfile({
@@ -1752,6 +2137,7 @@ return (
                   setPayerProfiles([emptyPayer()])
                   setPaymentTerms([defaultPaymentTerm()])
                   setTeamProfiles([{ role: MASTER_ROLES[0], ...emptyContact() }])
+                  localStorage.removeItem(STORAGE_KEY)
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
               >

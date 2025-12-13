@@ -25,7 +25,7 @@ const customerProfileSchema = z.object({
 })
 
 type CustomerProfileFormData = z.infer<typeof customerProfileSchema>
-
+ 
 interface Step2CustomerProfileProps {
   onNext?: (data: CustomerProfileFormData) => void
   onPrevious?: () => void
@@ -81,7 +81,7 @@ export default function Step2CustomerProfile({
           const baseClasses = `px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
             error ? 'border-red-500' : 'border-gray-300'
           }`
-
+ 
           if (type === 'file') {
             return (
               <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">

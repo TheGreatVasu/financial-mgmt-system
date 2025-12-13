@@ -473,7 +473,7 @@ export default function MonthlyPlanPage() {
               </div>
             </div>
           </div>
-
+       
           {/* Data Table */}
           {tableData.length > 0 || !loading ? (
             <CollectionDataTable

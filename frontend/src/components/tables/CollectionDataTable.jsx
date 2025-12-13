@@ -63,6 +63,7 @@ const CollectionDataTable = ({
       // Refresh grid when data changes
       if (gridApi) {
         gridApi.setRowData(data)
+        gridApi.refreshCells()
       }
     } else if ((!data || !Array.isArray(data) || data.length === 0) && internalData.length === 0) {
       // Initialize with default row if no data
@@ -70,9 +71,10 @@ const CollectionDataTable = ({
       setInternalData([defaultRow])
       if (gridApi) {
         gridApi.setRowData([defaultRow])
+        gridApi.refreshCells()
       }
     }
-  }, [data, gridApi, internalData.length])
+  }, [data, gridApi])
 
   // Column definitions with Excel-like styling
   const columnDefs = useMemo(() => [
@@ -467,18 +469,45 @@ const CollectionDataTable = ({
 
   const onGridReady = (params) => {
     try {
+      console.log('Grid ready, columnDefs:', columnDefs?.length, 'columns')
       setGridApi(params.api)
       setColumnApi(params.columnApi)
-      // Set initial data
-      const initialData = displayData
-      if (initialData.length > 0) {
-        params.api.setRowData(initialData)
+      
+      // Ensure columns are set explicitly
+      if (columnDefs && columnDefs.length > 0) {
+        console.log('Setting column definitions:', columnDefs.length)
+        params.api.setColumnDefs(columnDefs)
+        // Verify columns were set
+        const allColumns = params.api.getAllColumns()
+        console.log('Columns after set:', allColumns?.length)
       } else {
-        // Set default row if no data
-        const defaultRow = { ...defaultRowData, id: Date.now() }
-        params.api.setRowData([defaultRow])
-        setInternalData([defaultRow])
+        console.warn('No column definitions found!')
       }
+      
+      // Set initial data - use internalData or data prop
+      const initialData = internalData.length > 0 
+        ? internalData 
+        : (Array.isArray(data) && data.length > 0) 
+          ? data 
+          : [{ ...defaultRowData, id: Date.now() }]
+      
+      console.log('Setting row data:', initialData.length, 'rows')
+      params.api.setRowData(initialData)
+      
+      // Force grid to refresh and show columns
+      setTimeout(() => {
+        try {
+          params.api.refreshCells()
+          // Verify columns are visible
+          const visibleColumns = params.api.getDisplayedColumns()
+          console.log('Visible columns:', visibleColumns?.length)
+          if (visibleColumns?.length === 0) {
+            console.error('No visible columns! Grid may not be rendering properly.')
+          }
+        } catch (e) {
+          console.warn('Error refreshing grid:', e)
+        }
+      }, 100)
     } catch (err) {
       console.error('Error in onGridReady:', err)
       setError(err)
@@ -583,15 +612,32 @@ const CollectionDataTable = ({
     return [{ ...defaultRowData, id: Date.now() }]
   }, [internalData, data])
   
-  // Update internal data when prop data changes
+  // Ensure columns are set when grid is ready
+  useEffect(() => {
+    if (gridApi && columnDefs && columnDefs.length > 0) {
+      gridApi.setColumnDefs(columnDefs)
+      gridApi.refreshCells()
+    }
+  }, [gridApi, columnDefs])
+
+  // Update internal data when prop data changes and refresh grid
   useEffect(() => {
     if (Array.isArray(data) && data.length > 0) {
       setInternalData(data)
+      if (gridApi) {
+        gridApi.setRowData(data)
+        gridApi.refreshCells()
+      }
     } else if (internalData.length === 0) {
       // Only set default if we truly have no data
-      setInternalData([{ ...defaultRowData, id: Date.now() }])
+      const defaultRow = { ...defaultRowData, id: Date.now() }
+      setInternalData([defaultRow])
+      if (gridApi) {
+        gridApi.setRowData([defaultRow])
+        gridApi.refreshCells()
+      }
     }
-  }, [data])
+  }, [data, gridApi])
 
   if (loading) {
     return (
@@ -624,7 +670,7 @@ const CollectionDataTable = ({
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full flex flex-col" style={{ minHeight: '600px' }}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -701,28 +747,40 @@ const CollectionDataTable = ({
       </div>
 
       {/* AG Grid */}
-      <div className="ag-theme-alpine flex-1 w-full overflow-x-auto" style={{ height: '600px', minHeight: '400px' }}>
-        {displayData.length > 0 ? (
-          <AgGridReact
-            columnDefs={columnDefs}
-            rowData={displayData}
-            defaultColDef={defaultColDef}
-            onGridReady={onGridReady}
-            animateRows={true}
-            rowSelection="multiple"
-            suppressRowClickSelection={true}
-            enableRangeSelection={true}
-            enableCellTextSelection={true}
-            ensureDomOrder={true}
-            suppressCellFocus={false}
-            pagination={true}
-            paginationPageSize={50}
-            paginationPageSizeSelector={[25, 50, 100, 200]}
-            suppressHorizontalScroll={false}
-            alwaysShowHorizontalScroll={true}
-            suppressColumnVirtualisation={false}
-            tooltipShowDelay={500}
-            tooltipHideDelay={1000}
+      <div 
+        className="ag-theme-alpine" 
+        style={{ 
+          height: '600px', 
+          width: '100%',
+          display: 'block',
+          position: 'relative'
+        }}
+      >
+        <AgGridReact
+          key={`grid-${columnDefs.length}`}
+          columnDefs={columnDefs}
+          rowData={displayData.length > 0 ? displayData : [{ ...defaultRowData, id: Date.now() }]}
+          defaultColDef={defaultColDef}
+          onGridReady={onGridReady}
+          animateRows={true}
+          rowSelection="multiple"
+          suppressRowClickSelection={true}
+          enableRangeSelection={true}
+          enableCellTextSelection={true}
+          ensureDomOrder={true}
+          suppressCellFocus={false}
+          pagination={true}
+          paginationPageSize={50}
+          paginationPageSizeSelector={[25, 50, 100, 200]}
+          suppressHorizontalScroll={false}
+          alwaysShowHorizontalScroll={true}
+          suppressColumnVirtualisation={false}
+          tooltipShowDelay={500}
+          tooltipHideDelay={1000}
+          domLayout="normal"
+          suppressColumnMoveAnimation={false}
+          suppressMenuHide={true}
+          suppressFieldDotNotation={false}
             onCellValueChanged={(params) => {
               try {
                 // Auto-calculate balance and target achieved when values change
@@ -758,19 +816,6 @@ const CollectionDataTable = ({
               return { backgroundColor: '#f9fafb' }
             }}
           />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-gray-500 mb-4">No data available</p>
-              <button
-                onClick={handleAddRow}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-              >
-                Add First Row
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
