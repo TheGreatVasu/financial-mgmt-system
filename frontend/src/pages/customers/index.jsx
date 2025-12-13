@@ -32,9 +32,18 @@ export default function CustomersList() {
     setError('')
     try {
       // Load with master data included
-      const response = await api.list({ limit: 100, includeMaster: true })
+      const response = await api.list({ limit: 100, includeMaster: 'true' })
+      console.log('Customers API response:', response)
       const rows = response?.data || []
+      console.log('Loaded customers:', rows.length, rows)
       setCustomers(rows)
+      
+      if (rows.length === 0) {
+        console.warn('No customers found. This could mean:')
+        console.warn('1. No customers have been created yet')
+        console.warn('2. Customers exist but created_by field is NULL')
+        console.warn('3. Customers exist but belong to a different user')
+      }
     } catch (err) {
       const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load customers'
       setError(errorMsg)

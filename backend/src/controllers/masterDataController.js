@@ -28,20 +28,47 @@ const submitMasterData = asyncHandler(async (req, res) => {
   const userId = requireUser(req);
   const payload = req.body || {};
   
-  // Save master data
-  const saved = await saveMasterData(userId, payload);
+  console.log('Submitting master data for user:', userId);
+  console.log('Payload keys:', Object.keys(payload));
   
-  // Sync customer profile from master data to customers table
-  if (payload.customerProfile) {
-    try {
-      await syncMasterDataToCustomers(userId, payload);
-    } catch (syncError) {
-      console.error('Error syncing master data to customers:', syncError);
-      // Don't fail the request if sync fails, just log it
-    }
+  // Validate required sections
+  if (!payload.companyProfile || !payload.customerProfile) {
+    return res.status(400).json({
+      success: false,
+      message: 'Company Profile and Customer Profile are required'
+    });
   }
   
-  res.json({ success: true, data: saved, message: 'Master data saved and synced successfully' });
+  try {
+    // Save master data
+    const saved = await saveMasterData(userId, payload);
+    console.log('Master data saved successfully');
+    
+    // Sync customer profile from master data to customers table
+    let syncResult = null;
+    if (payload.customerProfile) {
+      try {
+        syncResult = await syncMasterDataToCustomers(userId, payload);
+        console.log('Customer sync result:', syncResult);
+      } catch (syncError) {
+        console.error('Error syncing master data to customers:', syncError);
+        // Don't fail the request if sync fails, just log it
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      data: saved, 
+      syncResult,
+      message: 'Master data saved and synced successfully' 
+    });
+  } catch (error) {
+    console.error('Error saving master data:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save master data'
+    });
+  }
 });
 
 const updateSection = (sectionKey) =>

@@ -1,7 +1,16 @@
 import { createApiClient } from './apiClient'
 
-const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-const apiClient = createApiClient(token || undefined)
+// Helper to get fresh token each time
+function getToken() {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('fms_token') || localStorage.getItem('token') || null
+}
+
+// Helper to create API client with fresh token
+function getApiClient() {
+  const token = getToken()
+  return createApiClient(token || undefined)
+}
 
 export interface CompanyProfileData {
   logo?: File | null
@@ -106,76 +115,107 @@ const masterDataService = {
   // Submit entire master data wizard
   submitMasterData: async (data: CompleteMasterData) => {
     try {
-      const response = await apiClient.post('/api/admin/master-data', data)
+      const apiClient = getApiClient()
+      const token = getToken()
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.')
+      }
+      const response = await apiClient.post('/admin/master-data', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to submit master data')
+      console.error('Master data submission error:', error)
+      if (error.response?.status === 401) {
+        throw new Error('Authentication expired. Please log in again.')
+      }
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to submit master data'
+      throw new Error(errorMessage)
     }
   },
 
   // Get existing master data
   getMasterData: async () => {
     try {
-      const response = await apiClient.get('/api/admin/master-data')
+      const apiClient = getApiClient()
+      const response = await apiClient.get('/admin/master-data')
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch master data')
+      console.error('Master data fetch error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch master data'
+      throw new Error(errorMessage)
     }
   },
 
   // Update specific section
   updateCompanyProfile: async (data: CompanyProfileData) => {
     try {
-      const response = await apiClient.put('/api/admin/master-data/company-profile', data)
+      const apiClient = getApiClient()
+      const response = await apiClient.put('/admin/master-data/company-profile', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update company profile')
+      console.error('Company profile update error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update company profile'
+      throw new Error(errorMessage)
     }
   },
 
   updateCustomerProfile: async (data: CustomerProfileData) => {
     try {
-      const response = await apiClient.put('/api/admin/master-data/customer-profile', data)
+      const apiClient = getApiClient()
+      const response = await apiClient.put('/admin/master-data/customer-profile', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update customer profile')
+      console.error('Customer profile update error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update customer profile'
+      throw new Error(errorMessage)
     }
   },
 
   updatePaymentTerms: async (data: PaymentTermsData) => {
     try {
-      const response = await apiClient.put('/api/admin/master-data/payment-terms', data)
+      const apiClient = getApiClient()
+      const response = await apiClient.put('/admin/master-data/payment-terms', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update payment terms')
+      console.error('Payment terms update error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update payment terms'
+      throw new Error(errorMessage)
     }
   },
 
   updateTeamProfiles: async (data: TeamProfileData) => {
     try {
-      const response = await apiClient.put('/api/admin/master-data/team-profiles', data)
+      const apiClient = getApiClient()
+      const response = await apiClient.put('/admin/master-data/team-profiles', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update team profiles')
+      console.error('Team profiles update error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update team profiles'
+      throw new Error(errorMessage)
     }
   },
 
   updateAdditionalStep: async (data: AdditionalStepData) => {
     try {
-      const response = await apiClient.put('/api/admin/master-data/additional-step', data)
+      const apiClient = getApiClient()
+      const response = await apiClient.put('/admin/master-data/additional-step', data)
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update additional step')
+      console.error('Additional step update error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update additional step'
+      throw new Error(errorMessage)
     }
   },
 
   // Get completion status
   getWizardStatus: async () => {
     try {
-      const response = await apiClient.get('/api/admin/master-data/status')
+      const apiClient = getApiClient()
+      const response = await apiClient.get('/admin/master-data/status')
       return response.data
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch wizard status')
+      console.error('Wizard status fetch error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch wizard status'
+      throw new Error(errorMessage)
     }
   },
 }

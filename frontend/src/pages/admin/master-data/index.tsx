@@ -18,11 +18,45 @@ interface MasterDataState {
   paymentTerms?: any
 }
 
+const STORAGE_KEY = 'master_data_wizard_state'
+
 export default function MasterDataWizard() {
   const navigate = useNavigate()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [masterData, setMasterData] = useState<MasterDataState>({})
+  
+  // Load saved state from localStorage on mount
+  const loadSavedState = (): { step: number; data: MasterDataState } => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          step: parsed.step || 1,
+          data: parsed.data || {}
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load saved wizard state:', err)
+    }
+    return { step: 1, data: {} }
+  }
+
+  const savedState = loadSavedState()
+  const [currentStep, setCurrentStep] = useState(savedState.step)
+  const [masterData, setMasterData] = useState<MasterDataState>(savedState.data)
   const [error, setError] = useState<string | null>(null)
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        step: currentStep,
+        data: masterData,
+        timestamp: Date.now()
+      }))
+    } catch (err) {
+      console.warn('Failed to save wizard state:', err)
+    }
+  }, [currentStep, masterData])
 
   const handleStepComplete = (stepNumber: number, data: any) => {
     const stepKeys = [
@@ -71,23 +105,37 @@ export default function MasterDataWizard() {
         ...masterData,
       }
       
+      console.log('Submitting master data with sections:', Object.keys(finalData))
+      
       // Validate that we have at least the required sections
       if (!finalData.companyProfile || !finalData.customerProfile || !finalData.paymentTerms) {
         const missing = []
         if (!finalData.companyProfile) missing.push('Company Profile')
         if (!finalData.customerProfile) missing.push('Customer Profile')
         if (!finalData.paymentTerms) missing.push('Payment Terms')
-        throw new Error(`Please complete the following required sections: ${missing.join(', ')}`)
+        const errorMsg = `Please complete the following required sections: ${missing.join(', ')}`
+        setError(errorMsg)
+        toast.error(errorMsg)
+        return
       }
       
       // Import master data service
       const masterDataService = (await import('../../services/masterDataService')).default
       
       // Submit to backend
+      console.log('Calling masterDataService.submitMasterData...')
       const response = await masterDataService.submitMasterData(finalData)
+      console.log('Master data submission response:', response)
       
       // Show success message
       toast.success('Master Data Wizard Completed! Customer data has been synced to the system.')
+      
+      // Clear saved state from localStorage
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+      } catch (err) {
+        console.warn('Failed to clear saved state:', err)
+      }
       
       // Reset wizard after successful submission
       setTimeout(() => {
@@ -99,10 +147,32 @@ export default function MasterDataWizard() {
       }, 2000)
       
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to complete wizard. Please try again.'
-      setError(errorMessage)
       console.error('Error submitting master data:', err)
+      console.error('Error details:', {
+        message: err?.message,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      })
+      
+      let errorMessage = 'Failed to complete wizard. Please try again.'
+      
+      if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err?.message) {
+        errorMessage = err.message
+      } else if (err?.response?.status === 404) {
+        errorMessage = 'API endpoint not found. Please check server configuration.'
+      } else if (err?.response?.status === 401) {
+        errorMessage = 'Authentication expired. Please log in again and try submitting.'
+        // Don't clear data on auth error - user can log in and retry
+      } else if (err?.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later. Your data has been saved locally.'
+      }
+      
+      setError(errorMessage)
       toast.error(errorMessage)
+      
+      // Data is preserved in localStorage, so user can retry without losing their work
     }
   }
 
@@ -112,6 +182,23 @@ export default function MasterDataWizard() {
       setError(null) // Clear any stale errors when reaching review step
     }
   }, [currentStep])
+
+  // Warn user before leaving if they have unsaved data
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasData = Object.keys(masterData).length > 0
+      if (hasData) {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved master data. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [masterData])
 
   const progressPercentage = ((currentStep - 1) / 6) * 100 // Adjusted for 6 steps (0-100%)
   const steps = [
@@ -129,12 +216,24 @@ export default function MasterDataWizard() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center md:text-left">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Creation of Master Data
-          </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto md:mx-0">
-            Stepwise onboarding for company, customer, payment, and team details
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Creation of Master Data
+              </h1>
+              <p className="text-gray-600 max-w-2xl mx-auto md:mx-0">
+                Stepwise onboarding for company, customer, payment, and team details
+              </p>
+            </div>
+            {Object.keys(masterData).length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Auto-saved</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Error Alert */}
@@ -279,6 +378,7 @@ export default function MasterDataWizard() {
               onNext={handleNext}
               onPrevious={handlePrevious}
               initialData={masterData.consigneeProfile}
+              customerData={masterData.customerProfile}
             />
           )}
           {currentStep === 4 && (

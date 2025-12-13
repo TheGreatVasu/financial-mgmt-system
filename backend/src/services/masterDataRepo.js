@@ -116,17 +116,21 @@ async function syncMasterDataToCustomers(userId, masterData) {
   const companyName = customerProfile.customerName || customerProfile.legalEntityName;
   const legalEntityName = customerProfile.legalEntityName || customerProfile.customerName;
   
-  // Check if customer already exists by name or GST
+  // Check if customer already exists by name or GST (only for this user)
   let existingCustomer = null;
   if (customerProfile.gstNumber) {
     existingCustomer = await db('customers')
       .where('gst_number', customerProfile.gstNumber)
+      .where('created_by', userId)
+      .whereNotNull('created_by')
       .first();
   }
   
   if (!existingCustomer && companyName) {
     existingCustomer = await db('customers')
       .where('company_name', companyName)
+      .where('created_by', userId)
+      .whereNotNull('created_by')
       .first();
   }
 
@@ -149,18 +153,23 @@ async function syncMasterDataToCustomers(userId, masterData) {
   };
 
   if (existingCustomer) {
-    // Update existing customer
+    // Update existing customer (ensure created_by is preserved)
     await db('customers')
       .where('id', existingCustomer.id)
+      .where('created_by', userId) // Extra safety check
       .update({
         ...customerData,
+        created_by: userId, // Ensure created_by is set
         updated_at: db.fn.now(),
       });
+    console.log(`Updated existing customer ${companyName} (ID: ${existingCustomer.id}) for user ${userId}`);
     return { id: existingCustomer.id, action: 'updated' };
   } else {
     // Create new customer
     customerData.created_at = db.fn.now();
+    customerData.created_by = userId; // Ensure created_by is set
     const [id] = await db('customers').insert(customerData);
+    console.log(`Created new customer ${companyName} (ID: ${id}) for user ${userId}`);
     return { id, action: 'created' };
   }
 }

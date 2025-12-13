@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { AlertCircle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import masterDataService from '../../../services/masterDataService'
 
 const companyProfileSchema = z.object({
@@ -53,7 +55,8 @@ export default function Step1CompanyProfile({
     control,
     handleSubmit,
     trigger,
-    formState: { errors },
+    watch,
+    formState: { errors, isValid },
     setError,
   } = useForm<CompanyProfileFormData>({
     resolver: zodResolver(companyProfileSchema),
@@ -99,13 +102,62 @@ export default function Step1CompanyProfile({
     try {
       setSaving(true)
       const valid = await trigger()
-      if (!valid) return
-      await masterDataService.updateCompanyProfile(data as any)
-      onNext?.(data)
+      if (!valid) {
+        toast.error('Please fill all required fields correctly.')
+        // Scroll to first error
+        const firstErrorElement = document.querySelector('.border-red-500')
+        if (firstErrorElement) {
+          firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        return
+      }
+      
+      try {
+        await masterDataService.updateCompanyProfile(data as any)
+      } catch (err: any) {
+        console.warn('Failed to save to backend (continuing anyway):', err)
+        // Continue even if backend save fails - we'll save on final submit
+      }
+      
+      if (onNext) {
+        onNext(data)
+        toast.success('Company profile saved successfully!')
+      }
+    } catch (error: any) {
+      console.error('Error submitting company profile:', error)
+      toast.error(error?.message || 'Failed to save company profile. Please try again.')
     } finally {
       setSaving(false)
     }
   }
+
+  // Watch form values for real-time validation
+  const formValues = watch()
+  const [isFormValid, setIsFormValid] = useState(false)
+
+  // Initial validation check
+  useEffect(() => {
+    trigger().then(setIsFormValid).catch(() => setIsFormValid(false))
+  }, []) // Run once on mount
+
+  useEffect(() => {
+    const checkValidity = async () => {
+      try {
+        const valid = await trigger()
+        setIsFormValid(valid)
+      } catch {
+        setIsFormValid(false)
+      }
+    }
+    
+    // Debounce validation check to avoid excessive validation
+    const timeoutId = setTimeout(() => {
+      checkValidity()
+    }, 500)
+    
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formValues])
 
   const baseInputClasses =
     'w-full px-4 py-3 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition'
@@ -178,7 +230,12 @@ export default function Step1CompanyProfile({
           )
         }
       />
-      {error && <span className="text-xs text-red-500">{error.message}</span>}
+      {error && (
+        <span className="text-xs text-red-500 flex items-center gap-1 mt-1">
+          <AlertCircle className="w-3 h-3" />
+          {error.message}
+        </span>
+      )}
     </div>
   )
 
@@ -193,6 +250,12 @@ export default function Step1CompanyProfile({
               Upload your brand identity and capture all locations and contacts in one view.
             </p>
           </div>
+          {!isFormValid && Object.keys(errors).length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+              <AlertCircle className="w-4 h-4" />
+              <span>Please complete all required fields</span>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -503,10 +566,24 @@ export default function Step1CompanyProfile({
             </button>
             <button
               type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-sm disabled:opacity-60"
+              disabled={saving || !isFormValid}
+              className={`px-6 py-2.5 text-white rounded-lg font-semibold shadow-sm flex items-center gap-2 transition-colors ${
+                isFormValid && !saving
+                  ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                  : 'bg-gray-400 cursor-not-allowed opacity-60'
+              }`}
             >
-              {saving ? 'Saving...' : 'Next'}
+              {saving ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                'Next'
+              )}
             </button>
           </div>
         </form>
