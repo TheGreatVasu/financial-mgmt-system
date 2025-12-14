@@ -1,5 +1,6 @@
 const { asyncHandler } = require('../middlewares/errorHandler');
 const repo = require('../services/repositories');
+const { getDb } = require('../config/db');
 
 // Helper function to calculate quarterly data from monthly collections
 function calculateQuarterlyData(monthlyData, isTarget = false) {
@@ -50,6 +51,118 @@ function calculateOthersData(outstanding, invoiceCount, overdueCount) {
     { title: 'Credit Notes Awaiting', value: creditNotesAwaiting, icon: 'FileText', color: 'yellow' },
     { title: 'Disputes Open', value: disputesOpen, icon: 'AlertCircle', color: 'red' },
   ];
+}
+
+// Helper function to get BOQ vs Actual data from PO entries
+async function getBOQVsActualData(userId, filters = {}) {
+  try {
+    const db = getDb();
+    if (!db) {
+      return {
+        boq: Array(6).fill(0),
+        actual: Array(6).fill(0),
+        labels: ['Q1','Q2','Q3','Q4','Q5','Q6'],
+        totalBOQ: 0,
+        totalActual: 0
+      };
+    }
+
+    // Query PO entries with BOQ enabled, filtered by user
+    const query = db('po_entries')
+      .where('boq_enabled', 1);
+
+    // Filter by user if provided
+    if (userId) {
+      query.where('created_by', userId);
+    }
+
+    // Apply date filters if provided
+    if (filters.startDate) {
+      query.where('po_date', '>=', filters.startDate);
+    }
+    if (filters.endDate) {
+      query.where('po_date', '<=', filters.endDate);
+    }
+
+    const poEntries = await query.select('po_date', 'total_po_value', 'boq_items', 'total_ex_works', 'total_freight_amount', 'gst');
+
+    // Initialize quarters array
+    const quarters = Array(6).fill(0);
+    const actuals = Array(6).fill(0); // Actuals would come from delivery/invoice data later
+    let totalBOQValue = 0;
+
+    // Group PO entries by quarter based on PO date and extract BOQ line items
+    poEntries.forEach(entry => {
+      if (!entry.po_date) return;
+
+      let boqValue = 0;
+
+      // Try to extract BOQ value from line items first
+      if (entry.boq_items) {
+        try {
+          const boqItems = typeof entry.boq_items === 'string' 
+            ? JSON.parse(entry.boq_items) 
+            : entry.boq_items;
+          
+          if (Array.isArray(boqItems) && boqItems.length > 0) {
+            // Calculate total from BOQ line items
+            boqValue = boqItems.reduce((sum, item) => {
+              // Use totalAmount (line total) if available, otherwise calculate from qty * unitCost + freight
+              if (item.totalAmount) {
+                return sum + (parseFloat(item.totalAmount) || 0);
+              } else {
+                const qty = parseFloat(item.qty) || 0;
+                const unitCost = parseFloat(item.unitCost) || 0;
+                const freight = parseFloat(item.freight) || 0;
+                return sum + (qty * unitCost) + freight;
+              }
+            }, 0);
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse BOQ items for PO entry:', parseError);
+        }
+      }
+
+      // Fallback to total_po_value if BOQ items calculation failed
+      if (boqValue === 0 && entry.total_po_value) {
+        boqValue = parseFloat(entry.total_po_value) || 0;
+      }
+
+      // Only process if we have a valid BOQ value
+      if (boqValue > 0) {
+        const poDate = new Date(entry.po_date);
+        if (!isNaN(poDate.getTime())) {
+          const month = poDate.getMonth(); // 0-11
+          const quarterIndex = Math.floor(month / 2); // 0-5 for 6 quarters (2 months each)
+          
+          if (quarterIndex >= 0 && quarterIndex < 6) {
+            quarters[quarterIndex] += boqValue;
+            totalBOQValue += boqValue;
+          }
+        }
+      }
+    });
+
+    // Calculate total actual (for now, set to 0 as per requirements)
+    const totalActual = 0;
+
+    return {
+      boq: quarters,
+      actual: actuals, // Will be populated when actual delivery data is available
+      labels: ['Q1','Q2','Q3','Q4','Q5','Q6'],
+      totalBOQ: totalBOQValue,
+      totalActual: totalActual
+    };
+  } catch (error) {
+    console.error('Error fetching BOQ vs Actual data:', error);
+    return {
+      boq: Array(6).fill(0),
+      actual: Array(6).fill(0),
+      labels: ['Q1','Q2','Q3','Q4','Q5','Q6'],
+      totalBOQ: 0,
+      totalActual: 0
+    };
+  }
 }
 
 // GET /api/dashboard
@@ -158,11 +271,7 @@ async function buildDashboardPayload(userId = null, filters = {}) {
           outstanding,
           buckets: series.agingBuckets || []
         },
-        boqVsActual: {
-          boq: collections.length > 0 ? calculateQuarterlyData(collections, true) : Array(6).fill(0),
-          actual: collections.length > 0 ? calculateQuarterlyData(collections, false) : Array(6).fill(0),
-          labels: ['Q1','Q2','Q3','Q4','Q5','Q6']
-        },
+        boqVsActual: await getBOQVsActualData(userId, filters),
         performance: {
           onTimeCollectionRate: calculateOnTimeRate(collectedAmount, outstanding, totalSum),
           promiseToPay: calculatePromiseToPay(cei),
@@ -245,11 +354,7 @@ async function buildDashboardPayload(userId = null, filters = {}) {
           outstanding: 0,
           buckets: []
         },
-        boqVsActual: {
-          boq: Array(6).fill(0),
-          actual: Array(6).fill(0),
-          labels: ['Q1','Q2','Q3','Q4','Q5','Q6']
-        },
+        boqVsActual: await getBOQVsActualData(userId, filters),
         performance: {
           onTimeCollectionRate: 0,
           promiseToPay: 0,

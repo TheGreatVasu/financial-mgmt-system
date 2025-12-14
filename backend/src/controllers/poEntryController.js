@@ -111,24 +111,31 @@ const createPOEntry = asyncHandler(async (req, res) => {
   if (db) {
     // Try to find customer by name or GST to link PO entry
     let customerId = p.customerId || null;
-    if (!customerId && p.customerName) {
-      const customer = await db('customers')
-        .where('company_name', p.customerName)
-        .orWhere('legal_entity_name', p.customerName)
-        .where('created_by', userId)
-        .first();
-      if (customer) {
-        customerId = customer.id;
+    try {
+      if (!customerId && p.customerName) {
+        const customer = await db('customers')
+          .where(function() {
+            this.where('company_name', p.customerName)
+              .orWhere('legal_entity_name', p.customerName)
+          })
+          .where('created_by', userId)
+          .first();
+        if (customer) {
+          customerId = customer.id;
+        }
       }
-    }
-    if (!customerId && p.gstNo) {
-      const customer = await db('customers')
-        .where('gst_number', p.gstNo)
-        .where('created_by', userId)
-        .first();
-      if (customer) {
-        customerId = customer.id;
+      if (!customerId && p.gstNo) {
+        const customer = await db('customers')
+          .where('gst_number', p.gstNo)
+          .where('created_by', userId)
+          .first();
+        if (customer) {
+          customerId = customer.id;
+        }
       }
+    } catch (customerLookupError) {
+      // Customer lookup is optional, continue without linking
+      console.warn('Customer lookup failed (non-critical):', customerLookupError.message);
     }
 
     // Handle BOQ items if provided
@@ -217,10 +224,49 @@ const createPOEntry = asyncHandler(async (req, res) => {
       updated_at: now
     };
     
-    const [id] = await db('po_entries').insert(row);
-    const newRow = await db('po_entries').where({ id }).first();
-    
-    return res.status(201).json({ success: true, data: mapPOEntry(newRow) });
+    try {
+      // Only insert columns that exist in the database
+      // Remove undefined and null values that might cause issues
+      const cleanRow = {};
+      Object.keys(row).forEach(key => {
+        if (row[key] !== undefined) {
+          cleanRow[key] = row[key];
+        }
+      });
+      
+      const [id] = await db('po_entries').insert(cleanRow);
+      const newRow = await db('po_entries').where({ id }).first();
+      
+      return res.status(201).json({ success: true, data: mapPOEntry(newRow) });
+    } catch (error) {
+      console.error('Error creating PO entry:', error);
+      console.error('Error code:', error.code);
+      console.error('Error sqlMessage:', error.sqlMessage);
+      console.error('Row data keys:', Object.keys(row));
+      
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to create PO entry';
+      if (error.code === 'ER_BAD_FIELD_ERROR') {
+        errorMessage = `Database column error: ${error.sqlMessage}. Please run migrations.`;
+      } else if (error.code === 'ER_NO_SUCH_TABLE') {
+        errorMessage = 'PO entries table not found. Please run migrations.';
+      } else if (error.sqlMessage) {
+        errorMessage = `Database error: ${error.sqlMessage}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? {
+          code: error.code,
+          sqlMessage: error.sqlMessage,
+          message: error.message,
+          stack: error.stack
+        } : undefined
+      });
+    }
   }
   
   res.status(500).json({ success: false, message: 'Database not available' });

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createPOEntryService } from '../../services/poEntryService'
-import { Loader2, Search, Plus, FileText, Calendar, DollarSign, ArrowLeft, RefreshCw, Trash2, AlertCircle } from 'lucide-react'
+import { Loader2, Search, Plus, FileText, Calendar, DollarSign, ArrowLeft, RefreshCw, Trash2, AlertCircle, Edit, Eye } from 'lucide-react'
 import Modal from '../../components/ui/Modal.jsx'
 import toast from 'react-hot-toast'
 
@@ -49,19 +49,27 @@ function Card({ entry, onDelete }) {
 
       <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
         <div className="text-xs text-secondary-500">Last updated: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—'}</div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Link
             to={`/po-entry/${entry.id || entry._id || entry.poNo}`}
-            className="text-primary-700 text-sm font-semibold hover:text-primary-800 inline-flex items-center gap-1"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
           >
-            Edit / View
+            <Edit className="h-3.5 w-3.5" />
+            Edit
+          </Link>
+          <Link
+            to={`/po-entry/${entry.id || entry._id || entry.poNo}?preview=true`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview
           </Link>
           <button
             type="button"
             onClick={() => onDelete?.(entry)}
-            className="inline-flex items-center gap-1 text-sm font-semibold text-danger-600 hover:text-danger-700"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
             Delete
           </button>
         </div>

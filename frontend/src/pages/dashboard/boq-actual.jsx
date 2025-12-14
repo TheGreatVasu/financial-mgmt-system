@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { fetchDashboard } from '../../services/dashboardService.js'
@@ -7,39 +8,109 @@ import { FileText, TrendingUp, Target, AlertTriangle, Download, RefreshCw, BarCh
 
 export default function BoqActualPage() {
   const { token } = useAuthContext()
+  const location = useLocation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [submittedBOQData, setSubmittedBOQData] = useState(null)
+
+  const loadDashboardData = useCallback(async () => {
+    if (!token) return
+    setLoading(true)
+    setError("")
+    try {
+      const d = await fetchDashboard(token, { range: '90d' })
+      setData(d)
+    } catch (e) {
+      setError(e?.message || 'Failed to load BOQ vs Actual data')
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
 
   useEffect(() => {
-    let mounted = true
-    async function load() {
-      if (!token) return
-      setLoading(true)
-      setError("")
+    // Check for submitted BOQ data in sessionStorage
+    const storedBOQData = sessionStorage.getItem('submittedBOQData')
+    if (storedBOQData) {
       try {
-        const d = await fetchDashboard(token, { range: '90d' })
-        if (mounted) setData(d)
+        const parsed = JSON.parse(storedBOQData)
+        setSubmittedBOQData(parsed)
       } catch (e) {
-        if (mounted) setError(e?.message || 'Failed to load BOQ vs Actual data')
-      } finally {
-        if (mounted) setLoading(false)
+        console.error('Failed to parse submitted BOQ data', e)
       }
     }
-    load()
-    return () => { mounted = false }
-  }, [token])
+    
+    // Load dashboard data from API
+    loadDashboardData()
+  }, [loadDashboardData, location.key]) // Reload when navigating to this page
 
   const formatCurrency = (amount) => {
     return `₹${Number(amount || 0).toLocaleString('en-IN')}`
   }
 
-  const boqVsActual = data?.boqVsActual || {}
-  const boq = boqVsActual.boq || []
-  const actual = boqVsActual.actual || []
-  const labels = boqVsActual.labels || ['Q1','Q2','Q3','Q4','Q5','Q6']
+  // Process BOQ data from API and merge with newly submitted data
+  let boq, actual, labels, chartData, totalBOQ, totalActual, totalVariance, variancePercent
 
-  const chartData = labels.map((label, index) => ({
+  // Get API data (from database)
+  const boqVsActual = data?.boqVsActual || {}
+  boq = [...(boqVsActual.boq || [])]
+  actual = [...(boqVsActual.actual || [])]
+  labels = boqVsActual.labels || ['Q1','Q2','Q3','Q4','Q5','Q6']
+
+  // If we have newly submitted BOQ data, calculate its value and add to appropriate quarter
+  if (submittedBOQData) {
+    const boqSummary = submittedBOQData.summary || {}
+    let submittedBOQValue = 0
+
+    // Calculate BOQ value from line items (preferred method)
+    if (submittedBOQData.lineItems && Array.isArray(submittedBOQData.lineItems)) {
+      submittedBOQValue = submittedBOQData.lineItems.reduce((sum, item) => {
+        // Use totalAmount (line total) if available
+        if (item.totalAmount) {
+          return sum + (parseFloat(item.totalAmount) || 0)
+        }
+        // Otherwise calculate: qty * unitCost + freight
+        const qty = parseFloat(item.qty) || 0
+        const unitCost = parseFloat(item.unitCost) || 0
+        const freight = parseFloat(item.freight) || 0
+        return sum + (qty * unitCost) + freight
+      }, 0)
+    }
+
+    // Fallback to summary totalPOValue if line items calculation is 0
+    if (submittedBOQValue === 0 && boqSummary.totalPOValue) {
+      submittedBOQValue = parseFloat(boqSummary.totalPOValue || 0)
+    }
+    
+    if (submittedBOQValue > 0) {
+      // Determine quarter based on PO date if available, otherwise use current date
+      let quarterIndex = 0
+      if (submittedBOQData.poDate) {
+        try {
+          const poDate = new Date(submittedBOQData.poDate)
+          if (!isNaN(poDate.getTime())) {
+            const month = poDate.getMonth() // 0-11
+            quarterIndex = Math.floor(month / 2) // 0-5 for 6 quarters (2 months each)
+            quarterIndex = Math.min(quarterIndex, 5) // Ensure it's within bounds
+          }
+        } catch (e) {
+          console.warn('Failed to parse PO date, using current quarter:', e)
+        }
+      }
+      
+      if (quarterIndex === 0) {
+        // Fallback to current quarter if PO date not available
+        const currentMonth = new Date().getMonth()
+        quarterIndex = Math.min(Math.floor(currentMonth / 2), 5)
+      }
+      
+      // Add the submitted BOQ value to the appropriate quarter
+      boq[quarterIndex] = (boq[quarterIndex] || 0) + submittedBOQValue
+    }
+  }
+
+  // Create chart data from the combined BOQ and actual arrays
+  chartData = labels.map((label, index) => ({
     quarter: label,
     boq: boq[index] || 0,
     actual: actual[index] || 0,
@@ -47,10 +118,11 @@ export default function BoqActualPage() {
     variancePercent: boq[index] > 0 ? (((actual[index] || 0) - (boq[index] || 0)) / boq[index] * 100).toFixed(1) : 0,
   }))
 
-  const totalBOQ = boq.reduce((sum, val) => sum + (val || 0), 0)
-  const totalActual = actual.reduce((sum, val) => sum + (val || 0), 0)
-  const totalVariance = totalActual - totalBOQ
-  const variancePercent = totalBOQ > 0 ? ((totalVariance / totalBOQ) * 100).toFixed(1) : 0
+  // Calculate totals from aggregated data
+  totalBOQ = boq.reduce((sum, val) => sum + (val || 0), 0)
+  totalActual = actual.reduce((sum, val) => sum + (val || 0), 0)
+  totalVariance = totalActual - totalBOQ
+  variancePercent = totalBOQ > 0 ? ((totalVariance / totalBOQ) * 100).toFixed(1) : 0
 
   return (
     <DashboardLayout>
@@ -65,10 +137,15 @@ export default function BoqActualPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.location.reload()}
+              onClick={async () => {
+                // Clear submitted data on refresh to show only database data
+                setSubmittedBOQData(null)
+                sessionStorage.removeItem('submittedBOQData')
+                await loadDashboardData()
+              }}
               className="inline-flex items-center gap-2 rounded-xl border border-secondary-200/80 bg-white px-3 py-2 shadow-inner hover:border-primary-200 transition-colors"
             >
-              <RefreshCw className="h-4 w-4 text-primary-600" />
+              <RefreshCw className={`h-4 w-4 text-primary-600 ${loading ? 'animate-spin' : ''}`} />
               <span className="text-sm font-semibold">Refresh</span>
             </button>
             <button
@@ -167,7 +244,13 @@ export default function BoqActualPage() {
               <YAxis 
                 tick={{ fontSize: 12, fill: '#6b7280' }}
                 axisLine={{ stroke: '#d1d5db' }}
-                tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                tickFormatter={(value) => {
+                  if (value >= 1000) {
+                    return `₹${(value / 1000).toFixed(0)}K`
+                  }
+                  return `₹${value.toFixed(0)}`
+                }}
+                domain={[0, 'auto']}
               />
               <Tooltip 
                 formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, '']}
@@ -237,11 +320,76 @@ export default function BoqActualPage() {
           </ResponsiveContainer>
         </div>
 
+        {/* BOQ Line Items Table (if submitted data exists) */}
+        {submittedBOQData && submittedBOQData.lineItems && submittedBOQData.lineItems.length > 0 && (
+          <div className="rounded-xl sm:rounded-2xl border border-secondary-200/70 bg-white p-4 sm:p-5 md:p-6 shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="w-5 h-5 text-primary-600" />
+              <div className="text-sm sm:text-base font-semibold text-secondary-700">BOQ Line Items</div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-secondary-500 border-b border-secondary-200">
+                    <th className="py-3 pr-4 font-semibold">Material Description</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Qty</th>
+                    <th className="py-3 pr-4 font-semibold text-center">UOM</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Unit Price</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Unit Cost</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Freight / Other Charges</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Total Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submittedBOQData.lineItems.map((item, index) => (
+                    <tr key={index} className="border-b border-secondary-100/80 hover:bg-secondary-50/50 transition-colors">
+                      <td className="py-3 pr-4 font-medium text-secondary-900">{item.materialDescription || '—'}</td>
+                      <td className="py-3 pr-4 text-right text-secondary-700">{item.qty || '—'}</td>
+                      <td className="py-3 pr-4 text-center text-secondary-700">{item.uom || '—'}</td>
+                      <td className="py-3 pr-4 text-right text-secondary-700">{item.unitPrice ? formatCurrency(item.unitPrice) : '—'}</td>
+                      <td className="py-3 pr-4 text-right text-secondary-700">{item.unitCost ? formatCurrency(item.unitCost) : '—'}</td>
+                      <td className="py-3 pr-4 text-right text-secondary-700">{item.freight ? formatCurrency(item.freight) : '—'}</td>
+                      <td className="py-3 pr-4 text-right font-semibold text-secondary-900">{item.totalAmount ? formatCurrency(item.totalAmount) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {submittedBOQData.summary && (
+                  <tfoot>
+                    <tr className="border-t-2 border-secondary-300 font-bold bg-secondary-50">
+                      <td colSpan="5" className="py-3 pr-4 text-secondary-900">BOQ Summary</td>
+                      <td className="py-3 pr-4 text-right text-secondary-900">
+                        {submittedBOQData.summary.totalFreightAmount ? formatCurrency(submittedBOQData.summary.totalFreightAmount) : '—'}
+                      </td>
+                      <td className="py-3 pr-4 text-right text-secondary-900">
+                        {submittedBOQData.summary.totalPOValue ? formatCurrency(submittedBOQData.summary.totalPOValue) : '—'}
+                      </td>
+                    </tr>
+                    <tr className="border-t border-secondary-200 font-semibold text-xs text-secondary-600 bg-secondary-50">
+                      <td colSpan="4" className="py-2 pr-4"></td>
+                      <td className="py-2 pr-4 text-right">
+                        <span className="font-semibold">Total Ex-Works:</span> {submittedBOQData.summary.totalExWorks ? formatCurrency(submittedBOQData.summary.totalExWorks) : '—'}
+                      </td>
+                      <td className="py-2 pr-4 text-right">
+                        <span className="font-semibold">Total Freight:</span> {submittedBOQData.summary.totalFreightAmount ? formatCurrency(submittedBOQData.summary.totalFreightAmount) : '—'}
+                      </td>
+                      <td className="py-2 pr-4 text-right">
+                        <span className="font-semibold">GST:</span> {submittedBOQData.summary.gst ? formatCurrency(submittedBOQData.summary.gst) : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Detailed Comparison Table */}
         <div className="rounded-xl sm:rounded-2xl border border-secondary-200/70 bg-white p-4 sm:p-5 md:p-6 shadow-sm hover:shadow-md transition-all duration-300">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-primary-600" />
-            <div className="text-sm sm:text-base font-semibold text-secondary-700">Quarterly Breakdown</div>
+            <div className="text-sm sm:text-base font-semibold text-secondary-700">
+              {submittedBOQData ? 'BOQ Summary' : 'Quarterly Breakdown'}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">

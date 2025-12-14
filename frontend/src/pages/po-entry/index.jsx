@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 
@@ -7,7 +7,8 @@ import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import { createPOEntryService } from '../../services/poEntryService'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CheckCircle2, ExternalLink, Info, Loader2, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ExternalLink, Info, Loader2, Plus, Trash2, ToggleLeft, ToggleRight, Edit } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const emptyBOQItem = () => ({
   materialDescription: '',
@@ -189,6 +190,8 @@ export default function POEntry() {
   const { token } = useAuthContext()
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const isPreviewMode = searchParams.get('preview') === 'true'
   const customerService = useMemo(() => createCustomerService(token), [token])
   const poEntryService = useMemo(() => createPOEntryService(token), [token])
   const isEditing = Boolean(id)
@@ -217,10 +220,115 @@ export default function POEntry() {
     loadMasterData()
   }, [token, customerService])
 
+  // Function to load sample data for testing
+  function loadSampleData() {
+    const sampleForm = {
+      // Customer Details
+      customerName: 'ABC Manufacturing Ltd.',
+      legalEntityName: 'ABC Manufacturing Private Limited',
+      customerAddress: '123 Industrial Area, Sector 5',
+      district: 'Gurgaon',
+      state: 'Haryana',
+      country: 'India',
+      pinCode: '122001',
+      gstNo: '06AABCU1234F1Z5',
+      businessUnit: 'North Zone',
+      segment: 'Domestic',
+      zone: 'North',
+      
+      // Contract and Purchase Order Details
+      contractAgreementNo: 'CA-2024-001',
+      contractAgreementDate: '2024-01-15',
+      poNo: 'PO-2024-001',
+      poDate: '2024-01-20',
+      letterOfIntentNo: 'LOI-2024-001',
+      letterOfIntentDate: '2024-01-10',
+      letterOfAwardNo: 'LOA-2024-001',
+      letterOfAwardDate: '2024-01-12',
+      tenderReferenceNo: 'TDR-2024-001',
+      tenderDate: '2024-01-05',
+      projectDescription: 'Supply of Steel Materials for Construction Project',
+      
+      // Payment Details
+      paymentType: 'Secured',
+      paymentTerms: 'Net 30',
+      paymentTermsClauseInPO: 'Payment to be made within 30 days of invoice date',
+      
+      // Insurance Details
+      insuranceType: 'Marine Insurance',
+      policyNo: 'POL-2024-001',
+      policyDate: '2024-01-20',
+      policyCompany: 'LIC General Insurance',
+      policyValidUpto: '2025-01-20',
+      policyClauseInPO: 'Marine insurance coverage as per standard terms',
+      policyRemarks: 'Coverage includes transit and storage',
+      
+      // Bank Guarantee Details
+      bankGuaranteeType: 'Advance Bank Guarantee',
+      bankGuaranteeNo: 'BG-2024-001',
+      bankGuaranteeDate: '2024-01-20',
+      bankGuaranteeValue: '500000',
+      bankName: 'State Bank of India',
+      bankGuaranteeValidity: '2025-01-20',
+      bankGuaranteeReleaseValidityClauseInPO: 'BG to be released after completion',
+      bankGuaranteeRemarks: 'Valid for 12 months',
+      
+      // Team Members
+      salesManager: 'Rajesh Kumar',
+      salesHead: 'Amit Sharma',
+      businessHead: 'Vikram Singh',
+      projectManager: 'Priya Patel',
+      projectHead: 'Suresh Mehta',
+      collectionIncharge: 'Anita Desai',
+      salesAgentName: 'Ravi Verma',
+      salesAgentCommission: '2.5',
+      collectionAgentName: 'Kiran Nair',
+      collectionAgentCommission: '1.5',
+      
+      // Additional Fields
+      deliveryScheduleClause: 'Delivery to be completed within 60 days',
+      liquidatedDamagesClause: 'LD @ 0.5% per week of delay',
+      lastDateOfDelivery: '2024-03-20',
+      poValidity: '2024-07-20',
+      poSignedConcernName: 'John Doe, Director',
+      
+      // Financial Summary
+      totalExWorks: '460.00',
+      totalFreightAmount: '10.00',
+      gst: '0.80',
+      totalPOValue: '470.80'
+    }
+    
+    setForm(sampleForm)
+    
+    // Set sample BOQ items
+    const sampleBOQItems = [
+      {
+        materialDescription: 'Steel',
+        qty: '20',
+        uom: 'MT',
+        unitPrice: '20',
+        unitCost: '23',
+        freight: '10',
+        gst: '0.80',
+        totalCost: '470.80'
+      }
+    ]
+    
+    setBoqItems(sampleBOQItems)
+    setBoqEnabled(true)
+  }
+
   useEffect(() => {
     if (!token) return
     if (!isEditing) {
-      setForm(createEmptyForm())
+      // Load sample data for new entries (only in development or if explicitly requested)
+      const shouldLoadSample = new URLSearchParams(window.location.search).get('sample') === 'true'
+      if (shouldLoadSample) {
+        loadSampleData()
+      } else {
+        setForm(createEmptyForm())
+      }
       return
     }
 
@@ -413,25 +521,115 @@ export default function POEntry() {
   async function saveEntry() {
     try {
       setIsSubmitting(true)
+      setConfirmOpen(false) // Close modal immediately when starting submission
+      
+      // Create payload and clean up empty strings
       const payload = { ...form, boqEnabled, boqItems: boqEnabled ? boqItems : [] }
-      numericFields.forEach((field) => {
-        payload[field] = form[field] ? Number(form[field]) : null
+      
+      // Convert empty strings to null for database compatibility
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === '') {
+          payload[key] = null
+        }
       })
+      
+      // Handle numeric fields
+      numericFields.forEach((field) => {
+        if (payload[field] !== null && payload[field] !== undefined && payload[field] !== '') {
+          payload[field] = Number(payload[field])
+        } else {
+          payload[field] = null
+        }
+      })
+      
+      // Clean BOQ items - remove empty strings
+      if (payload.boqItems && Array.isArray(payload.boqItems)) {
+        payload.boqItems = payload.boqItems.map(item => {
+          const cleaned = { ...item }
+          Object.keys(cleaned).forEach(key => {
+            if (cleaned[key] === '') {
+              cleaned[key] = null
+            }
+          })
+          return cleaned
+        })
+      }
+      
       const response = isEditing
         ? await poEntryService.update(id, payload)
         : await poEntryService.create(payload)
-      if (response?.success) {
-        toast.success(isEditing ? 'Purchase Order entry updated successfully!' : 'Purchase Order entry saved successfully!')
-      } else {
-        toast.success(isEditing ? 'Purchase Order entry updated' : 'Purchase Order entry created')
+      
+      // Always show success message if we got here without error
+      toast.success(isEditing ? 'Purchase Order entry updated successfully!' : 'Purchase Order entry saved successfully!')
+      
+      // Extract BOQ data only if BOQ is enabled and has items
+      if (boqEnabled && boqItems && boqItems.length > 0) {
+        // Extract only BOQ line item fields as specified
+        const boqLineItems = boqItems.map(item => ({
+          materialDescription: item.materialDescription || '',
+          qty: item.qty || '',
+          uom: item.uom || '',
+          unitPrice: item.unitPrice || '',
+          unitCost: item.unitCost || '',
+          freight: item.freight || '',
+          totalAmount: item.totalCost || '' // Total Amount per line item (qty * unitCost + freight + gst)
+        }))
+        
+        // Extract BOQ summary fields
+        const boqSummary = {
+          totalExWorks: form.totalExWorks || '',
+          totalFreightAmount: form.totalFreightAmount || '',
+          gst: form.gst || '',
+          totalPOValue: form.totalPOValue || ''
+        }
+        
+        // Store BOQ data in sessionStorage for the dashboard (includes PO date for quarter calculation)
+        const boqData = {
+          lineItems: boqLineItems,
+          summary: boqSummary,
+          poDate: form.poDate || new Date().toISOString().split('T')[0], // PO date for quarter calculation
+          submittedAt: new Date().toISOString()
+        }
+        sessionStorage.setItem('submittedBOQData', JSON.stringify(boqData))
+        
+        // Navigate to BOQ dashboard to show the chart
+        setForm(createEmptyForm())
+        setErrors({})
+        setBoqItems([emptyBOQItem()])
+        setBoqEnabled(false)
+        // Small delay to ensure toast is visible
+        setTimeout(() => {
+          navigate('/dashboard/boq-actual')
+        }, 500)
+        return
       }
+      
+      // Reset form and navigate to list page
       setForm(createEmptyForm())
       setErrors({})
-      setConfirmOpen(false)
-      navigate('/po-entry')
+      setBoqItems([emptyBOQItem()])
+      setBoqEnabled(false)
+      // Small delay to ensure toast is visible
+      setTimeout(() => {
+        navigate('/po-entry')
+      }, 500)
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || 'Failed to save PO entry'
+      console.error('Error saving PO entry:', error)
+      console.error('Error response:', error?.response?.data)
+      console.error('Error status:', error?.response?.status)
+      
+      let message = 'Failed to save PO entry'
+      if (error?.response?.data?.message) {
+        message = error.response.data.message
+      } else if (error?.response?.data?.error) {
+        message = `Database error: ${error.response.data.error.message || error.response.data.error}`
+      } else if (error?.message) {
+        message = error.message
+      }
+      
       toast.error(message)
+      setConfirmOpen(false) // Close modal on error so user can try again
+      // Don't reset form on error - let user fix and retry
     } finally {
       setIsSubmitting(false)
     }
@@ -468,12 +666,27 @@ export default function POEntry() {
               <div className="flex items-center gap-2 text-sm text-secondary-600 mb-2">
                 Structured Master Linked Form
               </div>
-              <h1 className="text-2xl font-semibold text-secondary-900">Customer PO Entry</h1>
+              <h1 className="text-2xl font-semibold text-secondary-900">
+                {isPreviewMode ? 'PO Entry Preview' : isEditing ? 'Edit PO Entry' : 'Customer PO Entry'}
+              </h1>
               <p className="text-sm text-secondary-600 mt-1">
-                Capture Purchase Orders using the exact structure from your Excel master.
+                {isPreviewMode 
+                  ? 'View-only mode - This is a read-only preview of the purchase order entry.'
+                  : 'Capture Purchase Orders using the exact structure from your Excel master.'}
               </p>
             </div>
             <div className="flex justify-end w-full lg:w-auto gap-2">
+              {!isEditing && !isPreviewMode && (
+                <button
+                  type="button"
+                  onClick={loadSampleData}
+                  className="inline-flex items-center gap-2 rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
+                  title="Load sample data for testing"
+                >
+                  <Plus className="h-4 w-4" />
+                  Load Sample Data
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setBoqEnabled(!boqEnabled)}
@@ -497,7 +710,7 @@ export default function POEntry() {
             </div>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={isPreviewMode ? (e) => e.preventDefault() : handleSubmit} className="space-y-6">
           <Section
             title="Customer Details"
             description="Pull customer metadata directly from the master data module."
@@ -512,7 +725,8 @@ export default function POEntry() {
                     }}
                     fieldName="customerName"
                     placeholder="Select from Master Data or start typing"
-                    inputClassName={`input ${errors.customerName ? 'border-danger-400' : ''}`}
+                    inputClassName={`input ${errors.customerName ? 'border-danger-400' : ''} ${isPreviewMode ? 'bg-secondary-50 cursor-not-allowed' : ''}`}
+                    disabled={isPreviewMode}
                   />
                   {errors.customerName ? <span className="text-xs text-danger-600">{errors.customerName}</span> : null}
                 </Field>
@@ -521,7 +735,8 @@ export default function POEntry() {
                     name="legalEntityName"
                     value={form.legalEntityName}
                     onChange={handleChange}
-                    className={`input ${errors.legalEntityName ? 'border-danger-400' : ''}`}
+                    readOnly={isPreviewMode}
+                    className={`input ${errors.legalEntityName ? 'border-danger-400' : ''} ${isPreviewMode ? 'bg-secondary-50 cursor-not-allowed' : ''}`}
                     placeholder="Legal entity name"
                   />
                   {errors.legalEntityName ? <span className="text-xs text-danger-600">{errors.legalEntityName}</span> : null}
@@ -1122,7 +1337,8 @@ export default function POEntry() {
                               type="text"
                               value={item.materialDescription}
                               onChange={(e) => handleBOQItemChange(index, 'materialDescription', e.target.value)}
-                              className="flex-1 px-2 py-1 border border-secondary-300 rounded-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                              readOnly={isPreviewMode}
+                              className={`flex-1 px-2 py-1 border border-secondary-300 rounded-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${isPreviewMode ? 'bg-secondary-50 cursor-not-allowed' : 'bg-white'}`}
                               placeholder="Enter material description"
                             />
                           </div>
@@ -1194,7 +1410,7 @@ export default function POEntry() {
                           />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {boqItems.length > 1 && (
+                          {!isPreviewMode && boqItems.length > 1 && (
                             <button
                               type="button"
                               onClick={() => removeBOQItem(index)}
@@ -1222,16 +1438,18 @@ export default function POEntry() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex justify-start">
-                <button
-                  type="button"
-                  onClick={addBOQItem}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-300 hover:bg-primary-100 rounded"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add line item
-                </button>
-              </div>
+              {!isPreviewMode && (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={addBOQItem}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-300 hover:bg-primary-100 rounded"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add line item
+                  </button>
+                </div>
+              )}
             </div>
           </Section>
               
@@ -1299,22 +1517,39 @@ export default function POEntry() {
             </div>
           ) : null}
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-secondary-200 pt-4">
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 px-8 py-3 text-base font-semibold text-white shadow-[0_15px_30px_-10px_rgba(15,23,42,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_25px_45px_-15px_rgba(15,23,42,0.55)] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isSubmitting ? 'Saving PO Entry...' : 'Submit PO Entry'}
-              </button>
+          {!isPreviewMode && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-secondary-200 pt-4">
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 px-8 py-3 text-base font-semibold text-white shadow-[0_15px_30px_-10px_rgba(15,23,42,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_25px_45px_-15px_rgba(15,23,42,0.55)] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isSubmitting ? 'Saving PO Entry...' : 'Submit PO Entry'}
+                </button>
+              </div>
+              <span className="text-sm text-secondary-500 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success-500" />
+                All entries are stored against the authenticated user and can be exported later.
+              </span>
             </div>
-            <span className="text-sm text-secondary-500 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success-500" />
-              All entries are stored against the authenticated user and can be exported later.
-            </span>
-          </div>
+          )}
+          {isPreviewMode && (
+            <div className="flex items-center justify-between gap-4 border-t border-secondary-200 pt-4">
+              <span className="text-sm text-secondary-500 flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary-500" />
+                Preview mode - This is a read-only view of the PO entry.
+              </span>
+              <Link
+                to={`/po-entry/${id}`}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 transition-colors"
+              >
+                <Edit className="h-4 w-4" />
+                Edit Entry
+              </Link>
+            </div>
+          )}
         </form>
 
         {/* Confirmation Modal */}
@@ -1339,7 +1574,11 @@ export default function POEntry() {
                   <button
                     type="button"
                     className="inline-flex items-center justify-center gap-2 rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={saveEntry}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      saveEntry()
+                    }}
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
