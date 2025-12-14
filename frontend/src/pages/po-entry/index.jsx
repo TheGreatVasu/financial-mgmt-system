@@ -327,7 +327,7 @@ export default function POEntry() {
       if (shouldLoadSample) {
         loadSampleData()
       } else {
-        setForm(createEmptyForm())
+      setForm(createEmptyForm())
       }
       return
     }
@@ -550,7 +550,7 @@ export default function POEntry() {
             if (cleaned[key] === '') {
               cleaned[key] = null
             }
-          })
+      })
           return cleaned
         })
       }
@@ -560,7 +560,7 @@ export default function POEntry() {
         : await poEntryService.create(payload)
       
       // Always show success message if we got here without error
-      toast.success(isEditing ? 'Purchase Order entry updated successfully!' : 'Purchase Order entry saved successfully!')
+        toast.success(isEditing ? 'Purchase Order entry updated successfully!' : 'Purchase Order entry saved successfully!')
       
       // Extract BOQ data only if BOQ is enabled and has items
       if (boqEnabled && boqItems && boqItems.length > 0) {
@@ -593,8 +593,8 @@ export default function POEntry() {
         sessionStorage.setItem('submittedBOQData', JSON.stringify(boqData))
         
         // Navigate to BOQ dashboard to show the chart
-        setForm(createEmptyForm())
-        setErrors({})
+      setForm(createEmptyForm())
+      setErrors({})
         setBoqItems([emptyBOQItem()])
         setBoqEnabled(false)
         // Small delay to ensure toast is visible
@@ -611,7 +611,7 @@ export default function POEntry() {
       setBoqEnabled(false)
       // Small delay to ensure toast is visible
       setTimeout(() => {
-        navigate('/po-entry')
+      navigate('/po-entry')
       }, 500)
     } catch (error) {
       console.error('Error saving PO entry:', error)
@@ -1439,16 +1439,16 @@ export default function POEntry() {
                 </table>
               </div>
               {!isPreviewMode && (
-                <div className="flex justify-start">
-                  <button
-                    type="button"
-                    onClick={addBOQItem}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-300 hover:bg-primary-100 rounded"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add line item
-                  </button>
-                </div>
+              <div className="flex justify-start">
+                <button
+                  type="button"
+                  onClick={addBOQItem}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-300 hover:bg-primary-100 rounded"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add line item
+                </button>
+              </div>
               )}
             </div>
           </Section>
@@ -1518,22 +1518,22 @@ export default function POEntry() {
           ) : null}
 
           {!isPreviewMode && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-secondary-200 pt-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 px-8 py-3 text-base font-semibold text-white shadow-[0_15px_30px_-10px_rgba(15,23,42,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_25px_45px_-15px_rgba(15,23,42,0.55)] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {isSubmitting ? 'Saving PO Entry...' : 'Submit PO Entry'}
-                </button>
-              </div>
-              <span className="text-sm text-secondary-500 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success-500" />
-                All entries are stored against the authenticated user and can be exported later.
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-secondary-200 pt-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 px-8 py-3 text-base font-semibold text-white shadow-[0_15px_30px_-10px_rgba(15,23,42,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_25px_45px_-15px_rgba(15,23,42,0.55)] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isSubmitting ? 'Saving PO Entry...' : 'Submit PO Entry'}
+              </button>
             </div>
+            <span className="text-sm text-secondary-500 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-success-500" />
+              All entries are stored against the authenticated user and can be exported later.
+            </span>
+          </div>
           )}
           {isPreviewMode && (
             <div className="flex items-center justify-between gap-4 border-t border-secondary-200 pt-4">

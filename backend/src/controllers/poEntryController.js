@@ -112,26 +112,26 @@ const createPOEntry = asyncHandler(async (req, res) => {
     // Try to find customer by name or GST to link PO entry
     let customerId = p.customerId || null;
     try {
-      if (!customerId && p.customerName) {
-        const customer = await db('customers')
+    if (!customerId && p.customerName) {
+      const customer = await db('customers')
           .where(function() {
             this.where('company_name', p.customerName)
-              .orWhere('legal_entity_name', p.customerName)
+        .orWhere('legal_entity_name', p.customerName)
           })
-          .where('created_by', userId)
-          .first();
-        if (customer) {
-          customerId = customer.id;
-        }
+        .where('created_by', userId)
+        .first();
+      if (customer) {
+        customerId = customer.id;
       }
-      if (!customerId && p.gstNo) {
-        const customer = await db('customers')
-          .where('gst_number', p.gstNo)
-          .where('created_by', userId)
-          .first();
-        if (customer) {
-          customerId = customer.id;
-        }
+    }
+    if (!customerId && p.gstNo) {
+      const customer = await db('customers')
+        .where('gst_number', p.gstNo)
+        .where('created_by', userId)
+        .first();
+      if (customer) {
+        customerId = customer.id;
+      }
       }
     } catch (customerLookupError) {
       // Customer lookup is optional, continue without linking
@@ -235,9 +235,9 @@ const createPOEntry = asyncHandler(async (req, res) => {
       });
       
       const [id] = await db('po_entries').insert(cleanRow);
-      const newRow = await db('po_entries').where({ id }).first();
-      
-      return res.status(201).json({ success: true, data: mapPOEntry(newRow) });
+    const newRow = await db('po_entries').where({ id }).first();
+    
+    return res.status(201).json({ success: true, data: mapPOEntry(newRow) });
     } catch (error) {
       console.error('Error creating PO entry:', error);
       console.error('Error code:', error.code);

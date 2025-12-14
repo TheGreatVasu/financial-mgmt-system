@@ -15,11 +15,11 @@ export default function BoqActualPage() {
   const [submittedBOQData, setSubmittedBOQData] = useState(null)
 
   const loadDashboardData = useCallback(async () => {
-    if (!token) return
-    setLoading(true)
-    setError("")
-    try {
-      const d = await fetchDashboard(token, { range: '90d' })
+      if (!token) return
+      setLoading(true)
+      setError("")
+      try {
+        const d = await fetchDashboard(token, { range: '90d' })
       setData(d)
     } catch (e) {
       setError(e?.message || 'Failed to load BOQ vs Actual data')

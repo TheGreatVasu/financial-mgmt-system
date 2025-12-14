@@ -152,6 +152,16 @@ async function syncMasterDataToCustomers(userId, masterData) {
     updated_at: db.fn.now(),
   };
 
+  // Save metadata to customers table (as JSON object, not string)
+  const metadata = {
+    companyProfile: masterData.companyProfile || {},
+    customerProfile: masterData.customerProfile || {},
+    consigneeProfiles: masterData.consigneeProfiles || [],
+    payerProfiles: masterData.payerProfiles || [],
+    paymentTerms: masterData.paymentTerms || [],
+    teamProfiles: masterData.teamProfiles || []
+  };
+
   if (existingCustomer) {
     // Update existing customer (ensure created_by is preserved)
     await db('customers')
@@ -159,18 +169,20 @@ async function syncMasterDataToCustomers(userId, masterData) {
       .where('created_by', userId) // Extra safety check
       .update({
         ...customerData,
+        metadata: metadata,
         created_by: userId, // Ensure created_by is set
         updated_at: db.fn.now(),
       });
     console.log(`Updated existing customer ${companyName} (ID: ${existingCustomer.id}) for user ${userId}`);
-    return { id: existingCustomer.id, action: 'updated' };
+    return { id: existingCustomer.id, customerId: existingCustomer.id, action: 'updated' };
   } else {
     // Create new customer
     customerData.created_at = db.fn.now();
     customerData.created_by = userId; // Ensure created_by is set
+    customerData.metadata = metadata;
     const [id] = await db('customers').insert(customerData);
     console.log(`Created new customer ${companyName} (ID: ${id}) for user ${userId}`);
-    return { id, action: 'created' };
+    return { id, customerId: id, action: 'created' };
   }
 }
 

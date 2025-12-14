@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { Plus } from 'lucide-react'
 import Step1CompanyProfile from './Step1CompanyProfile'
 import Step2CustomerProfile from './Step2CustomerProfile'
 import Step3ConsigneeProfile from './Step3ConsigneeProfile'
@@ -200,6 +201,113 @@ export default function MasterDataWizard() {
     }
   }, [masterData])
 
+  // Function to load sample data for testing
+  const loadSampleData = () => {
+    const sampleData: MasterDataState = {
+      companyProfile: {
+        companyName: 'Tech Solutions Pvt. Ltd.',
+        legalEntityName: 'Tech Solutions Private Limited',
+        corporateAddress: '123 Business Park, Sector 18',
+        corporateDistrict: 'Gurgaon',
+        corporateState: 'Haryana',
+        corporateCountry: 'India',
+        corporatePinCode: '122015',
+        correspondenceAddress: '123 Business Park, Sector 18',
+        correspondenceDistrict: 'Gurgaon',
+        correspondenceState: 'Haryana',
+        correspondenceCountry: 'India',
+        correspondencePinCode: '122015',
+        otherOfficeType: 'Branch Office',
+        otherOfficeAddress: '456 Industrial Area, Phase 2',
+        otherOfficeGst: '06AATCS1234F1Z5',
+        otherOfficeDistrict: 'Gurgaon',
+        otherOfficeState: 'Haryana',
+        otherOfficeCountry: 'India',
+        otherOfficePinCode: '122016',
+        primaryContactName: 'Rajesh Kumar',
+        primaryContactNumber: '+919876543210',
+        primaryContactEmail: 'rajesh.kumar@techsolutions.com'
+      },
+      customerProfile: {
+        customerName: 'ABC Manufacturing Ltd.',
+        legalEntityName: 'ABC Manufacturing Private Limited',
+        corporateOfficeAddress: '789 Factory Road, Industrial Estate',
+        correspondenceAddress: '789 Factory Road, Industrial Estate',
+        district: 'Gurgaon',
+        state: 'Haryana',
+        country: 'India',
+        pinCode: '122001',
+        segment: 'Domestic',
+        gstNumber: '06AABCU1234F1Z5',
+        poIssuingAuthority: 'John Doe',
+        designation: 'Purchase Manager',
+        contactNumber: '+919876543211',
+        emailId: 'john.doe@abcmanufacturing.com'
+      },
+      consigneeProfile: {
+        consignees: [{
+          consigneeName: 'ABC Manufacturing - Warehouse',
+          consigneeAddress: '789 Factory Road, Warehouse Block A',
+          customerName: 'ABC Manufacturing Ltd.',
+          legalEntityName: 'ABC Manufacturing Private Limited',
+          city: 'Gurgaon',
+          state: 'Haryana',
+          gstNumber: '06AABCU1234F1Z5',
+          contactPersonName: 'Jane Smith',
+          designation: 'Warehouse Manager',
+          contactNumber: '+919876543212',
+          emailId: 'jane.smith@abcmanufacturing.com'
+        }]
+      },
+      payerProfile: {
+        payers: [{
+          payerName: 'ABC Manufacturing Ltd.',
+          payerAddress: '789 Factory Road, Accounts Department',
+          customerName: 'ABC Manufacturing Ltd.',
+          legalEntityName: 'ABC Manufacturing Private Limited',
+          city: 'Gurgaon',
+          state: 'Haryana',
+          gstNumber: '06AABCU1234F1Z5',
+          contactPersonName: 'Robert Wilson',
+          designation: 'Accounts Manager',
+          contactNumber: '+919876543213',
+          emailId: 'robert.wilson@abcmanufacturing.com'
+        }]
+      },
+      employeeProfile: {
+        teamMemberName: 'Amit Sharma',
+        employeeId: 'EMP001',
+        role: 'Sales Manager',
+        department: 'Sales',
+        contactNumber: '+919876543214',
+        emailId: 'amit.sharma@techsolutions.com',
+        reportingManager: 'Rajesh Kumar',
+        location: 'Gurgaon',
+        accessLevel: 'Manager',
+        remarks: 'Handles key accounts in North Zone'
+      },
+      paymentTerms: {
+        paymentTermName: 'Net 30 Days',
+        creditPeriod: '30',
+        advanceRequired: 'No',
+        advancePercentage: '',
+        balancePaymentDueDays: '30',
+        latePaymentInterest: '1.5% per month',
+        billingCycle: 'Monthly',
+        paymentMethod: 'Bank Transfer',
+        bankName: 'State Bank of India',
+        bankAccountNumber: '1234567890123456',
+        ifscCode: 'SBIN0001234',
+        upiId: 'techsolutions@paytm',
+        notes: 'Payment to be made within 30 days of invoice date'
+      }
+    }
+    
+    setMasterData(sampleData)
+    setCurrentStep(1)
+    toast.success('Sample data loaded! You can now navigate through the steps to review it.')
+  }
+
   const progressPercentage = ((currentStep - 1) / 6) * 100 // Adjusted for 6 steps (0-100%)
   const steps = [
     { number: 1, title: 'Company Profile', short: 'Company' },
@@ -215,13 +323,13 @@ export default function MasterDataWizard() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 sm:p-6 md:p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="mb-8 text-center md:text-left">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+            <div className="flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Creation of Master Data
               </h1>
-              <p className="text-gray-600 max-w-2xl mx-auto md:mx-0">
+              <p className="text-gray-600">
                 Stepwise onboarding for company, customer, payment, and team details
               </p>
             </div>
@@ -233,6 +341,22 @@ export default function MasterDataWizard() {
                 <span>Auto-saved</span>
               </div>
             )}
+          </div>
+          
+          {/* Load Sample Data Button - Prominent Placement */}
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={loadSampleData}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-500 px-6 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-600 hover:border-blue-600 hover:shadow-xl transition-all duration-200 active:scale-95"
+              title="Load sample data for testing all form fields"
+            >
+              <Plus className="h-5 w-5" />
+              Load Sample Data
+            </button>
+            <p className="text-xs text-gray-500 mt-2 ml-1">
+              Click to automatically fill all form fields with sample data for testing
+            </p>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
@@ -9,6 +9,8 @@ import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import SelectWithOther from '../../components/ui/SelectWithOther.jsx'
 import { Loader2, Plus, Save, Trash2, CheckCircle2, XCircle, Building2, Users, FileText, CreditCard, UserCheck } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
+import Modal from '../../components/ui/Modal.jsx'
+import toast from 'react-hot-toast'
 
 const DEV_BYPASS_VALIDATION = false
 const STORAGE_KEY = 'masterDataFormDraft'
@@ -99,8 +101,11 @@ export default function CustomerNew() {
   const { token } = useAuthContext()
   const svc = useMemo(() => createCustomerService(token), [token])
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('id')
 
   const [currentStep, setCurrentStep] = useState(0)
+  const [loadingData, setLoadingData] = useState(!!editId)
 
   const [logoPreview, setLogoPreview] = useState(null)
   const [customerLogoPreview, setCustomerLogoPreview] = useState(null)
@@ -171,6 +176,7 @@ export default function CustomerNew() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [createdRecordId, setCreatedRecordId] = useState(null)
   const [submittedData, setSubmittedData] = useState(null)
@@ -185,8 +191,13 @@ export default function CustomerNew() {
   }
 
   function validateEmail(email) {
+    if (!email || typeof email !== 'string') return false
+    // Trim whitespace
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) return false
     // Accept only company domain or gmail.com
-    return /@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/.test(email)
+    // Match @financialmgmt.com or @gmail.com (with optional subdomain)
+    return /^[^\s@]+@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/i.test(trimmedEmail)
   }
 
   function validatePhone(phone) {
@@ -306,8 +317,15 @@ export default function CustomerNew() {
         setError('')
         setFieldErrors({})
       } else {
-        const firstError = Object.values(errors)[0]
-        setError(firstError || 'Please fix the errors below')
+        // Don't show team member errors in top banner - they'll show on the field
+        const nonTeamErrors = Object.values(errors).filter(err => 
+          !err.includes('Team member') && !err.includes('team member')
+        )
+        if (nonTeamErrors.length > 0) {
+          setError(nonTeamErrors[0] || 'Please fix the errors below')
+        } else {
+          setError('') // Clear top error, field errors will show inline
+        }
       }
       return isValid
     } catch (err) {
@@ -346,8 +364,23 @@ export default function CustomerNew() {
           if (typeof value === 'string' && value.trim() === '') return true
           return false
         })
-        const isValid = !missing
-        return isValid
+        if (missing) return false
+        
+        // Validate primary contact email and phone if provided
+        const errors = {}
+        if (companyProfile?.primaryContact?.email && !validateEmail(companyProfile.primaryContact.email)) {
+          errors['company.primaryContact.email'] = 'Primary contact email must be a valid @financialmgmt.com or @gmail.com address'
+        }
+        if (companyProfile?.primaryContact?.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
+          errors['company.primaryContact.contactNumber'] = 'Primary contact number must contain only digits and be 7-15 digits long'
+        }
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...errors }))
+          // Don't show primary contact errors in top banner - they'll show on the field
+          setError('') // Clear top error, field errors will show inline
+          return false
+        }
+        return true
       }
       if (currentStep === 1) {
         // Customer Profile required fields
@@ -374,6 +407,20 @@ export default function CustomerNew() {
           return false
         })
         if (missing) return false
+        
+        // Validate email and phone format
+        const errors = {}
+        if (customerProfile?.emailId && !validateEmail(customerProfile.emailId)) {
+          errors['customer.emailId'] = 'Customer email must be a valid @financialmgmt.com or @gmail.com address'
+        }
+        if (customerProfile?.contactNumber && !validatePhone(customerProfile.contactNumber)) {
+          errors['customer.contactNumber'] = 'Customer contact number must contain only digits and be 7-15 digits long'
+        }
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...errors }))
+          setError(Object.values(errors)[0])
+          return false
+        }
         return true
       }
       if (currentStep === 2) {
@@ -399,6 +446,20 @@ export default function CustomerNew() {
           return false
         })
         if (missing) return false
+        
+        // Validate email and phone format
+        const errors = {}
+        if (target?.emailId && !validateEmail(target.emailId)) {
+          errors['consignee.0.emailId'] = 'Consignee email must be a valid @financialmgmt.com or @gmail.com address'
+        }
+        if (target?.contactNumber && !validatePhone(target.contactNumber)) {
+          errors['consignee.0.contactNumber'] = 'Consignee contact number must contain only digits and be 7-15 digits long'
+        }
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...errors }))
+          setError(Object.values(errors)[0])
+          return false
+        }
         return true
       }
       if (currentStep === 3) {
@@ -424,10 +485,39 @@ export default function CustomerNew() {
           return false
         })
         if (missing) return false
+        
+        // Validate email and phone format
+        const errors = {}
+        if (target?.emailId && !validateEmail(target.emailId)) {
+          errors['payer.0.emailId'] = 'Payer email must be a valid @financialmgmt.com or @gmail.com address'
+        }
+        if (target?.contactNumber && !validatePhone(target.contactNumber)) {
+          errors['payer.0.contactNumber'] = 'Payer contact number must contain only digits and be 7-15 digits long'
+        }
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...errors }))
+          setError(Object.values(errors)[0])
+          return false
+        }
         return true
       }
       if (currentStep === 4) {
-        // Employee Profile step - skip validation during render
+        // Employee Profile step - validate email and phone if provided
+        const errors = {}
+        teamProfiles.forEach((member, index) => {
+          if (member?.email && !validateEmail(member.email)) {
+            errors[`team.${index}.email`] = 'Team member email must be a valid @financialmgmt.com or @gmail.com address'
+          }
+          if (member?.contactNumber && !validatePhone(member.contactNumber)) {
+            errors[`team.${index}.contactNumber`] = 'Team member contact number must contain only digits and be 7-15 digits long'
+          }
+        })
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...errors }))
+          // Don't show team member errors in top banner - they'll show on the field
+          setError('') // Clear top error, field errors will show inline
+          return false
+        }
         return true
       }
       if (currentStep === 5) {
@@ -563,7 +653,44 @@ function updatePaymentTerm(index, field, value) {
 
   function onNext(e) {
     e?.preventDefault()
-    if (DEV_BYPASS_VALIDATION || canGoNext) setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
+    // Clear previous errors when trying to move forward
+    setError('')
+    
+    // Validate current step before moving forward
+    if (DEV_BYPASS_VALIDATION) {
+      setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
+      return
+    }
+    
+    if (canGoNext) {
+      // Clear field errors for current step when moving forward successfully
+      const stepErrorKeys = Object.keys(fieldErrors).filter(key => {
+        if (currentStep === 0) return key.startsWith('company.')
+        if (currentStep === 1) return key.startsWith('customer.')
+        if (currentStep === 2) return key.startsWith('consignee.')
+        if (currentStep === 3) return key.startsWith('payer.')
+        if (currentStep === 4) return key.startsWith('team.')
+        return false
+      })
+      if (stepErrorKeys.length > 0) {
+        setFieldErrors(prev => {
+          const newErrors = { ...prev }
+          stepErrorKeys.forEach(key => delete newErrors[key])
+          return newErrors
+        })
+      }
+      setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
+    } else {
+      // Validation failed - errors are already set in canGoNext
+      // Scroll to first error field if possible
+      const firstErrorKey = Object.keys(fieldErrors)[0]
+      if (firstErrorKey) {
+        const element = document.querySelector(`[data-field="${firstErrorKey}"]`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }
+    }
   }
 
   function onPrev(e) {
@@ -573,11 +700,127 @@ function updatePaymentTerm(index, field, value) {
 
   function handleDone() {
     setShowSuccessPopup(false)
-    navigate('/customers')
+    // Navigate to customers list page with refresh state
+    navigate('/customers', { replace: true, state: { refresh: true } })
   }
 
-  // Load saved data from localStorage on component mount
+  // Function to load sample data for testing
+  function loadSampleData() {
+    setCompanyProfile({
+      logo: null,
+      companyName: 'Tech Solutions Pvt. Ltd.',
+      legalEntityName: 'Tech Solutions Private Limited',
+      corporateAddress: '123 Business Park, Sector 18',
+      corporateDistrict: 'Gurgaon',
+      corporateState: 'Haryana',
+      corporateCountry: 'India',
+      corporatePinCode: '122015',
+      correspondenceAddress: '123 Business Park, Sector 18',
+      correspondenceDistrict: 'Gurgaon',
+      correspondenceState: 'Haryana',
+      correspondenceCountry: 'India',
+      correspondencePinCode: '122015',
+      otherOfficeType: 'Branch Office',
+      otherOfficeAddress: '456 Industrial Area, Phase 2',
+      otherOfficeGst: '06AATCS1234F1Z5',
+      otherOfficeDistrict: 'Gurgaon',
+      otherOfficeState: 'Haryana',
+      otherOfficeCountry: 'India',
+      otherOfficePinCode: '122016',
+      otherOfficeContactName: 'Rajesh Kumar',
+      otherOfficeContactNumber: '+919876543210',
+      otherOfficeEmail: 'rajesh.kumar@techsolutions.com',
+      primaryContact: {
+        name: 'Rajesh Kumar',
+        contactNumber: '+919876543210',
+        email: 'rajesh.kumar@gmail.com',
+        department: 'Management',
+        designation: 'CEO',
+        jobRole: 'Executive',
+        segment: 'Domestic'
+      }
+    })
+
+    setCustomerProfile({
+      logo: '',
+      customerName: 'ABC Manufacturing Ltd.',
+      legalEntityName: 'ABC Manufacturing Private Limited',
+      corporateOfficeAddress: '789 Factory Road, Industrial Estate',
+      correspondenceAddress: '789 Factory Road, Industrial Estate',
+      district: 'Gurgaon',
+      state: 'Haryana',
+      country: 'India',
+      pinCode: '122001',
+      segment: 'Domestic',
+      gstNumber: '06AABCU1234F1Z5',
+      poIssuingAuthority: 'John Doe',
+      designation: 'Purchase Manager',
+      contactNumber: '+919876543211',
+      emailId: 'john.doe@gmail.com'
+    })
+
+    setConsigneeProfiles([{
+      logo: '',
+      consigneeName: 'ABC Manufacturing - Warehouse',
+      consigneeAddress: '789 Factory Road, Warehouse Block A',
+      customerName: 'ABC Manufacturing Ltd.',
+      legalEntityName: 'ABC Manufacturing Private Limited',
+      city: 'Gurgaon',
+      state: 'Haryana',
+      gstNumber: '06AABCU1234F1Z5',
+      contactPersonName: 'Jane Smith',
+      designation: 'Warehouse Manager',
+      contactNumber: '+919876543212',
+      emailId: 'jane.smith@gmail.com'
+    }])
+
+    setPayerProfiles([{
+      logo: '',
+      payerName: 'ABC Manufacturing Ltd.',
+      payerAddress: '789 Factory Road, Accounts Department',
+      customerName: 'ABC Manufacturing Ltd.',
+      legalEntityName: 'ABC Manufacturing Private Limited',
+      city: 'Gurgaon',
+      state: 'Haryana',
+      gstNumber: '06AABCU1234F1Z5',
+      contactPersonName: 'Robert Wilson',
+      designation: 'Accounts Manager',
+      contactNumber: '+919876543213',
+      emailId: 'robert.wilson@gmail.com'
+    }])
+
+    setTeamProfiles([{
+      role: 'Sales Manager',
+      name: 'Amit Sharma',
+      designation: 'Sales Manager',
+      contactNumber: '+919876543214',
+      email: 'amit.sharma@gmail.com',
+      department: 'Sales',
+      jobRole: 'Sales Executive',
+      segment: 'Domestic',
+      photo: ''
+    }])
+
+    setPaymentTerms([{
+      basic: '70%',
+      freight: '10%',
+      taxes: '18%',
+      due1: '30',
+      due2: '60',
+      due3: '90',
+      finalDue: '120',
+      description: 'Net 30 Days with 70% advance, 10% on delivery, balance in 30 days'
+    }])
+
+    setCurrentStep(0)
+    toast.success('Sample data loaded! You can now navigate through the steps to review it.')
+  }
+
+  // Load customer data for editing
   useEffect(() => {
+    async function loadCustomerData() {
+      if (!editId || !token) {
+        // Load saved data from localStorage if not editing
     try {
       const savedData = localStorage.getItem(STORAGE_KEY)
       if (savedData) {
@@ -594,7 +837,84 @@ function updatePaymentTerm(index, field, value) {
       console.error('Error loading saved data:', error)
       localStorage.removeItem(STORAGE_KEY)
     }
-  }, [])
+        setLoadingData(false)
+        return
+      }
+
+      try {
+        setLoadingData(true)
+        const customer = await svc.get(editId)
+        const metadata = customer?.metadata || {}
+        
+        // Load company profile
+        if (metadata.companyProfile) {
+          setCompanyProfile({
+            ...metadata.companyProfile,
+            primaryContact: {
+              name: metadata.companyProfile.primaryContactName || '',
+              contactNumber: metadata.companyProfile.primaryContactNumber || '',
+              email: metadata.companyProfile.primaryContactEmail || '',
+              department: '',
+              designation: '',
+              jobRole: '',
+              segment: ''
+            }
+          })
+        }
+        
+        // Load customer profile
+        if (metadata.customerProfile) {
+          setCustomerProfile(metadata.customerProfile)
+        }
+        
+        // Load consignee profiles
+        if (metadata.consigneeProfiles && Array.isArray(metadata.consigneeProfiles)) {
+          setConsigneeProfiles(metadata.consigneeProfiles)
+        }
+        
+        // Load payer profiles
+        if (metadata.payerProfiles && Array.isArray(metadata.payerProfiles)) {
+          setPayerProfiles(metadata.payerProfiles)
+        }
+        
+        // Load payment terms
+        if (metadata.paymentTerms && Array.isArray(metadata.paymentTerms)) {
+          setPaymentTerms(metadata.paymentTerms.map(term => ({
+            basic: term.advanceRequired || '',
+            freight: '',
+            taxes: term.latePaymentInterest || '',
+            due1: term.creditPeriod || '',
+            due2: '',
+            due3: '',
+            finalDue: term.balancePaymentDueDays || '',
+            description: term.paymentTermName || term.notes || ''
+          })))
+        }
+        
+        // Load team profiles
+        if (metadata.teamProfiles && Array.isArray(metadata.teamProfiles)) {
+          setTeamProfiles(metadata.teamProfiles.map(member => ({
+            role: member.role || '',
+            name: member.teamMemberName || '',
+            designation: '',
+            contactNumber: member.contactNumber || '',
+            email: member.emailId || '',
+            department: member.department || '',
+            jobRole: member.remarks || '',
+            segment: '',
+            photo: ''
+          })))
+        }
+      } catch (error) {
+        console.error('Error loading customer data:', error)
+        toast.error('Failed to load customer data for editing')
+      } finally {
+        setLoadingData(false)
+      }
+    }
+    
+    loadCustomerData()
+  }, [editId, token, svc])
 
   // Auto-save to localStorage whenever data changes
   useEffect(() => {
@@ -615,9 +935,13 @@ function updatePaymentTerm(index, field, value) {
   }, [companyProfile, customerProfile, consigneeProfiles, payerProfiles, paymentTerms, teamProfiles, currentStep])
 
 async function onSubmit(e) {
+  if (e) {
   e.preventDefault();
+    e.stopPropagation();
+  }
   setError("");
   setFieldErrors({});
+  setConfirmOpen(false); // Close confirmation modal
 
   try {
     // Comprehensive validation
@@ -687,14 +1011,27 @@ async function onSubmit(e) {
       }
     };
 
-    const response = await masterDataService.submitMasterData(payload);
+    let response
+    if (editId) {
+      // Update existing customer
+      response = await svc.update(editId, payload)
+      toast.success('Master Data updated successfully!')
+    } else {
+      // Create new customer
+      response = await masterDataService.submitMasterData(payload)
+      toast.success('Master Data created successfully!')
+    }
 
     // Clear localStorage after successful submission
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY)
 
-    setSubmittedData(payload);
-    setCreatedRecordId(response?.data?.id || Date.now().toString());
-    setShowSuccessPopup(true);
+    setSubmittedData(payload)
+    // Get customer ID from sync result or response
+    const recordId = response?.data?.syncResult?.customerId || response?.data?.syncResult?.id || response?.data?.customerId || response?.data?.id || editId || Date.now().toString()
+    setCreatedRecordId(recordId)
+    setShowSuccessPopup(true)
+    
+    // Don't auto-navigate - let user click "Done" or "Create Another" button
 
   } catch (err) {
     console.error("Submit error:", err);
@@ -704,11 +1041,22 @@ async function onSubmit(e) {
   }
 }
 
+if (loadingData) {
+  return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+      </div>
+    </DashboardLayout>
+  )
+}
+
 return (
 // ...
     <ErrorBoundary>
       <DashboardLayout>
       <div className="mb-8 rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-secondary-900">Creation of Master Data</h1>
@@ -716,6 +1064,23 @@ return (
           </div>
           <div className="text-sm font-medium text-primary-700 bg-white/70 border border-primary-100 rounded-full px-4 py-2 shadow-xs">
             {progressPercent}% complete
+            </div>
+          </div>
+          
+          {/* Load Sample Data Button */}
+          <div>
+            <button
+              type="button"
+              onClick={loadSampleData}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-500 px-6 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-600 hover:border-blue-600 hover:shadow-xl transition-all duration-200 active:scale-95"
+              title="Load sample data for testing all form fields"
+            >
+              <Plus className="h-5 w-5" />
+              Load Sample Data
+            </button>
+            <p className="text-xs text-gray-500 mt-2 ml-1">
+              Click to automatically fill all form fields with sample data for testing
+            </p>
           </div>
         </div>
 
@@ -773,8 +1138,13 @@ return (
           </div>
         </div>
       </div>
-      <form onSubmit={onSubmit} className="space-y-6">
-        {error && (
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // Only allow submission through the button click, not form submit
+        return false
+      }} className="space-y-6">
+        {error && !error.includes('Primary contact') && !error.includes('primary contact') && !error.includes('Team member') && !error.includes('team member') && (
           <div className="rounded-md border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700 flex items-center gap-2">
             <XCircle className="h-4 w-4 flex-shrink-0" />
             <span>{error}</span>
@@ -1025,6 +1395,69 @@ return (
             />
           </div>
         </div>
+
+        {/* Primary Contact Section */}
+        <div className="space-y-3 mt-6 pt-6 border-t border-secondary-200">
+          <h3 className="text-base font-semibold text-secondary-900">Primary Contact</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="form-label">Contact Name</label>
+              <input
+                className="input"
+                placeholder="Contact person name"
+                value={companyProfile.primaryContact?.name || ''}
+                onChange={(e) => updateCompany('primaryContact', { ...companyProfile.primaryContact, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="form-label">Contact Number</label>
+              <input
+                data-field="company.primaryContact.contactNumber"
+                className={`input ${getFieldError('company.primaryContact.contactNumber') ? 'border-red-500' : ''}`}
+                placeholder="Contact number"
+                value={companyProfile.primaryContact?.contactNumber || ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                  updateCompany('primaryContact', { ...companyProfile.primaryContact, contactNumber: value })
+                  if (getFieldError('company.primaryContact.contactNumber')) {
+                    setFieldErrors(prev => {
+                      const newErrors = { ...prev }
+                      delete newErrors['company.primaryContact.contactNumber']
+                      return newErrors
+                    })
+                  }
+                }}
+              />
+              {getFieldError('company.primaryContact.contactNumber') && (
+                <p className="text-xs text-red-500 mt-1">{getFieldError('company.primaryContact.contactNumber')}</p>
+              )}
+            </div>
+            <div>
+              <label className="form-label">Email ID</label>
+              <input
+                data-field="company.primaryContact.email"
+                type="email"
+                className={`input ${getFieldError('company.primaryContact.email') ? 'border-red-500' : ''}`}
+                placeholder="Email address"
+                value={companyProfile.primaryContact?.email || ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                  updateCompany('primaryContact', { ...companyProfile.primaryContact, email: value })
+                  if (getFieldError('company.primaryContact.email')) {
+                    setFieldErrors(prev => {
+                      const newErrors = { ...prev }
+                      delete newErrors['company.primaryContact.email']
+                      return newErrors
+                    })
+                  }
+                }}
+              />
+              {getFieldError('company.primaryContact.email') && (
+                <p className="text-xs text-red-500 mt-1">{getFieldError('company.primaryContact.email')}</p>
+              )}
+            </div>
+          </div>
+        </div>
     </div>
   </section>
 )}
@@ -1222,11 +1655,25 @@ return (
                 <div>
                   <label className="form-label">Contact Person Contact No *</label>
                   <input
-                    className="input"
+                    data-field="customer.contactNumber"
+                    className={`input ${getFieldError('customer.contactNumber') ? 'border-red-500' : ''}`}
                     value={customerProfile.contactNumber}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, contactNumber: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setCustomerProfile({ ...customerProfile, contactNumber: value })
+                      if (getFieldError('customer.contactNumber')) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors['customer.contactNumber']
+                          return newErrors
+                        })
+                      }
+                    }}
                     placeholder="Enter contact number"
                   />
+                  {getFieldError('customer.contactNumber') && (
+                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.contactNumber')}</p>
+                  )}
                 </div>
                 <div>
                   <label className="form-label">Email ID *</label>
@@ -1723,21 +2170,49 @@ return (
                     <div>
                       <label className="form-label">Contact No</label>
                       <input
-                        className="input"
+                        data-field={`team.${index}.contactNumber`}
+                        className={`input ${getFieldError(`team.${index}.contactNumber`) ? 'border-red-500' : ''}`}
                         value={member.contactNumber}
-                        onChange={(e) => updateTeamProfile(index, 'contactNumber', e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          updateTeamProfile(index, 'contactNumber', value)
+                          if (getFieldError(`team.${index}.contactNumber`)) {
+                            setFieldErrors(prev => {
+                              const newErrors = { ...prev }
+                              delete newErrors[`team.${index}.contactNumber`]
+                              return newErrors
+                            })
+                          }
+                        }}
                         placeholder="Contact number"
                       />
+                      {getFieldError(`team.${index}.contactNumber`) && (
+                        <p className="text-xs text-red-500 mt-1">{getFieldError(`team.${index}.contactNumber`)}</p>
+                      )}
                     </div>
                     <div>
                       <label className="form-label">Email ID</label>
                       <input
-                        className="input"
+                        data-field={`team.${index}.email`}
                         type="email"
+                        className={`input ${getFieldError(`team.${index}.email`) ? 'border-red-500' : ''}`}
                         value={member.email}
-                        onChange={(e) => updateTeamProfile(index, 'email', e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          updateTeamProfile(index, 'email', value)
+                          if (getFieldError(`team.${index}.email`)) {
+                            setFieldErrors(prev => {
+                              const newErrors = { ...prev }
+                              delete newErrors[`team.${index}.email`]
+                              return newErrors
+                            })
+                          }
+                        }}
                         placeholder="Email address"
                       />
+                      {getFieldError(`team.${index}.email`) && (
+                        <p className="text-xs text-red-500 mt-1">{getFieldError(`team.${index}.email`)}</p>
+                      )}
                     </div>
                     <div>
                       <label className="form-label">Department</label>
@@ -1935,7 +2410,14 @@ return (
     </button>
   ) : (
     <button
-      type="submit"
+      type="button"
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (validateAllSteps()) {
+          setConfirmOpen(true)
+        }
+      }}
       className="btn btn-success px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       disabled={saving || !canGoNext}
       style={{ minWidth: 120 }}
@@ -1946,7 +2428,67 @@ return (
 </div>
       </form>
       
-      {/* Success Popup Modal with Card Preview */}
+      {/* Confirmation Modal */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => !saving && setConfirmOpen(false)}
+        title="Confirm Submission"
+        variant="dialog"
+        size="sm"
+        footer={(
+          <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              className="btn btn-outline btn-md"
+              onClick={() => setConfirmOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-success btn-md"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setConfirmOpen(false)
+                onSubmit(e)
+              }}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Confirm & Submit'
+              )}
+            </button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-100">
+                <FileText className="h-5 w-5 text-blue-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                Submit Master Data?
+              </h3>
+              <p className="text-sm text-gray-700 mb-2">
+                Are you sure you want to submit this master data? Once submitted, it will be saved to your system and you can view it on the Master Data page.
+              </p>
+              <p className="text-xs text-gray-500">
+                You can edit or preview this entry after submission.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Modal>
+      
+      {/* Success Popup Modal - Professional Design */}
       {showSuccessPopup && submittedData && (
         <div
           className="fixed inset-0 flex items-center justify-center z-[12000] overflow-y-auto p-4"
@@ -1957,130 +2499,221 @@ return (
           }}
           onClick={(e) => e.target === e.currentTarget && setShowSuccessPopup(false)}
         >
-          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8 animate-in fade-in zoom-in relative">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full mx-4 my-8 relative">
             {/* Success Header */}
-            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+            <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Master Data Created Successfully! ✨
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Master Data Submitted Successfully
                   </h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Record ID: <span className="font-mono text-blue-600">{createdRecordId}</span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Record ID: <span className="font-mono text-gray-700">{createdRecordId}</span>
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowSuccessPopup(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
-                <XCircle className="h-6 w-6" />
+                  <XCircle className="h-5 w-5" />
               </button>
+              </div>
             </div>
 
-            {/* Card Preview Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto pr-2">
-              {/* Company Profile Card */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-5 border border-blue-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <Building2 className="h-5 w-5 text-blue-600" />
-                  <h4 className="font-semibold text-blue-900">Company Profile</h4>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div><span className="text-blue-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.companyProfile.companyName || submittedData.companyProfile.legalEntityName}</span></div>
-                  <div><span className="text-blue-700 font-medium">Legal Entity:</span> <span className="text-gray-800">{submittedData.companyProfile.legalEntityName}</span></div>
-                  <div><span className="text-blue-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.companyProfile.corporateState}</span></div>
-                  <div><span className="text-blue-700 font-medium">Country:</span> <span className="text-gray-800">{submittedData.companyProfile.corporateCountry}</span></div>
+            {/* Structured Data Display */}
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-6">
+                {/* Company Profile */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-gray-600" />
+                    Company Profile
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg border border-gray-200">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-200">
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Company Name</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.companyName || submittedData.companyProfile.legalEntityName || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">Legal Entity</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.legalEntityName || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.corporateState || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">Country</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.corporateCountry || 'N/A'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                 </div>
               </div>
 
-              {/* Customer Profile Card */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-5 border border-purple-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="h-5 w-5 text-purple-600" />
-                  <h4 className="font-semibold text-purple-900">Customer Profile</h4>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div><span className="text-purple-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.customerProfile.customerName}</span></div>
-                  <div><span className="text-purple-700 font-medium">Segment:</span> <span className="text-gray-800">{submittedData.customerProfile.segment}</span></div>
-                  <div><span className="text-purple-700 font-medium">Contact:</span> <span className="text-gray-800">{submittedData.customerProfile.contactNumber}</span></div>
-                  <div><span className="text-purple-700 font-medium">Email:</span> <span className="text-gray-800 truncate block">{submittedData.customerProfile.emailId}</span></div>
+                {/* Customer Profile */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-gray-600" />
+                    Customer Profile
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg border border-gray-200">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-200">
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Customer Name</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.customerName || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">Segment</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.segment || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">Contact Number</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.contactNumber || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-medium text-gray-600">Email</td>
+                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.emailId || 'N/A'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                 </div>
               </div>
 
-              {/* Consignee Profile Card */}
+                {/* Consignee Profile */}
               {submittedData.consigneeProfiles?.[0] && (
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-5 border border-green-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText className="h-5 w-5 text-green-600" />
-                    <h4 className="font-semibold text-green-900">Consignee Profile</h4>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="text-green-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].consigneeName}</span></div>
-                    <div><span className="text-green-700 font-medium">City:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].city}</span></div>
-                    <div><span className="text-green-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].state}</span></div>
-                    <div><span className="text-green-700 font-medium">GST:</span> <span className="text-gray-800">{submittedData.consigneeProfiles[0].gstNumber}</span></div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-600" />
+                      Consignee Profile
+                    </h4>
+                    <div className="bg-gray-50 rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-200">
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Consignee Name</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].consigneeName || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">City</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].city || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].state || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">GST Number</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].gstNumber || 'N/A'}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                   </div>
                 </div>
               )}
 
-              {/* Payer Profile Card */}
+                {/* Payer Profile */}
               {submittedData.payerProfiles?.[0] && (
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-5 border border-orange-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CreditCard className="h-5 w-5 text-orange-600" />
-                    <h4 className="font-semibold text-orange-900">Payer Profile</h4>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="text-orange-700 font-medium">Name:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].payerName}</span></div>
-                    <div><span className="text-orange-700 font-medium">City:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].city}</span></div>
-                    <div><span className="text-orange-700 font-medium">State:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].state}</span></div>
-                    <div><span className="text-orange-700 font-medium">GST:</span> <span className="text-gray-800">{submittedData.payerProfiles[0].gstNumber}</span></div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-gray-600" />
+                      Payer Profile
+                    </h4>
+                    <div className="bg-gray-50 rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-200">
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Payer Name</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].payerName || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">City</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].city || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].state || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">GST Number</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].gstNumber || 'N/A'}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                   </div>
                 </div>
               )}
 
-              {/* Payment Terms Card */}
+                {/* Payment Terms */}
               {submittedData.paymentTerms?.[0] && (
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-5 border border-indigo-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CreditCard className="h-5 w-5 text-indigo-600" />
-                    <h4 className="font-semibold text-indigo-900">Payment Terms</h4>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="text-indigo-700 font-medium">Term Name:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].paymentTermName}</span></div>
-                    <div><span className="text-indigo-700 font-medium">Credit Period:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].creditPeriod}</span></div>
-                    <div><span className="text-indigo-700 font-medium">Billing Cycle:</span> <span className="text-gray-800">{submittedData.paymentTerms[0].billingCycle}</span></div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-gray-600" />
+                      Payment Terms
+                    </h4>
+                    <div className="bg-gray-50 rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-200">
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Term Name</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].paymentTermName || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">Credit Period</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].creditPeriod || 'N/A'} days</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-medium text-gray-600">Billing Cycle</td>
+                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].billingCycle || 'N/A'}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                   </div>
                 </div>
               )}
 
-              {/* Team Profiles Card */}
+                {/* Team Profiles */}
               {submittedData.teamProfiles?.length > 0 && (
-                <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-5 border border-pink-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <UserCheck className="h-5 w-5 text-pink-600" />
-                    <h4 className="font-semibold text-pink-900">Team Profiles ({submittedData.teamProfiles.length})</h4>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    {submittedData.teamProfiles.slice(0, 3).map((member, idx) => (
-                      <div key={idx}>
-                        <span className="text-pink-700 font-medium">{member.teamMemberName}</span> - <span className="text-gray-800">{member.role}</span>
-                      </div>
-                    ))}
-                    {submittedData.teamProfiles.length > 3 && (
-                      <div className="text-pink-700 text-xs">+{submittedData.teamProfiles.length - 3} more</div>
-                    )}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <UserCheck className="h-4 w-4 text-gray-600" />
+                      Team Members ({submittedData.teamProfiles.length})
+                    </h4>
+                    <div className="bg-gray-50 rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {submittedData.teamProfiles.map((member, idx) => (
+                            <tr key={idx}>
+                              <td className="px-4 py-2.5 text-gray-900">{member.teamMemberName || 'N/A'}</td>
+                              <td className="px-4 py-2.5 text-gray-900">{member.role || 'N/A'}</td>
+                              <td className="px-4 py-2.5 text-gray-900">{member.department || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 mt-6 pt-4 border-t">
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowSuccessPopup(false)
@@ -2137,15 +2770,18 @@ return (
                   setPayerProfiles([emptyPayer()])
                   setPaymentTerms([defaultPaymentTerm()])
                   setTeamProfiles([{ role: MASTER_ROLES[0], ...emptyContact() }])
+                  setSubmittedData(null)
+                  setCreatedRecordId(null)
                   localStorage.removeItem(STORAGE_KEY)
+                  // Stay on the same page to create another entry
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Create Another
               </button>
               <button
                 onClick={handleDone}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Done
               </button>

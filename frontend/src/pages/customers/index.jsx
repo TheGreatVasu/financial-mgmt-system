@@ -1,16 +1,93 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Upload, Search, Loader2, AlertCircle, X, Edit, Trash2, Eye, FileText, Building2, Mail, Phone, MapPin, Users, CreditCard, Calendar, ChevronRight } from 'lucide-react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Plus, Upload, Search, Loader2, AlertCircle, X, Edit, Trash2, Eye, FileText, Building2, Mail, Phone, MapPin, Users, CreditCard, Calendar, ChevronRight, RefreshCw, DollarSign } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import Modal from '../../components/ui/Modal.jsx'
-import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+
+function Card({ entry, onDelete, onPreview }) {
+  const companyName = entry.companyName || entry.company_name || 'Unnamed Company'
+  const metadata = entry.metadata || {}
+  const customerProfile = metadata.customerProfile || {}
+  const email = entry.email || entry.contact_email || customerProfile.emailId || 'N/A'
+  const phone = entry.phone || entry.contact_phone || customerProfile.contactNumber || 'N/A'
+  const segment = customerProfile.segment || entry.segment || 'Segment not set'
+  const gstNumber = customerProfile.gstNumber || entry.gst_number || 'GST not set'
+  const legalEntity = entry.legal_entity_name || customerProfile.legalEntityName || 'N/A'
+
+  return (
+    <div className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-secondary-500">Company Name</p>
+          <p className="text-lg font-semibold text-secondary-900">{companyName}</p>
+          <p className="text-sm text-secondary-600">{legalEntity}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-secondary-500">Created</p>
+          <p className="text-sm font-medium text-secondary-800">
+            {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-IN') : '—'}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="flex items-center gap-2 text-secondary-700">
+          <Mail className="h-4 w-4 text-secondary-400" />
+          <span className="truncate">{email !== 'N/A' ? email : 'Email not set'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-secondary-700">
+          <Phone className="h-4 w-4 text-secondary-400" />
+          <span>{phone !== 'N/A' ? phone : 'Phone not set'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-secondary-700">
+          <FileText className="h-4 w-4 text-secondary-400" />
+          <span>{segment}</span>
+        </div>
+        <div className="flex items-center gap-2 text-secondary-700">
+          <FileText className="h-4 w-4 text-secondary-400" />
+          <span className="truncate">{gstNumber}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
+        <div className="text-xs text-secondary-500">Last updated: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—'}</div>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/customers/new?id=${entry.id || entry._id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
+          >
+            <Edit className="h-3.5 w-3.5" />
+            Edit
+          </Link>
+          <button
+            type="button"
+            onClick={() => onPreview?.(entry)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete?.(entry)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function CustomersList() {
   const { token } = useAuthContext()
   const navigate = useNavigate()
+  const location = useLocation()
   const api = useMemo(() => createCustomerService(token), [token])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,14 +95,14 @@ export default function CustomersList() {
   const [tier, setTier] = useState('all')
   const [deletingCustomer, setDeletingCustomer] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [previewCustomer, setPreviewCustomer] = useState(null)
   const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState('cards') // 'cards' or 'table'
 
   useEffect(() => {
     if (token) {
       loadCustomers()
     }
-  }, [token, api])
+  }, [token, api, location.key, location.state?.refresh])
 
   async function loadCustomers() {
     setLoading(true)
@@ -84,73 +161,54 @@ export default function CustomersList() {
     })
   }, [customers, q, tier])
 
-  const getTierBadge = (tier) => {
-    const tierMap = {
-      enterprise: 'bg-purple-100 text-purple-700 border-purple-200',
-      business: 'bg-blue-100 text-blue-700 border-blue-200',
-      startup: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    }
-    return tierMap[tier] || 'bg-secondary-100 text-secondary-700 border-secondary-200'
-  }
-
   return (
     <DashboardLayout>
-      <div className="space-y-6 pb-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Master Data
-            </h1>
-            <p className="text-sm text-gray-600 mt-2">View and manage all your customer master data records</p>
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-secondary-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm text-secondary-600 mb-1">
+                Structured Master Linked Form
+              </div>
+              <h1 className="text-2xl font-semibold text-secondary-900">Master Data Records</h1>
+              <p className="text-sm text-secondary-600">Browse and manage all recorded master data.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadCustomers}
+                className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 px-4 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <Link
+                to="/customers/new"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                New Master Data
+              </Link>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              className="px-4 py-2.5 border border-secondary-300 dark:border-secondary-700 rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-800 transition-all duration-200 text-sm font-medium text-secondary-700 dark:text-secondary-300 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
-              onClick={() => toast.info('Import feature coming soon!')}
-            >
-              <Upload className="h-4 w-4 inline mr-2" />
-              <span className="hidden sm:inline">Import</span>
-            </button>
-            <Link
-              to="/customers/new"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 
-                         bg-gradient-to-r from-blue-600 to-blue-700 
-                         text-white shadow-lg shadow-blue-500/30
-                         hover:from-blue-700 hover:to-blue-800 
-                         hover:shadow-xl hover:shadow-blue-500/40
-                         active:scale-[0.98]
-                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              <Plus className="h-5 w-5" />
-              <span>Create New</span>
-            </Link>
+
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:max-w-lg">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" />
+              <input
+                className="w-full rounded-lg border border-secondary-200 bg-white pl-10 pr-3 py-2.5 text-sm focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                placeholder="Search by name, company, email, or phone..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Error Alert */}
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 px-5 py-4 flex items-start gap-3 shadow-sm"
-            >
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-800">Error</p>
-                <p className="text-sm text-red-700 mt-0.5">{error}</p>
-              </div>
-              <button
-                onClick={() => setError('')}
-                className="text-red-600 hover:text-red-800 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error && (
+          <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700 text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
@@ -177,35 +235,37 @@ export default function CustomersList() {
           </div>
         </div>
 
-        {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-10 w-10 animate-spin text-primary-600" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-2xl border border-gray-200 shadow-sm">
-            <div className="rounded-full bg-gradient-to-br from-blue-50 to-blue-100 p-6 mb-6">
-              <Building2 className="h-12 w-12 text-blue-500" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No master data found</h3>
-            <p className="text-sm text-gray-600 mb-8 max-w-sm">
-              {customers.length === 0
-                ? 'Get started by creating your first master data record.'
-                : 'Try adjusting your search or filter criteria.'}
-            </p>
-            {customers.length === 0 && (
+          <div className="rounded-2xl border border-secondary-200 bg-white p-8 text-center space-y-3 shadow-sm">
+            <FileText className="h-10 w-10 text-secondary-400 mx-auto" />
+            <p className="text-lg font-semibold text-secondary-900">No master data found</p>
+            <p className="text-sm text-secondary-600">Create your first master data entry to get started.</p>
+            <div className="flex items-center justify-center gap-2">
               <Link
                 to="/customers/new"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 shadow-sm"
               >
-                <Plus className="h-5 w-5" />
-                Create First Master Data
+                <Plus className="h-4 w-4" />
+                Create Master Data
               </Link>
-            )}
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((c, index) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filtered.map((entry) => (
+              <Card
+                key={entry._id || entry.id}
+                entry={entry}
+                onDelete={() => setDeletingCustomer(entry)}
+                onPreview={() => setPreviewCustomer(entry)}
+              />
+            ))}
+          </div>
+        )}
               const companyName = c.companyName || c.company_name || 'Unnamed Company'
               const name = c.name || 'N/A'
               const email = c.email || c.contact_email || 'N/A'
@@ -220,108 +280,82 @@ export default function CustomersList() {
               const plantAddresses = c.plantAddresses || []
               
               return (
-                <motion.div
+                <div
                   key={c.id || c._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="group relative bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-blue-300 hover:shadow-xl transition-all duration-300 overflow-hidden"
+                  className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-3"
                 >
-                  {/* Top accent bar */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600" />
-                  
-                  {/* Header */}
-                  <div className="mb-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-lg font-bold text-gray-900 line-clamp-2 pr-2 flex-1">
-                        {companyName}
-                      </h3>
-                      {c.tier && (
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getTierBadge(c.tier)} flex-shrink-0`}>
-                          {c.tier.charAt(0).toUpperCase() + c.tier.slice(1)}
-                        </span>
-                      )}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-secondary-500">Company Name</p>
+                      <p className="text-lg font-semibold text-secondary-900">{companyName}</p>
+                      <p className="text-sm text-secondary-600">{masterProfile.legal_entity_name || customerProfile?.legalEntityName || companyProfile?.legalEntityName || 'N/A'}</p>
                     </div>
-                    {masterProfile.legal_entity_name && (
-                      <p className="text-sm text-gray-600 mb-2">
-                        <span className="font-medium">Legal Entity:</span> {masterProfile.legal_entity_name}
+                    <div className="text-right">
+                      <p className="text-xs text-secondary-500">Created</p>
+                      <p className="text-sm font-medium text-secondary-800">
+                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : '—'}
                       </p>
-                    )}
-                    {name && name !== 'N/A' && (
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Contact:</span> {name}
-                      </p>
-                    )}
+                    </div>
                   </div>
 
-                  {/* Contact Info */}
-                  <div className="space-y-2 mb-4 pb-4 border-b border-gray-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     {email !== 'N/A' && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Mail className="h-4 w-4 text-gray-400" />
+                      <div className="flex items-center gap-2 text-secondary-700">
+                        <Mail className="h-4 w-4 text-secondary-400" />
                         <span className="truncate">{email}</span>
                       </div>
                     )}
                     {phone !== 'N/A' && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone className="h-4 w-4 text-gray-400" />
+                      <div className="flex items-center gap-2 text-secondary-700">
+                        <Phone className="h-4 w-4 text-secondary-400" />
                         <span>{phone}</span>
                       </div>
                     )}
-                    {c.gst_number && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <FileText className="h-4 w-4 text-gray-400" />
-                        <span className="truncate">{c.gst_number}</span>
+                    {customerProfile?.gstNumber && (
+                      <div className="flex items-center gap-2 text-secondary-700">
+                        <FileText className="h-4 w-4 text-secondary-400" />
+                        <span className="truncate">{customerProfile.gstNumber}</span>
+                      </div>
+                    )}
+                    {customerProfile?.segment && (
+                      <div className="flex items-center gap-2 text-secondary-700">
+                        <FileText className="h-4 w-4 text-secondary-400" />
+                        <span>{customerProfile.segment}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Master Data Summary */}
-                  <div className="space-y-3 mb-4">
-                    {siteOffices.length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                        <span>{siteOffices.length} Site Office{siteOffices.length > 1 ? 's' : ''}</span>
-                      </div>
-                    )}
-                    {plantAddresses.length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Building2 className="h-3.5 w-3.5 text-gray-400" />
-                        <span>{plantAddresses.length} Plant Address{plantAddresses.length > 1 ? 'es' : ''}</span>
-                      </div>
-                    )}
-                    {paymentTerms.length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <CreditCard className="h-3.5 w-3.5 text-gray-400" />
-                        <span>{paymentTerms.length} Payment Term{paymentTerms.length > 1 ? 's' : ''}</span>
-                      </div>
-                    )}
-                    {teamProfiles.filter(t => t.name).length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Users className="h-3.5 w-3.5 text-gray-400" />
-                        <span>{teamProfiles.filter(t => t.name).length} Team Member{teamProfiles.filter(t => t.name).length > 1 ? 's' : ''}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
+                    <div className="text-xs text-secondary-500">
+                      Last updated: {c.updatedAt ? new Date(c.updatedAt).toLocaleString('en-IN') : '—'}
+                    </div>
+                    <div className="flex items-center gap-2">
                     <Link
-                      to={`/customers/${c.id || c._id}`}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-lg transition-all inline-flex items-center justify-center gap-2"
+                        to={`/customers/new?id=${c.id || c._id}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
                     >
-                      <Eye className="h-4 w-4" />
-                      View Details
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
                     </Link>
                     <button
+                        type="button"
+                        onClick={() => setPreviewCustomer(c)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
                       onClick={() => setDeletingCustomer(c)}
-                      className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                      title="Delete"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
                     >
-                      <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
                     </button>
+                    </div>
                   </div>
-                </motion.div>
+                </div>
               )
             })}
           </div>
@@ -343,62 +377,198 @@ export default function CustomersList() {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Preview Modal */}
       <Modal
-        open={!!deletingCustomer}
-        onClose={() => !isDeleting && setDeletingCustomer(null)}
-        title="Delete Master Data"
+        open={!!previewCustomer}
+        onClose={() => setPreviewCustomer(null)}
+        title="Master Data Preview"
         variant="dialog"
-        size="sm"
-        footer={(
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button
-              className="btn btn-outline btn-md"
-              onClick={() => setDeletingCustomer(null)}
-              disabled={isDeleting}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn btn-danger btn-md"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </button>
-          </div>
-        )}
+        size="lg"
       >
-        {deletingCustomer && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-red-100">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
+        {previewCustomer && (
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+            {/* Company Profile */}
+            {previewCustomer.metadata?.companyProfile && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-blue-600" />
+                  Company Profile
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Company Name:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.companyProfile.companyName || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Legal Entity:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.companyProfile.legalEntityName || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">State:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.companyProfile.corporateState || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Country:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.companyProfile.corporateCountry || 'N/A'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                  Are you sure you want to delete this master data record?
+            )}
+
+            {/* Customer Profile */}
+            {previewCustomer.metadata?.customerProfile && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-purple-600" />
+                  Customer Profile
                 </h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  <strong>{deletingCustomer.companyName || deletingCustomer.company_name || deletingCustomer.name || 'N/A'}</strong> will be permanently deleted.
-                </p>
-                <p className="text-xs text-gray-500">
-                  This action cannot be undone. All associated data including company profile, customer profile, payment terms, and team profiles will be permanently removed.
-                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Customer Name:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.customerProfile.customerName || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Segment:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.customerProfile.segment || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Contact:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.customerProfile.contactNumber || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Email:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewCustomer.metadata.customerProfile.emailId || 'N/A'}
+                    </span>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Payment Terms */}
+            {previewCustomer.metadata?.paymentTerms && previewCustomer.metadata.paymentTerms.length > 0 && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-indigo-600" />
+                  Payment Terms ({previewCustomer.metadata.paymentTerms.length})
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {previewCustomer.metadata.paymentTerms.map((term, idx) => (
+                    <div key={idx} className="bg-gray-50 p-2 rounded">
+                      <div className="font-medium text-gray-900">{term.paymentTermName || 'Payment Term ' + (idx + 1)}</div>
+                      <div className="text-gray-600">Credit Period: {term.creditPeriod || 'N/A'} days</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Team Profiles */}
+            {previewCustomer.metadata?.teamProfiles && previewCustomer.metadata.teamProfiles.length > 0 && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-pink-600" />
+                  Team Members ({previewCustomer.metadata.teamProfiles.length})
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {previewCustomer.metadata.teamProfiles.map((member, idx) => (
+                    <div key={idx} className="bg-gray-50 p-2 rounded">
+                      <div className="font-medium text-gray-900">{member.teamMemberName || 'Team Member ' + (idx + 1)}</div>
+                      <div className="text-gray-600">Role: {member.role || 'N/A'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <button
+                onClick={() => setPreviewCustomer(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+              <Link
+                to={`/customers/new?id=${previewCustomer.id || previewCustomer._id}`}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors inline-flex items-center gap-2"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </Link>
             </div>
           </div>
         )}
       </Modal>
+
+        <Modal
+          open={!!deletingCustomer}
+          onClose={() => !isDeleting && setDeletingCustomer(null)}
+          title="Delete Master Data"
+          variant="dialog"
+          size="sm"
+          footer={(
+            <>
+              <button
+                className="btn btn-outline"
+                onClick={() => setDeletingCustomer(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary bg-danger-600 hover:bg-danger-700"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </>
+          )}
+        >
+          {deletingCustomer && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-danger-100">
+                    <AlertCircle className="h-5 w-5 text-danger-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-secondary-900 mb-1">
+                    Are you sure you want to delete this master data entry?
+                  </h3>
+                  <p className="text-sm text-secondary-700 mb-2">
+                    <strong>{deletingCustomer.companyName || deletingCustomer.company_name || deletingCustomer.id || 'N/A'}</strong> will be permanently deleted.
+                  </p>
+                  <p className="text-xs text-secondary-500">
+                    This action cannot be undone and will remove the master data from your records.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal>
     </DashboardLayout>
   )
 }
