@@ -35,13 +35,33 @@ function safeJsonParse(value) {
 }
 
 function extractMasterPayload(payload = {}) {
-  const metadata = payload.metadata || {};
+  // Accept both legacy "metadata" envelope and direct section fields from the wizard
+  const metadata = { ...(payload.metadata || {}) };
+  const sectionKeys = [
+    'companyProfile',
+    'customerProfile',
+    'consigneeProfiles',
+    'payerProfiles',
+    'paymentTerms',
+    'teamProfiles',
+    'additionalStep'
+  ];
+
+  sectionKeys.forEach((key) => {
+    if (payload[key] && !metadata[key]) {
+      metadata[key] = payload[key];
+    }
+  });
+
   return {
     metadata,
     companyProfile: metadata.companyProfile || {},
     customerProfile: metadata.customerProfile || {},
     paymentTerms: metadata.paymentTerms || [],
-    teamProfiles: metadata.teamProfiles || []
+    teamProfiles: metadata.teamProfiles || [],
+    consigneeProfiles: metadata.consigneeProfiles || [],
+    payerProfiles: metadata.payerProfiles || [],
+    additionalStep: metadata.additionalStep || {}
   };
 }
 

@@ -12,6 +12,12 @@ function Card({ entry, onDelete, onPreview }) {
   const metadata = entry.metadata || {}
   const companyProfile = metadata.companyProfile || {}
   const customerProfile = metadata.customerProfile || {}
+  const contactPerson =
+    entry.contactPerson ||
+    customerProfile.contactPersonName ||
+    companyProfile.primaryContactName ||
+    entry.name ||
+    'N/A'
   const email = entry.email || entry.contact_email || customerProfile.emailId || companyProfile.emailId || 'N/A'
   const phone = entry.phone || entry.contact_phone || customerProfile.contactNumber || companyProfile.contactNumber || 'N/A'
   const segment = customerProfile.segment || entry.segment || 'Segment not set'
@@ -21,6 +27,7 @@ function Card({ entry, onDelete, onPreview }) {
   const country = companyProfile.corporateCountry || customerProfile.corporateCountry || 'N/A'
   const paymentTerms = metadata.paymentTerms || []
   const teamProfiles = metadata.teamProfiles || []
+  const createdDate = entry.createdAt || entry.created_at || entry.createdDate
 
   return (
     <div className="group relative rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
@@ -51,6 +58,18 @@ function Card({ entry, onDelete, onPreview }) {
 
         {/* Information Grid */}
         <div className="grid grid-cols-1 gap-3">
+          {contactPerson !== 'N/A' && (
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <Users className="h-4 w-4 text-gray-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Contact Person</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{contactPerson}</p>
+              </div>
+            </div>
+          )}
+
           {email !== 'N/A' && (
             <div className="flex items-center gap-3 text-sm">
               <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
@@ -121,7 +140,7 @@ function Card({ entry, onDelete, onPreview }) {
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-500">
               <Calendar className="h-3 w-3 inline mr-1" />
-              {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-IN', { 
+              {createdDate ? new Date(createdDate).toLocaleDateString('en-IN', { 
                 year: 'numeric', 
                 month: 'short', 
                 day: 'numeric' 
@@ -208,7 +227,44 @@ export default function CustomersList() {
       }
       
       console.log('Final rows extracted:', rows.length, rows)
-      setCustomers(rows)
+
+      const normalized = rows.map((row) => {
+        const parsedMetadata =
+          typeof row.metadata === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(row.metadata)
+                } catch (err) {
+                  console.warn('Failed to parse metadata for row', row.id || row._id, err)
+                  return null
+                }
+              })()
+            : row.metadata || null
+
+        return {
+          ...row,
+          metadata: parsedMetadata || {},
+          companyName: row.companyName || row.company_name || parsedMetadata?.companyProfile?.companyName,
+          contactPerson:
+            row.name ||
+            parsedMetadata?.customerProfile?.contactPersonName ||
+            parsedMetadata?.companyProfile?.primaryContactName,
+          email:
+            row.email ||
+            row.contact_email ||
+            parsedMetadata?.customerProfile?.emailId ||
+            parsedMetadata?.companyProfile?.primaryContactEmail,
+          phone:
+            row.phone ||
+            row.contact_phone ||
+            parsedMetadata?.customerProfile?.contactNumber ||
+            parsedMetadata?.companyProfile?.primaryContactNumber,
+          segment: row.segment || parsedMetadata?.customerProfile?.segment,
+          createdAt: row.createdAt || row.created_at
+        }
+      })
+
+      setCustomers(normalized)
       
       if (rows.length === 0) {
         console.warn('No customers found. This could mean:')

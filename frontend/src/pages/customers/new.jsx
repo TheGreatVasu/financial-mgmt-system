@@ -960,7 +960,7 @@ async function onSubmit(e) {
     // ---- SUBMIT PAYLOAD ----
     setSaving(true);
 
-    // Prepare payload for masterDataService
+    // Normalize payload once to reuse across API calls
     const payload = {
       companyProfile: {
         ...companyProfile,
@@ -1011,23 +1011,42 @@ async function onSubmit(e) {
       }
     };
 
-    let response
+    // Build request body expected by customers API
+    const customerRequest = {
+      companyName: payload.companyProfile.companyName || payload.customerProfile.customerName,
+      legalEntityName: payload.companyProfile.legalEntityName || payload.customerProfile.legalEntityName,
+      name: payload.customerProfile.contactPersonName || payload.companyProfile.primaryContactName || '',
+      email: payload.customerProfile.emailId || payload.companyProfile.primaryContactEmail || '',
+      phone: payload.customerProfile.contactNumber || payload.companyProfile.primaryContactNumber || '',
+      segment: payload.customerProfile.segment || '',
+      gstNumber: payload.customerProfile.gstNumber || '',
+      metadata: payload
+    };
+
+    let response;
+
+    // Persist master data (keeps wizard storage + sync) then upsert customer record used by listing
+    await masterDataService.submitMasterData(payload);
+
     if (editId) {
-      // Update existing customer
-      response = await svc.update(editId, payload)
-      toast.success('Master Data updated successfully!')
+      response = await svc.update(editId, customerRequest);
+      toast.success('Master Data updated successfully!');
     } else {
-      // Create new customer
-      response = await masterDataService.submitMasterData(payload)
-      toast.success('Master Data created successfully!')
+      response = await svc.create(customerRequest);
+      toast.success('Master Data created successfully!');
     }
 
     // Clear localStorage after successful submission
     localStorage.removeItem(STORAGE_KEY)
 
     setSubmittedData(payload)
-    // Get customer ID from sync result or response
-    const recordId = response?.data?.syncResult?.customerId || response?.data?.syncResult?.id || response?.data?.customerId || response?.data?.id || editId || Date.now().toString()
+    // Get customer ID from API response
+    const recordId =
+      response?.data?.id ||
+      response?.data?.customerId ||
+      response?.data?._id ||
+      editId ||
+      Date.now().toString()
     setCreatedRecordId(recordId)
     setShowSuccessPopup(true)
     
