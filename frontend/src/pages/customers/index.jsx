@@ -30,11 +30,11 @@ function Card({ entry, onDelete, onPreview }) {
   const createdDate = entry.createdAt || entry.created_at || entry.createdDate
 
   return (
-    <div className="group relative rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+    <div className="group relative h-full rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col min-h-[520px]">
       {/* Gradient accent bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
       
-      <div className="p-6 flex flex-col gap-4">
+      <div className="p-6 flex flex-col gap-4 flex-1 overflow-hidden">
         {/* Header Section */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -136,9 +136,9 @@ function Card({ entry, onDelete, onPreview }) {
         </div>
 
         {/* Footer with Actions */}
-        <div className="pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-gray-500">
+        <div className="pt-3 border-t border-gray-100 mt-auto">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-gray-500 flex items-center gap-1">
               <Calendar className="h-3 w-3 inline mr-1" />
               {createdDate ? new Date(createdDate).toLocaleDateString('en-IN', { 
                 year: 'numeric', 
@@ -147,13 +147,6 @@ function Card({ entry, onDelete, onPreview }) {
               }) : '—'}
             </div>
             <div className="flex items-center gap-2">
-              <Link
-                to={`/customers/new?id=${entry.id || entry._id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-all duration-200"
-              >
-                <Edit className="h-3.5 w-3.5" />
-                Edit
-              </Link>
               <button
                 type="button"
                 onClick={() => onPreview?.(entry)}
@@ -331,7 +324,7 @@ export default function CustomersList() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6">
         <div className="rounded-2xl border border-secondary-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
@@ -439,14 +432,15 @@ export default function CustomersList() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 auto-rows-fr">
               {filtered.map((entry) => (
-                <Card
-                  key={entry._id || entry.id}
-                  entry={entry}
-                  onDelete={() => setDeletingCustomer(entry)}
-                  onPreview={() => setPreviewCustomer(entry)}
-                />
+                <div key={entry._id || entry.id} className="h-full">
+                  <Card
+                    entry={entry}
+                    onDelete={() => setDeletingCustomer(entry)}
+                    onPreview={() => setPreviewCustomer(entry)}
+                  />
+                </div>
               ))}
             </div>
           </>

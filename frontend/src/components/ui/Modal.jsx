@@ -1,6 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export default function Modal({ open, onClose, title, children, footer, variant = 'dialog', size = 'md' }) {
+  const dialogRef = useRef(null)
+  const containerRef = useRef(null)
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') onClose?.()
@@ -15,6 +17,34 @@ export default function Modal({ open, onClose, title, children, footer, variant 
       document.body.style.overflow = ''
     }
   }, [open, onClose])
+
+  useEffect(() => {
+    if (open && dialogRef.current) {
+      const focusable = dialogRef.current.querySelector(
+        'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      focusable?.focus()
+    }
+  }, [open])
+
+  function trapFocus(e) {
+    if (e.key !== 'Tab') return
+    const node = dialogRef.current
+    if (!node) return
+    const focusable = Array.from(
+      node.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter(el => !el.hasAttribute('disabled'))
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   if (!open) return null
 
@@ -58,9 +88,9 @@ export default function Modal({ open, onClose, title, children, footer, variant 
           bottom: 0,
           width: '100vw',
           height: '100vh',
-          backgroundColor: 'rgba(0, 0, 0, 0.15)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(15, 23, 42, 0.35)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
           zIndex: 1,
         }}
         onClick={onClose}
@@ -69,7 +99,8 @@ export default function Modal({ open, onClose, title, children, footer, variant 
       {/* Modal container - centered with flex, above backdrop */}
       {/* Shifted right to account for sidebar, centered in available space */}
       <div 
-        className="fixed inset-0 flex items-center"
+        ref={containerRef}
+        className="fixed inset-0 flex items-center justify-center"
         style={{
           position: 'fixed',
           top: 0,
@@ -83,9 +114,7 @@ export default function Modal({ open, onClose, title, children, footer, variant 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '2rem',
-          paddingLeft: 'clamp(320px, 25vw, 400px)', // Account for sidebar width (typically 288px-420px)
-          paddingRight: 'clamp(2rem, 5vw, 3rem)',
+          padding: 'clamp(1rem, 4vw, 2rem)',
         }}
       >
         {variant === 'drawer' ? (
@@ -106,17 +135,22 @@ export default function Modal({ open, onClose, title, children, footer, variant 
           </div>
         ) : (
           <div 
+            ref={dialogRef}
             role="dialog" 
             aria-modal="true" 
+            tabIndex="-1"
+            onKeyDown={trapFocus}
             onClick={(e) => e.stopPropagation()}
             className={`${sizes[size]} bg-white dark:bg-[#0B1220] shadow-[0_20px_60px_-10px_rgba(2,6,23,0.35)] rounded-2xl border border-secondary-200/80 dark:border-secondary-800/80 animate-in fade-in-0 zoom-in-95 transition-transform duration-200`}
             style={{ 
               pointerEvents: 'auto', 
-              marginLeft: 'auto', 
-              marginRight: 'auto',
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
               maxWidth: maxWidths[size],
               width: '100%',
-              minWidth: '400px',
+              minWidth: 'min(92vw, 360px)',
               maxHeight: '90vh',
               overflow: 'hidden',
               display: 'flex',

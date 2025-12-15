@@ -2510,15 +2510,15 @@ return (
       {/* Success Popup Modal - Professional Design */}
       {showSuccessPopup && submittedData && (
         <div
-          className="fixed inset-0 flex items-center justify-center z-[12000] overflow-y-auto p-4"
+          className="fixed inset-0 flex items-center justify-center z-[12000] overflow-y-auto p-4 sm:p-6"
           style={{
             backgroundColor: 'rgba(15, 23, 42, 0.55)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
           }}
           onClick={(e) => e.target === e.currentTarget && setShowSuccessPopup(false)}
         >
-          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full mx-4 my-8 relative">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-auto my-8 relative flex flex-col max-h-[85vh]">
             {/* Success Header */}
             <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
@@ -2545,7 +2545,7 @@ return (
             </div>
 
             {/* Structured Data Display */}
-            <div className="p-6 max-h-[60vh] overflow-y-auto">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="space-y-6">
                 {/* Company Profile */}
                 <div>
