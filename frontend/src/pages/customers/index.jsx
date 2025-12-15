@@ -10,74 +10,149 @@ import toast from 'react-hot-toast'
 function Card({ entry, onDelete, onPreview }) {
   const companyName = entry.companyName || entry.company_name || 'Unnamed Company'
   const metadata = entry.metadata || {}
+  const companyProfile = metadata.companyProfile || {}
   const customerProfile = metadata.customerProfile || {}
-  const email = entry.email || entry.contact_email || customerProfile.emailId || 'N/A'
-  const phone = entry.phone || entry.contact_phone || customerProfile.contactNumber || 'N/A'
+  const email = entry.email || entry.contact_email || customerProfile.emailId || companyProfile.emailId || 'N/A'
+  const phone = entry.phone || entry.contact_phone || customerProfile.contactNumber || companyProfile.contactNumber || 'N/A'
   const segment = customerProfile.segment || entry.segment || 'Segment not set'
-  const gstNumber = customerProfile.gstNumber || entry.gst_number || 'GST not set'
-  const legalEntity = entry.legal_entity_name || customerProfile.legalEntityName || 'N/A'
+  const gstNumber = customerProfile.gstNumber || entry.gst_number || companyProfile.gstNumber || 'GST not set'
+  const legalEntity = entry.legal_entity_name || customerProfile.legalEntityName || companyProfile.legalEntityName || 'N/A'
+  const state = companyProfile.corporateState || customerProfile.corporateState || 'N/A'
+  const country = companyProfile.corporateCountry || customerProfile.corporateCountry || 'N/A'
+  const paymentTerms = metadata.paymentTerms || []
+  const teamProfiles = metadata.teamProfiles || []
 
   return (
-    <div className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-secondary-500">Company Name</p>
-          <p className="text-lg font-semibold text-secondary-900">{companyName}</p>
-          <p className="text-sm text-secondary-600">{legalEntity}</p>
+    <div className="group relative rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+      {/* Gradient accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+      
+      <div className="p-6 flex flex-col gap-4">
+        {/* Header Section */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 className="h-5 w-5 text-blue-600 flex-shrink-0" />
+              <p className="text-xs uppercase tracking-wider text-gray-500 font-medium">Company</p>
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 truncate mb-1">{companyName}</h3>
+            <p className="text-sm text-gray-600 truncate">{legalEntity}</p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-100">
+              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <span className="text-xs font-semibold text-blue-700 uppercase">{segment}</span>
+            </div>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-secondary-500">Created</p>
-          <p className="text-sm font-medium text-secondary-800">
-            {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-IN') : '—'}
-          </p>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-        <div className="flex items-center gap-2 text-secondary-700">
-          <Mail className="h-4 w-4 text-secondary-400" />
-          <span className="truncate">{email !== 'N/A' ? email : 'Email not set'}</span>
-        </div>
-        <div className="flex items-center gap-2 text-secondary-700">
-          <Phone className="h-4 w-4 text-secondary-400" />
-          <span>{phone !== 'N/A' ? phone : 'Phone not set'}</span>
-        </div>
-        <div className="flex items-center gap-2 text-secondary-700">
-          <FileText className="h-4 w-4 text-secondary-400" />
-          <span>{segment}</span>
-        </div>
-        <div className="flex items-center gap-2 text-secondary-700">
-          <FileText className="h-4 w-4 text-secondary-400" />
-          <span className="truncate">{gstNumber}</span>
-        </div>
-      </div>
+        {/* Divider */}
+        <div className="border-t border-gray-100"></div>
 
-      <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
-        <div className="text-xs text-secondary-500">Last updated: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—'}</div>
-        <div className="flex items-center gap-2">
-          <Link
-            to={`/customers/new?id=${entry.id || entry._id}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
-          >
-            <Edit className="h-3.5 w-3.5" />
-            Edit
-          </Link>
-          <button
-            type="button"
-            onClick={() => onPreview?.(entry)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Preview
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete?.(entry)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
+        {/* Information Grid */}
+        <div className="grid grid-cols-1 gap-3">
+          {email !== 'N/A' && (
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <Mail className="h-4 w-4 text-gray-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Email</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{email}</p>
+              </div>
+            </div>
+          )}
+          
+          {phone !== 'N/A' && (
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <Phone className="h-4 w-4 text-gray-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Phone</p>
+                <p className="text-sm font-medium text-gray-900">{phone}</p>
+              </div>
+            </div>
+          )}
+
+          {gstNumber !== 'GST not set' && (
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <FileText className="h-4 w-4 text-gray-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">GST Number</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{gstNumber}</p>
+              </div>
+            </div>
+          )}
+
+          {(state !== 'N/A' || country !== 'N/A') && (
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-gray-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Location</p>
+                <p className="text-sm font-medium text-gray-900">{state !== 'N/A' && country !== 'N/A' ? `${state}, ${country}` : state !== 'N/A' ? state : country}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Stats Badges */}
+        <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+          {paymentTerms.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <CreditCard className="h-3.5 w-3.5 text-gray-400" />
+              <span className="font-medium">{paymentTerms.length} Payment Term{paymentTerms.length > 1 ? 's' : ''}</span>
+            </div>
+          )}
+          {teamProfiles.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <Users className="h-3.5 w-3.5 text-gray-400" />
+              <span className="font-medium">{teamProfiles.length} Team Member{teamProfiles.length > 1 ? 's' : ''}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer with Actions */}
+        <div className="pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500">
+              <Calendar className="h-3 w-3 inline mr-1" />
+              {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-IN', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              }) : '—'}
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/customers/new?id=${entry.id || entry._id}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-all duration-200"
+              >
+                <Edit className="h-3.5 w-3.5" />
+                Edit
+              </Link>
+              <button
+                type="button"
+                onClick={() => onPreview?.(entry)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-all duration-200"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete?.(entry)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition-all duration-200"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -110,9 +185,29 @@ export default function CustomersList() {
     try {
       // Load with master data included
       const response = await api.list({ limit: 100, includeMaster: 'true' })
-      console.log('Customers API response:', response)
-      const rows = response?.data || []
-      console.log('Loaded customers:', rows.length, rows)
+      console.log('Customers API full response:', response)
+      console.log('Response structure:', {
+        success: response?.success,
+        hasData: !!response?.data,
+        dataType: Array.isArray(response?.data) ? 'array' : typeof response?.data,
+        dataLength: Array.isArray(response?.data) ? response.data.length : 'N/A',
+        meta: response?.meta
+      })
+      
+      // Handle different response structures
+      let rows = []
+      if (Array.isArray(response)) {
+        // Direct array response
+        rows = response
+      } else if (Array.isArray(response?.data)) {
+        // Nested data array
+        rows = response.data
+      } else if (response?.data?.data && Array.isArray(response.data.data)) {
+        // Double nested
+        rows = response.data.data
+      }
+      
+      console.log('Final rows extracted:', rows.length, rows)
       setCustomers(rows)
       
       if (rows.length === 0) {
@@ -120,12 +215,29 @@ export default function CustomersList() {
         console.warn('1. No customers have been created yet')
         console.warn('2. Customers exist but created_by field is NULL')
         console.warn('3. Customers exist but belong to a different user')
+        console.warn('4. API response structure might be different than expected')
+      } else {
+        console.log('Successfully loaded', rows.length, 'customer(s)')
+        // Log first customer structure for debugging
+        if (rows[0]) {
+          console.log('Sample customer structure:', {
+            id: rows[0].id || rows[0]._id,
+            companyName: rows[0].companyName || rows[0].company_name,
+            hasMetadata: !!rows[0].metadata,
+            metadataKeys: rows[0].metadata ? Object.keys(rows[0].metadata) : []
+          })
+        }
       }
     } catch (err) {
       const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load customers'
       setError(errorMsg)
       toast.error(errorMsg)
       console.error('Failed to load customers:', err)
+      console.error('Error details:', {
+        response: err?.response,
+        data: err?.response?.data,
+        status: err?.response?.status
+      })
     } finally {
       setLoading(false)
     }
@@ -175,8 +287,12 @@ export default function CustomersList() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={loadCustomers}
-                className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 px-4 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50"
+                onClick={() => {
+                  console.log('Manual refresh triggered')
+                  loadCustomers()
+                }}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 px-4 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -191,63 +307,74 @@ export default function CustomersList() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-lg">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" />
-              <input
-                className="w-full rounded-lg border border-secondary-200 bg-white pl-10 pr-3 py-2.5 text-sm focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-                placeholder="Search by name, company, email, or phone..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
-          </div>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700 text-sm">
-            {error}
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Search by name, company, email, or phone..."
-              />
+        {/* Search and Filters */}
+        {!loading && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  placeholder="Search by name, company, email, or phone..."
+                />
+              </div>
+              <select
+                value={tier}
+                onChange={(e) => setTier(e.target.value)}
+                className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all w-full lg:w-auto lg:min-w-[180px] bg-white"
+              >
+                <option value="all">All Tiers</option>
+                <option value="enterprise">Enterprise</option>
+                <option value="business">Business</option>
+                <option value="startup">Startup</option>
+              </select>
             </div>
-            <select
-              value={tier}
-              onChange={(e) => setTier(e.target.value)}
-              className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all w-full lg:w-auto lg:min-w-[180px]"
-            >
-              <option value="all">All Tiers</option>
-              <option value="enterprise">Enterprise</option>
-              <option value="business">Business</option>
-              <option value="startup">Startup</option>
-            </select>
           </div>
-        </div>
+        )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-10 w-10 animate-spin text-primary-600" />
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+            <p className="text-sm text-gray-600 font-medium">Loading master data records...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-secondary-200 bg-white p-8 text-center space-y-3 shadow-sm">
-            <FileText className="h-10 w-10 text-secondary-400 mx-auto" />
-            <p className="text-lg font-semibold text-secondary-900">No master data found</p>
-            <p className="text-sm text-secondary-600">Create your first master data entry to get started.</p>
-            <div className="flex items-center justify-center gap-2">
+          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-gray-50 to-white p-12 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 mb-4">
+              <FileText className="h-10 w-10 text-blue-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">No master data found</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              {q || tier !== 'all' 
+                ? 'No records match your search criteria. Try adjusting your filters.'
+                : 'Create your first master data entry to get started. Fill out the complete form to see it displayed here as a card.'}
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              {(q || tier !== 'all') && (
+                <button
+                  onClick={() => {
+                    setQ('')
+                    setTier('all')
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Clear Filters
+                </button>
+              )}
               <Link
                 to="/customers/new"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 shadow-sm"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 shadow-md hover:shadow-lg transition-all"
               >
                 <Plus className="h-4 w-4" />
                 Create Master Data
@@ -255,127 +382,38 @@ export default function CustomersList() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filtered.map((entry) => (
-              <Card
-                key={entry._id || entry.id}
-                entry={entry}
-                onDelete={() => setDeletingCustomer(entry)}
-                onPreview={() => setPreviewCustomer(entry)}
-              />
-            ))}
-          </div>
-        )}
-              const companyName = c.companyName || c.company_name || 'Unnamed Company'
-              const name = c.name || 'N/A'
-              const email = c.email || c.contact_email || 'N/A'
-              const phone = c.phone || c.contact_phone || 'N/A'
-              const metadata = c.metadata || {}
-              const companyProfile = metadata.companyProfile || {}
-              const customerProfile = metadata.customerProfile || {}
-              const paymentTerms = metadata.paymentTerms || []
-              const teamProfiles = metadata.teamProfiles || []
-              const masterProfile = c.masterProfile || {}
-              const siteOffices = c.siteOffices || []
-              const plantAddresses = c.plantAddresses || []
-              
-              return (
-                <div
-                  key={c.id || c._id}
-                  className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-secondary-500">Company Name</p>
-                      <p className="text-lg font-semibold text-secondary-900">{companyName}</p>
-                      <p className="text-sm text-secondary-600">{masterProfile.legal_entity_name || customerProfile?.legalEntityName || companyProfile?.legalEntityName || 'N/A'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-secondary-500">Created</p>
-                      <p className="text-sm font-medium text-secondary-800">
-                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {email !== 'N/A' && (
-                      <div className="flex items-center gap-2 text-secondary-700">
-                        <Mail className="h-4 w-4 text-secondary-400" />
-                        <span className="truncate">{email}</span>
-                      </div>
-                    )}
-                    {phone !== 'N/A' && (
-                      <div className="flex items-center gap-2 text-secondary-700">
-                        <Phone className="h-4 w-4 text-secondary-400" />
-                        <span>{phone}</span>
-                      </div>
-                    )}
-                    {customerProfile?.gstNumber && (
-                      <div className="flex items-center gap-2 text-secondary-700">
-                        <FileText className="h-4 w-4 text-secondary-400" />
-                        <span className="truncate">{customerProfile.gstNumber}</span>
-                      </div>
-                    )}
-                    {customerProfile?.segment && (
-                      <div className="flex items-center gap-2 text-secondary-700">
-                        <FileText className="h-4 w-4 text-secondary-400" />
-                        <span>{customerProfile.segment}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
-                    <div className="text-xs text-secondary-500">
-                      Last updated: {c.updatedAt ? new Date(c.updatedAt).toLocaleString('en-IN') : '—'}
-                    </div>
-                    <div className="flex items-center gap-2">
-                    <Link
-                        to={`/customers/new?id=${c.id || c._id}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
-                    >
-                        <Edit className="h-3.5 w-3.5" />
-                        Edit
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => setPreviewCustomer(c)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Preview
-                      </button>
-                      <button
-                        type="button"
-                      onClick={() => setDeletingCustomer(c)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
-                    >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                    </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+              {filtered.map((entry) => (
+                <Card
+                  key={entry._id || entry.id}
+                  entry={entry}
+                  onDelete={() => setDeletingCustomer(entry)}
+                  onPreview={() => setPreviewCustomer(entry)}
+                />
+              ))}
+            </div>
+          </>
         )}
 
         {/* Stats Summary */}
         {!loading && filtered.length > 0 && (
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl border border-blue-200 p-6">
+          <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-xl border border-blue-800 shadow-lg p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-900 mb-1">Total Master Data Records</p>
-                <p className="text-3xl font-bold text-blue-900">{filtered.length}</p>
+                <p className="text-sm font-medium text-blue-100 mb-2 opacity-90">Total Master Data Records</p>
+                <p className="text-4xl font-bold text-white mb-1">{filtered.length}</p>
+                <p className="text-xs text-blue-200 opacity-75">
+                  {filtered.length === 1 ? 'record' : 'records'} {q || tier !== 'all' ? 'found' : 'available'}
+                </p>
               </div>
-              <div className="p-4 bg-white/50 rounded-xl backdrop-blur-sm">
-                <Building2 className="h-8 w-8 text-blue-600" />
+              <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm border border-white/30">
+                <Building2 className="h-10 w-10 text-white" />
               </div>
             </div>
           </div>
         )}
-      </div>
+      
 
       {/* Preview Modal */}
       <Modal
@@ -569,6 +607,7 @@ export default function CustomersList() {
             </div>
           )}
         </Modal>
+      </div>
     </DashboardLayout>
   )
 }
