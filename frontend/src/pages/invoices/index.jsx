@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Download, Plus, Filter as FilterIcon, Edit, Trash2, Eye, Search, Loader2, AlertCircle, X, FileText } from 'lucide-react'
+import { Download, Plus, Edit, Trash2, Eye, Search, Loader2, AlertCircle, X, FileText, Calendar, DollarSign } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createInvoiceService } from '../../services/invoiceService.js'
@@ -135,6 +135,94 @@ export default function InvoicesList() {
     return statusMap[status] || statusMap.draft
   }
 
+  const formatAmount = (value) =>
+    `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const InvoiceCard = ({ invoice }) => {
+    const issueDate = invoice.issueDate || invoice.issue_date
+    const dueDate = invoice.dueDate || invoice.due_date
+    const amount = invoice.totalAmount || invoice.total_amount || 0
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-secondary-200 bg-white shadow-sm p-5 flex flex-col gap-4"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-secondary-500">Invoice</p>
+            <p className="text-lg font-semibold text-secondary-900">
+              {invoice.invoiceNumber || invoice.invoice_number || 'N/A'}
+            </p>
+            <p className="text-sm text-secondary-600">
+              {invoice.customer || invoice.customer_name || 'Unknown Customer'}
+            </p>
+          </div>
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(invoice.status || 'draft')}`}
+          >
+            {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-secondary-700">
+            <DollarSign className="h-4 w-4 text-secondary-400" />
+            <span>{formatAmount(amount)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-secondary-700">
+            <Calendar className="h-4 w-4 text-secondary-400" />
+            <span>
+              Issue: {issueDate ? new Date(issueDate).toLocaleDateString('en-IN') : '—'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-secondary-700">
+            <Calendar className="h-4 w-4 text-secondary-400" />
+            <span>
+              Due: {dueDate ? new Date(dueDate).toLocaleDateString('en-IN') : '—'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-secondary-700">
+            <FileText className="h-4 w-4 text-secondary-400" />
+            <span>{invoice.paymentTerms || invoice.payment_terms || 'Payment terms not set'}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-secondary-100">
+          <div className="text-xs text-secondary-500">
+            Updated: {invoice.updatedAt ? new Date(invoice.updatedAt).toLocaleString() : '—'}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/invoices/${invoice.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 hover:border-secondary-300 transition-colors"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
+            </Link>
+            <button
+              type="button"
+              onClick={() => setEditingInvoice(invoice)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-colors"
+            >
+              <Edit className="h-3.5 w-3.5" />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeletingInvoice(invoice)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-danger-50 px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100 hover:border-danger-300 transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -219,9 +307,9 @@ export default function InvoicesList() {
           </div>
         </div>
 
-        {/* Table Card */}
+        {/* Card view aligned with PO/Master style */}
         <div className="card">
-          <div className="card-content p-0">
+          <div className="card-content">
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
@@ -248,113 +336,10 @@ export default function InvoicesList() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-secondary-200">
-                  <thead className="bg-secondary-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Invoice
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Customer
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Due Date
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-secondary-700 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-secondary-200">
-                    {filtered.map((inv) => (
-                      <motion.tr
-                        key={inv.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="hover:bg-secondary-50/50 transition-colors"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Link
-                            to={`/invoices/${inv.id}`}
-                            className="text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline"
-                          >
-                            {inv.invoiceNumber || inv.invoice_number || 'N/A'}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-secondary-900">
-                            {inv.customer || inv.customer_name || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="text-sm font-semibold text-secondary-900">
-                            ₹{(inv.totalAmount || inv.total_amount || 0).toLocaleString('en-IN', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2
-                            })}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(inv.status || 'draft')}`}>
-                            {(inv.status || 'draft').charAt(0).toUpperCase() + (inv.status || 'draft').slice(1)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-secondary-600">
-                            {inv.dueDate
-                              ? new Date(inv.dueDate).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })
-                              : inv.due_date
-                              ? new Date(inv.due_date).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })
-                              : 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-2">
-                            <Link
-                              to={`/invoices/${inv.id}`}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-primary-700 hover:text-primary-900 hover:bg-primary-50 rounded-md transition-colors"
-                              title="View invoice"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">View</span>
-                            </Link>
-                            <button
-                              onClick={() => setEditingInvoice(inv)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-secondary-700 hover:text-secondary-900 hover:bg-secondary-100 rounded-md transition-colors"
-                              title="Edit invoice"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Edit</span>
-                            </button>
-                            <button
-                              onClick={() => setDeletingInvoice(inv)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-danger-700 hover:text-danger-900 hover:bg-danger-50 rounded-md transition-colors"
-                              title="Delete invoice"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filtered.map((inv) => (
+                  <InvoiceCard key={inv.id} invoice={inv} />
+                ))}
               </div>
             )}
           </div>

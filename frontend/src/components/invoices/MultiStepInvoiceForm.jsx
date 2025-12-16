@@ -10,6 +10,119 @@ import Step5SecondDue from './steps/Step5SecondDue'
 import Step6ThirdDueSummary from './steps/Step6ThirdDueSummary'
 import Step7Summary from './steps/Step7Summary'
 
+const SAMPLE_INVOICE_DATA = {
+  keyId: '',
+  gstTaxInvoiceNo: 'GST-INV-2025-001',
+  gstTaxInvoiceDate: '',
+  internalInvoiceNo: 'INT-INV-045',
+  invoiceType: 'GST',
+  businessUnit: 'Energy',
+  customerId: '',
+  customerName: 'Sample Manufacturing Ltd.',
+  segment: 'Industrial',
+  region: 'North',
+  zone: 'Zone 1',
+  salesOrderNo: 'SO-7845',
+  accountManagerName: 'Amit Sharma',
+  poEntryId: '',
+  poNoReference: 'PO-78945',
+  poDate: '',
+  materialDescriptionType: 'High-efficiency pump system',
+  stateOfSupply: 'Maharashtra',
+  qty: 4,
+  unit: 'Nos',
+  currency: 'INR',
+  basicRate: 250000,
+  basicValue: 1000000,
+  freightInvoiceNo: 'FR-2201',
+  freightRate: 15000,
+  freightValue: 15000,
+  sgstOutput: 90000,
+  cgstOutput: 90000,
+  igstOutput: 0,
+  ugstOutput: 0,
+  totalGst: 180000,
+  tcs: 0,
+  subTotal: 1015000,
+  totalInvoiceValue: 1195000,
+  consigneeNameAddress: 'ABC Plant, Plot 21, MIDC Industrial Area, Pune',
+  consigneeCity: 'Pune',
+  payerNameAddress: 'ABC Manufacturing Ltd, Corporate Office, Mumbai',
+  city: 'Mumbai',
+  lorryReceiptNo: 'LR-55421',
+  lorryReceiptDate: '',
+  transporterName: 'Blue Dart Logistics',
+  deliveryChallanNo: 'DC-88321',
+  deliveryChallanDate: '',
+  materialInspectionRequestDate: '',
+  inspectionOfferDate: '',
+  materialInspectionDate: '',
+  deliveryInstructionDate: '',
+  deliveryInspectionCipReceivedDate: '',
+  miccReceiptDate: '',
+  lastDateOfDispatch: '',
+  invoiceReadyDate: '',
+  courierDocumentNo: 'CR-11223',
+  courierDocumentDate: '',
+  courierCompanyName: 'DTDC',
+  billSentToPersonName: 'Vikram Desai',
+  billSentDate: '',
+  lastDateOfMaterialReceipt: '',
+  invoiceReceiptDate: '',
+  invoiceReceiptPersonName: 'Nidhi Rao',
+  materialVerificationDate: '',
+  jvrDate: '',
+  srnDate: '',
+  mrcDate: '',
+  invoiceSubmissionAtSiteDate: '',
+  invoiceForwardedToHo: 'Yes',
+  invoiceForwardedForPayment: 'Yes',
+  paymentText: 'Net 30 days from invoice date',
+  paymentTerms: 'Net 30',
+  firstDueDate: '',
+  notes: 'Sample invoice generated for testing the form.',
+  firstDueAmount: 398333.33,
+  paymentReceivedAmountFirstDue: 200000,
+  receiptDateFirstDue: '',
+  firstDueBalance: 198333.33,
+  notDueFirstDue: 0,
+  overDueFirstDue: 0,
+  noOfDaysOfPaymentReceiptFirstDue: 5,
+  secondDueDate: '',
+  secondDueAmount: 398333.33,
+  paymentReceivedAmountSecondDue: 0,
+  receiptDateSecondDue: '',
+  secondDueBalance: 398333.33,
+  notDueSecondDue: 398333.33,
+  overDueSecondDue: 0,
+  noOfDaysOfPaymentReceiptSecondDue: 0,
+  thirdDueDate: '',
+  thirdDueAmount: 398333.34,
+  paymentReceivedAmountThirdDue: 0,
+  receiptDateThirdDue: '',
+  thirdDueBalance: 398333.34,
+  notDueThirdDue: 398333.34,
+  overDueThirdDue: 0,
+  noOfDaysOfPaymentReceiptThirdDue: 0,
+  totalBalance: 995000,
+  notDueTotal: 796666.67,
+  overDueTotal: 0,
+  itTds2PercentService: 0,
+  itTds1PercentUs194Q: 0,
+  lcessBoq1PercentWorks: 0,
+  tds2PercentCgst1PercentSgst1Percent: 0,
+  tdsOnCgst1Percent: 0,
+  tdsOnSgst1Percent: 0,
+  excessSupplyQty: 0,
+  interestOnAdvance: 0,
+  anyHold: 'No',
+  penaltyLdDeduction: 0,
+  bankCharges: 1200,
+  lcDiscrepancyCharge: 0,
+  provisionForBadDebts: 0,
+  badDebts: 0
+}
+
 const STEP_TITLES = ['Invoice Data Entry', 'Review & Submit']
 const TOTAL_STEPS = STEP_TITLES.length
 const IS_DEV_MODE = typeof import.meta !== 'undefined' && import.meta.env?.MODE !== 'production'
@@ -150,6 +263,69 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const formatDate = (date) => date.toISOString().split('T')[0]
+  const addDays = (days) => formatDate(new Date(Date.now() + days * 24 * 60 * 60 * 1000))
+
+  const loadSampleData = () => {
+    const customer = customers?.[0]
+    const po = poEntries?.[0]
+    const datedSample = {
+      gstTaxInvoiceDate: addDays(0),
+      poDate: po?.poDate || po?.po_date || addDays(-10),
+      lorryReceiptDate: addDays(-8),
+      deliveryChallanDate: addDays(-7),
+      materialInspectionRequestDate: addDays(-6),
+      inspectionOfferDate: addDays(-5),
+      materialInspectionDate: addDays(-4),
+      deliveryInstructionDate: addDays(-3),
+      deliveryInspectionCipReceivedDate: addDays(-2),
+      miccReceiptDate: addDays(-1),
+      lastDateOfDispatch: addDays(0),
+      invoiceReadyDate: addDays(1),
+      courierDocumentDate: addDays(1),
+      billSentDate: addDays(2),
+      lastDateOfMaterialReceipt: addDays(3),
+      invoiceReceiptDate: addDays(4),
+      materialVerificationDate: addDays(5),
+      jvrDate: addDays(6),
+      srnDate: addDays(7),
+      mrcDate: addDays(8),
+      invoiceSubmissionAtSiteDate: addDays(9),
+      firstDueDate: addDays(30),
+      receiptDateFirstDue: addDays(35),
+      secondDueDate: addDays(60),
+      receiptDateSecondDue: addDays(65),
+      thirdDueDate: addDays(90),
+      receiptDateThirdDue: addDays(95)
+    }
+
+    const payload = {
+      ...SAMPLE_INVOICE_DATA,
+      ...datedSample
+    }
+
+    if (customer) {
+      payload.customerId = customer.id || customer._id || ''
+      payload.customerName = customer.companyName || customer.company_name || customer.name || payload.customerName
+      payload.segment = payload.segment || customer.segment
+      payload.region = payload.region || customer.region
+      payload.zone = payload.zone || customer.zone
+    }
+
+    if (po) {
+      payload.poEntryId = po.id || po._id || ''
+      payload.poNoReference = po.poNo || po.po_no || payload.poNoReference
+      payload.poDate = po.poDate || po.po_date || payload.poDate
+      payload.paymentTerms = po.paymentTerms || po.payment_terms || payload.paymentTerms
+      payload.businessUnit = po.businessUnit || po.business_unit || payload.businessUnit
+      payload.segment = payload.segment || po.segment
+      payload.zone = payload.zone || po.zone
+    }
+
+    setFormData(payload)
+    setErrors({})
+    setCurrentStep(1)
+  }
 
   const customerAddressOptions = useMemo(() => {
     if (!customers?.length) return []
@@ -437,6 +613,20 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-secondary-600">
+          Quickly prefill every field with realistic sample values for testing.
+        </p>
+        <button
+          type="button"
+          onClick={loadSampleData}
+          className="btn btn-secondary btn-sm"
+          disabled={loading}
+        >
+          Load Sample Data
+        </button>
+      </div>
+
       {/* Modern Progress Bar */}
       <div className="mb-8">
         {/* Progress Info */}

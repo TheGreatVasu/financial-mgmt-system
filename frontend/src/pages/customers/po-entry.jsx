@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { Save, Download, ArrowLeft, FileSpreadsheet, Eye, Printer, HelpCircle, RotateCcw, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createApiClient } from '../../services/apiClient'
+import { createPOEntryService } from '../../services/poEntryService'
 
 const emptyBOQItem = () => ({
   materialDescription: '',
@@ -19,7 +20,10 @@ const emptyBOQItem = () => ({
 
 export default function CustomerPOEntry() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('id')
   const { token } = useAuthContext()
+  const poService = useMemo(() => createPOEntryService(token), [token])
   const [formError, setFormError] = useState('')
   const [showHelp, setShowHelp] = useState(false)
   const [isSavingDraft, setIsSavingDraft] = useState(false)
@@ -112,6 +116,7 @@ export default function CustomerPOEntry() {
   })
 
   const [loading, setLoading] = useState(false)
+  const [loadingEntry, setLoadingEntry] = useState(!!editId)
   const [showExcelView, setShowExcelView] = useState(false)
   
   function handleChange(e) {
@@ -179,27 +184,126 @@ export default function CustomerPOEntry() {
     }
   }, [boqItems, boqEnabled])
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError('')
-    setLoading(true)
+  useEffect(() => {
+    if (editId) {
+      loadEntry(editId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, token])
 
+  async function loadEntry(id) {
+    setLoadingEntry(true)
+    setFormError('')
     try {
-      const api = createApiClient(token)
-      const payload = {
-        ...formData,
-        boqEnabled,
-        boqItems: boqEnabled ? boqItems : []
+      const response = await poService.get(id)
+      const data = response?.data || response
+      if (!data) return
+
+      const nextForm = {
+        // Customer Details
+        customerName: data.customerName || '',
+        legalEntityName: data.legalEntityName || '',
+        customerAddress: data.customerAddress || '',
+        district: data.district || '',
+        state: data.state || '',
+        country: data.country || '',
+        pinCode: data.pinCode || '',
+        gstNo: data.gstNo || '',
+        businessUnit: data.businessUnit || '',
+        segment: data.segment || '',
+        zone: data.zone || '',
+
+        // Contract and Purchase Order Details
+        contractAgreementNo: data.contractAgreementNo || '',
+        contractAgreementDate: data.contractAgreementDate || '',
+        poNo: data.poNo || '',
+        poDate: data.poDate || '',
+        letterOfIntentNo: data.letterOfIntentNo || '',
+        letterOfIntentDate: data.letterOfIntentDate || '',
+        letterOfAwardNo: data.letterOfAwardNo || '',
+        letterOfAwardDate: data.letterOfAwardDate || '',
+        tenderReferenceNo: data.tenderReferenceNo || '',
+        tenderDate: data.tenderDate || '',
+        projectDescription: data.projectDescription || '',
+
+        // Payment Details
+        paymentType: data.paymentType || '',
+        paymentTerms: data.paymentTerms || '',
+        paymentTermsClauseInPO: data.paymentTermsClauseInPO || '',
+
+        // Insurance Details
+        insuranceType: data.insuranceType || '',
+        policyNo: data.policyNo || '',
+        policyDate: data.policyDate || '',
+        policyCompany: data.policyCompany || '',
+        policyValidUpto: data.policyValidUpto || '',
+        policyClauseInPO: data.policyClauseInPO || '',
+        policyRemarks: data.policyRemarks || '',
+
+        // Bank Guarantee Details
+        bankGuaranteeType: data.bankGuaranteeType || '',
+        bankGuaranteeNo: data.bankGuaranteeNo || '',
+        bankGuaranteeDate: data.bankGuaranteeDate || '',
+        bankGuaranteeValue: data.bankGuaranteeValue ?? '',
+        bankName: data.bankName || '',
+        bankGuaranteeValidity: data.bankGuaranteeValidity || '',
+        bankGuaranteeReleaseValidityClauseInPO:
+          data.bankGuaranteeReleaseValidityClauseInPO || '',
+        bankGuaranteeRemarks: data.bankGuaranteeRemarks || '',
+
+        // Team Members
+        salesManager: data.salesManager || '',
+        salesHead: data.salesHead || '',
+        businessHead: data.businessHead || '',
+        projectManager: data.projectManager || '',
+        projectHead: data.projectHead || '',
+        collectionIncharge: data.collectionIncharge || '',
+        salesAgentName: data.salesAgentName || '',
+        salesAgentCommission:
+          data.salesAgentCommission != null ? String(data.salesAgentCommission) : '',
+        collectionAgentName: data.collectionAgentName || '',
+        collectionAgentCommission:
+          data.collectionAgentCommission != null ? String(data.collectionAgentCommission) : '',
+
+        // Additional Fields
+        deliveryScheduleClause: data.deliveryScheduleClause || '',
+        liquidatedDamagesClause: data.liquidatedDamagesClause || '',
+        lastDateOfDelivery: data.lastDateOfDelivery || '',
+        poValidity: data.poValidity || '',
+        poSignedConcernName: data.poSignedConcernName || '',
+
+        // Summary
+        totalExWorks: data.totalExWorks != null ? String(data.totalExWorks) : '',
+        totalFreightAmount:
+          data.totalFreightAmount != null ? String(data.totalFreightAmount) : '',
+        gst: data.gst != null ? String(data.gst) : '',
+        totalPOValue: data.totalPOValue != null ? String(data.totalPOValue) : '',
       }
 
-      const response = await api.post('/customers/po-entry', payload)
-      toast.success('PO Entry saved successfully!')
-      navigate('/customers')
+      setFormData(nextForm)
+
+      // BOQ section
+      setBoqEnabled(Boolean(data.boqEnabled))
+      setBoqItems(
+        Array.isArray(data.boqItems) && data.boqItems.length
+          ? data.boqItems.map((item) => ({
+              materialDescription: item.materialDescription || '',
+              qty: item.qty || '',
+              uom: item.uom || '',
+              unitPrice: item.unitPrice || '',
+              unitCost: item.unitCost || '',
+              freight: item.freight || '',
+              gst: item.gst || '',
+              totalCost: item.totalCost || '',
+            }))
+          : [emptyBOQItem()]
+      )
     } catch (error) {
-      setFormError(error?.response?.data?.message || 'Failed to save PO entry')
-      toast.error(error?.response?.data?.message || 'Failed to save PO entry')
+      console.error('Failed to load PO entry', error)
+      setFormError(error?.response?.data?.message || 'Failed to load PO entry for editing')
+      toast.error(error?.response?.data?.message || 'Failed to load PO entry for editing')
     } finally {
-      setLoading(false)
+      setLoadingEntry(false)
     }
   }
 

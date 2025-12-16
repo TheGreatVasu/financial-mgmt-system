@@ -18,7 +18,7 @@ export default function Step3Logistics({ formData, updateFormData, errors, consi
             </label>
             <select
               className="input"
-              value=""
+              value={formData.consigneeNameAddress || ''}
               onChange={(e) => handleAddressSelect('consigneeNameAddress', e.target.value)}
               disabled={!consigneeOptions.length}
             >
@@ -61,7 +61,7 @@ export default function Step3Logistics({ formData, updateFormData, errors, consi
             </label>
             <select
               className="input"
-              value=""
+              value={formData.payerNameAddress || ''}
               onChange={(e) => handleAddressSelect('payerNameAddress', e.target.value)}
               disabled={!payerOptions.length}
             >
