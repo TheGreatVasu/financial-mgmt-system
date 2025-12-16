@@ -8,6 +8,7 @@ import SignupPage from './pages/signup'
 import GoogleProfileCompletionPage from './pages/google-profile-completion'
 // Removed public marketing pages to ensure only login is visible before auth
 const PaymentsPage = lazy(() => import('./pages/payments'))
+const PaymentNewPage = lazy(() => import('./pages/payments/new.jsx'))
 const NotFoundPage = lazy(() => import('./pages/not-found'))
 import Profile from './pages/profile'
 import Reports from './pages/reports'
@@ -149,6 +150,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <PaymentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payments/new"
+          element={
+            <ProtectedRoute>
+              <PaymentNewPage />
             </ProtectedRoute>
           }
         />

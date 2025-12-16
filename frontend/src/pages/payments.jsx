@@ -1,5 +1,6 @@
 import DashboardLayout from '../components/layout/DashboardLayout'
 import React, { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Modal from '../components/ui/Modal.jsx'
 import SmartDropdown from '../components/ui/SmartDropdown.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
@@ -12,6 +13,7 @@ import toast from 'react-hot-toast'
 export default function PaymentsPage() {
   const { token } = useAuthContext()
   const paymentApi = useMemo(() => createPaymentService(token), [token])
+  const navigate = useNavigate()
   
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -211,7 +213,7 @@ export default function PaymentsPage() {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setPaymentOpen(true)}
+            onClick={() => navigate('/payments/new')}
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200"
           >
             <Plus className="h-5 w-5" />
@@ -372,7 +374,7 @@ export default function PaymentsPage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setPaymentOpen(true)}
+                  onClick={() => navigate('/payments/new')}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all"
                 >
                   <Plus className="h-5 w-5" />

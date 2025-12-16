@@ -475,6 +475,14 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
 
   const handleSubmit = async () => {
     if (!validateStep(currentStep)) return
+
+    // Guard: require at least one customer in the system
+    if (!customers || customers.length === 0) {
+      const msg = 'No customers found. Please create a customer before creating an invoice.'
+      setErrors({ submit: msg })
+      console.error(msg)
+      return
+    }
     
     setLoading(true)
     try {
@@ -499,9 +507,9 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
         dueDate = issue.toISOString().split('T')[0]
       }
       
-      // Validate customerId
-      const customerId = Number(formData.customerId)
-      if (!customerId || isNaN(customerId)) {
+      // Validate customerId (allow string or number IDs)
+      const customerId = formData.customerId
+      if (!customerId) {
         throw new Error('Please select a valid customer')
       }
       
@@ -541,7 +549,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
       
       const payload = {
         // Required fields for backend
-        customerId: customerId,
+        customerId,
         issueDate: issueDate,
         dueDate: dueDate,
         items: items,
