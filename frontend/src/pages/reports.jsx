@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { fetchDashboard } from '../services/dashboardService.js'
-import MonthlySalesChart from '../components/tailadmin/ecommerce/MonthlySalesChart.jsx'
+import MonthlySalesChart from '../components/MonthlySalesChart.jsx'
 import PieChart from '../components/ui/PieChart.jsx'
 import { 
   CalendarRange, Download, ChevronDown, TrendingUp, DollarSign, Clock, 
@@ -39,18 +39,10 @@ export default function Reports() {
       setError("")
       try {
         const d = await fetchDashboard(token, { range })
-        console.log('📊 Reports data loaded:', { range, data: d, kpis: d?.kpis, series: d?.series })
         if (mounted) {
           setData(d)
-          console.log('✅ Reports state updated:', { 
-            hasKpis: !!d?.kpis, 
-            outstanding: d?.kpis?.outstanding,
-            collected: d?.kpis?.collectedThisMonth,
-            dso: d?.kpis?.dso
-          })
         }
       } catch (e) {
-        console.error('❌ Reports load error:', e)
         if (mounted) setError(e?.message || 'Failed to load reports')
       } finally {
         if (mounted) setLoading(false)

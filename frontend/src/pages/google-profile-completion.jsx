@@ -162,11 +162,6 @@ export default function GoogleProfileCompletionPage() {
         role
       })
 
-      // Verify we got the updated user data
-      if (updatedUser && updatedUser.id) {
-        console.log('✅ Profile completed, updated user:', { id: updatedUser.id, email: updatedUser.email })
-      }
-
       // Force refresh user data from server (bypassing cache)
       // This ensures we have the latest user data with updated profile
       await refresh(true)

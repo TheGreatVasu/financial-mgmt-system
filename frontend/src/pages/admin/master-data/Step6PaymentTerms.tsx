@@ -53,7 +53,6 @@ export default function Step6PaymentTerms({
 
   const onSubmit = (data: PaymentTermsFormData) => {
     if (onNext) onNext(data)
-    else console.log('Payment Terms Data:', data)
   }
 
   const FormField = ({
@@ -80,7 +79,6 @@ export default function Step6PaymentTerms({
           const baseClasses = `px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
             error ? 'border-red-500' : 'border-gray-300'
           }`
-
           if (type === 'file') {
             return (
               <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
@@ -133,12 +131,7 @@ export default function Step6PaymentTerms({
             )
           }
 
-          if (isTextarea) {
-            return (
-              <textarea {...field} placeholder={placeholder} className={baseClasses} rows={3} />
-            )
-          }
-
+          if (isTextarea) return <textarea {...field} placeholder={placeholder} className={baseClasses} rows={3} />
           if (options) {
             return (
               <select {...field} className={baseClasses}>
@@ -152,14 +145,7 @@ export default function Step6PaymentTerms({
             )
           }
 
-          return (
-            <input
-              {...field}
-              type={type}
-              placeholder={placeholder}
-              className={baseClasses}
-            />
-          )
+          return <input {...field} type={type} placeholder={placeholder} className={baseClasses} />
         }}
       />
 

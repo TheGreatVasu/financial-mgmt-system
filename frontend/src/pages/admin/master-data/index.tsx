@@ -26,19 +26,15 @@ const STORAGE_KEY = 'master_data_wizard_state'
 export default function MasterDataWizard() {
   const navigate = useNavigate()
   
-  // Load saved state from localStorage on mount
   const loadSavedState = (): { step: number; data: MasterDataState } => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        return {
-          step: parsed.step || 1,
-          data: parsed.data || {}
-        }
+        return { step: parsed.step || 1, data: parsed.data || {} }
       }
     } catch (err) {
-      console.warn('Failed to load saved wizard state:', err)
+      // Ignore parse errors
     }
     return { step: 1, data: {} }
   }
@@ -48,7 +44,6 @@ export default function MasterDataWizard() {
   const [masterData, setMasterData] = useState<MasterDataState>(savedState.data)
   const [error, setError] = useState<string | null>(null)
 
-  // Save state to localStorage whenever it changes
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -57,7 +52,7 @@ export default function MasterDataWizard() {
         timestamp: Date.now()
       }))
     } catch (err) {
-      console.warn('Failed to save wizard state:', err)
+      // Ignore localStorage errors
     }
   }, [currentStep, masterData])
 
@@ -79,16 +74,16 @@ export default function MasterDataWizard() {
 
   const handleNext = (data: any) => {
     try {
-      setError(null) // Clear any previous errors
+      setError(null)
       handleStepComplete(currentStep, data)
       if (currentStep < 7) {
         setCurrentStep(currentStep + 1)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.')
-      console.error('Error:', err)
-      toast.error(err.message || 'An error occurred. Please try again.')
+      const errorMsg = err.message || 'An error occurred. Please try again.'
+      setError(errorMsg)
+      toast.error(errorMsg)
     }
   }
 
@@ -102,13 +97,9 @@ export default function MasterDataWizard() {
 
   const handleFinalSubmit = async (data: any) => {
     try {
-      setError(null) // Clear any previous errors
+      setError(null)
       
-      const finalData = {
-        ...masterData,
-      }
-      
-      console.log('Submitting master data with sections:', Object.keys(finalData))
+      const finalData = { ...masterData }
       
       // Validate that we have at least the required sections
       if (!finalData.companyProfile || !finalData.customerProfile || !finalData.paymentTerms) {
@@ -123,9 +114,7 @@ export default function MasterDataWizard() {
       }
       
       // Submit to backend
-      console.log('Calling masterDataService.submitMasterData...')
-      const response = await masterDataService.submitMasterData(finalData as any)
-      console.log('Master data submission response:', response)
+      await masterDataService.submitMasterData(finalData as any)
       
       // Show success message
       toast.success('Master Data Wizard Completed! Customer data has been synced to the system.')
@@ -134,7 +123,7 @@ export default function MasterDataWizard() {
       try {
         localStorage.removeItem(STORAGE_KEY)
       } catch (err) {
-        console.warn('Failed to clear saved state:', err)
+        // Ignore localStorage errors
       }
       
       // Reset wizard after successful submission
@@ -142,18 +131,10 @@ export default function MasterDataWizard() {
         setCurrentStep(1)
         setMasterData({})
         setError(null)
-        // Redirect to customers page
         navigate('/customers')
       }, 2000)
       
     } catch (err: any) {
-      console.error('Error submitting master data:', err)
-      console.error('Error details:', {
-        message: err?.message,
-        response: err?.response?.data,
-        status: err?.response?.status,
-      })
-      
       let errorMessage = 'Failed to complete wizard. Please try again.'
       
       if (err?.response?.data?.message) {
@@ -164,26 +145,18 @@ export default function MasterDataWizard() {
         errorMessage = 'API endpoint not found. Please check server configuration.'
       } else if (err?.response?.status === 401) {
         errorMessage = 'Authentication expired. Please log in again and try submitting.'
-        // Don't clear data on auth error - user can log in and retry
       } else if (err?.response?.status === 500) {
         errorMessage = 'Server error. Please try again later. Your data has been saved locally.'
       }
       
       setError(errorMessage)
       toast.error(errorMessage)
-      
-      // Data is preserved in localStorage, so user can retry without losing their work
     }
   }
 
-  // Clear errors when reaching review step (step 7)
   useEffect(() => {
-    if (currentStep === 7) {
-      setError(null) // Clear any stale errors when reaching review step
-    }
+    if (currentStep === 7) setError(null)
   }, [currentStep])
-
-  // Warn user before leaving if they have unsaved data
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const hasData = Object.keys(masterData).length > 0
@@ -200,7 +173,6 @@ export default function MasterDataWizard() {
     }
   }, [masterData])
 
-  // Function to load sample data for testing
   const loadSampleData = () => {
     const sampleData: MasterDataState = {
       companyProfile: {
@@ -413,7 +385,6 @@ export default function MasterDataWizard() {
               {steps.map((step) => {
                 const isCompleted = step.number < currentStep
                 const isActive = step.number === currentStep
-                const isUpcoming = step.number > currentStep
                 
                 return (
                   <button

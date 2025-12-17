@@ -67,16 +67,13 @@ export default function LoginPage() {
       import.meta?.env?.VITE_GOOGLE_CLIENT_ID ||
       (document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || '').trim() ||
       (typeof window !== 'undefined' ? (window.__APP_CONFIG__?.googleClientId || localStorage.getItem('VITE_GOOGLE_CLIENT_ID') || '') : '')
-    console.log('[Google Sign-In] VITE_GOOGLE_CLIENT_ID =', import.meta?.env?.VITE_GOOGLE_CLIENT_ID)
     if (!clientId) {
-      console.error('[Google Sign-In] Missing VITE_GOOGLE_CLIENT_ID in frontend/.env')
       setError('Google sign-in is not configured. Missing client ID.')
       return
     }
     function onLoad() {
       /* global google */
       if (!window.google) {
-        console.error('[Google Sign-In] GIS script loaded but window.google is undefined')
         setError('Google sign-in failed to initialize.')
         return
       }
@@ -101,7 +98,6 @@ export default function LoginPage() {
                 }, 1500)
               }
             } catch (e) {
-              console.error('[Google Sign-In] Verification error:', e)
               setError(e?.message || 'Google login failed')
               setLoading(false)
             }
@@ -123,11 +119,10 @@ export default function LoginPage() {
               })
             }
           } catch (renderError) {
-            console.error('[Google Sign-In] Button render error:', renderError)
+            // Ignore render errors
           }
         }, 100)
       } catch (e) {
-        console.error('[Google Sign-In] initialize() failed:', e)
         setError('Google sign-in failed to initialize.')
       }
     }

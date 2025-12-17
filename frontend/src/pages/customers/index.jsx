@@ -195,31 +195,15 @@ export default function CustomersList() {
     setLoading(true)
     setError('')
     try {
-      // Load with master data included
       const response = await api.list({ limit: 100, includeMaster: 'true' })
-      console.log('Customers API full response:', response)
-      console.log('Response structure:', {
-        success: response?.success,
-        hasData: !!response?.data,
-        dataType: Array.isArray(response?.data) ? 'array' : typeof response?.data,
-        dataLength: Array.isArray(response?.data) ? response.data.length : 'N/A',
-        meta: response?.meta
-      })
-      
-      // Handle different response structures
       let rows = []
       if (Array.isArray(response)) {
-        // Direct array response
         rows = response
       } else if (Array.isArray(response?.data)) {
-        // Nested data array
         rows = response.data
       } else if (response?.data?.data && Array.isArray(response.data.data)) {
-        // Double nested
         rows = response.data.data
       }
-      
-      console.log('Final rows extracted:', rows.length, rows)
 
       const normalized = rows.map((row) => {
         const parsedMetadata =
@@ -228,7 +212,6 @@ export default function CustomersList() {
                 try {
                   return JSON.parse(row.metadata)
                 } catch (err) {
-                  console.warn('Failed to parse metadata for row', row.id || row._id, err)
                   return null
                 }
               })()
@@ -258,35 +241,10 @@ export default function CustomersList() {
       })
 
       setCustomers(normalized)
-      
-      if (rows.length === 0) {
-        console.warn('No customers found. This could mean:')
-        console.warn('1. No customers have been created yet')
-        console.warn('2. Customers exist but created_by field is NULL')
-        console.warn('3. Customers exist but belong to a different user')
-        console.warn('4. API response structure might be different than expected')
-      } else {
-        console.log('Successfully loaded', rows.length, 'customer(s)')
-        // Log first customer structure for debugging
-        if (rows[0]) {
-          console.log('Sample customer structure:', {
-            id: rows[0].id || rows[0]._id,
-            companyName: rows[0].companyName || rows[0].company_name,
-            hasMetadata: !!rows[0].metadata,
-            metadataKeys: rows[0].metadata ? Object.keys(rows[0].metadata) : []
-          })
-        }
-      }
     } catch (err) {
       const errorMsg = err?.response?.data?.message || err?.message || 'Failed to load customers'
       setError(errorMsg)
       toast.error(errorMsg)
-      console.error('Failed to load customers:', err)
-      console.error('Error details:', {
-        response: err?.response,
-        data: err?.response?.data,
-        status: err?.response?.status
-      })
     } finally {
       setLoading(false)
     }
@@ -336,10 +294,7 @@ export default function CustomersList() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  console.log('Manual refresh triggered')
-                  loadCustomers()
-                }}
+                onClick={loadCustomers}
                 disabled={loading}
                 className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 px-4 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >

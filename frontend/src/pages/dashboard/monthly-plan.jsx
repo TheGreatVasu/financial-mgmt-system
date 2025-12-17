@@ -290,8 +290,6 @@ export default function MonthlyPlanPage() {
   }
 
   const handleViewRow = (row) => {
-    console.log('Viewing row:', row)
-    // Show detailed view in alert (can be replaced with modal)
     const details = [
       `Customer Name: ${row.customerName || 'N/A'}`,
       `Collection Incharge: ${row.collectionIncharge || 'N/A'}`,

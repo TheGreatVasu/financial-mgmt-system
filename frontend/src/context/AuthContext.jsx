@@ -15,9 +15,7 @@ export function AuthProvider({ children }) {
         return
       }
       
-      // Clear mock tokens immediately - they should never persist
       if (token === 'mock-token') {
-        console.warn('Mock token detected, clearing it')
         setToken(null)
         setUser(null)
         localStorage.removeItem('fms_token')
@@ -28,19 +26,13 @@ export function AuthProvider({ children }) {
       try {
         const me = await getCurrentUser(token)
         if (me) {
-          // Also check if we got a mock user back (shouldn't happen, but be safe)
           if (me.id === 'mock-user' || me.email === 'demo@example.com') {
-            console.warn('Mock user data detected, clearing token')
             setToken(null)
             setUser(null)
             localStorage.removeItem('fms_token')
           } else {
             setUser(me)
           }
-        } else {
-          // If getCurrentUser returns null/undefined, don't clear token immediately
-          // Might be a temporary network issue
-          console.warn('getCurrentUser returned no data, but keeping token')
         }
       } catch (e) {
         // Handle rate limiting (429) - don't clear token, just show error

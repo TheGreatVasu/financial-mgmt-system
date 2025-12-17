@@ -296,6 +296,7 @@ const createInvoice = asyncHandler(async (req, res) => {
             console.log('Retrying insert without optional columns (missing columns in database)...');
             
             // Create minimal row with only required columns that definitely exist
+            // IMPORTANT: Still persist created_by for user-based filtering in list API
             const minimalRow = {
               invoice_number: invoiceNumber,
               customer_id: customerId,
@@ -307,6 +308,7 @@ const createInvoice = asyncHandler(async (req, res) => {
               total_amount: total,
               paid_amount: 0,
               status: payload.status || 'draft',
+              created_by: userId,
               created_at: now,
             };
             

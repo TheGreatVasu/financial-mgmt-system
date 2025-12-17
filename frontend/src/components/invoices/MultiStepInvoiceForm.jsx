@@ -133,6 +133,16 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
   const [poEntries, setPoEntries] = useState([])
   const [paymentTerms, setPaymentTerms] = useState([])
   const [currentStep, setCurrentStep] = useState(1)
+  
+  const normalizeDate = (dateStr) => {
+    if (!dateStr) return ''
+    if (typeof dateStr !== 'string') return ''
+    if (dateStr.includes('T')) return dateStr.split('T')[0]
+    if (dateStr.includes(' ')) return dateStr.split(' ')[0]
+    return dateStr
+  }
+  const normalizeDateField = (val) => normalizeDate(val || '')
+  
   const [formData, setFormData] = useState(() => {
     // Initialize all 107 fields
     const initial = {}
@@ -140,7 +150,8 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     // Step 1 - 14 fields
     initial.keyId = invoice?.keyId || invoice?.key_id || ''
     initial.gstTaxInvoiceNo = invoice?.gstTaxInvoiceNo || invoice?.gst_tax_invoice_no || ''
-    initial.gstTaxInvoiceDate = invoice?.gstTaxInvoiceDate || invoice?.gst_tax_invoice_date || invoice?.issueDate || invoice?.issue_date || new Date().toISOString().split('T')[0]
+    const gstDate = invoice?.gstTaxInvoiceDate || invoice?.gst_tax_invoice_date || invoice?.issueDate || invoice?.issue_date
+    initial.gstTaxInvoiceDate = gstDate ? normalizeDate(gstDate) : new Date().toISOString().split('T')[0]
     initial.internalInvoiceNo = invoice?.internalInvoiceNo || invoice?.internal_invoice_no || ''
     initial.invoiceType = invoice?.invoiceType || invoice?.invoice_type || ''
     initial.businessUnit = invoice?.businessUnit || invoice?.business_unit || ''
@@ -152,7 +163,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     initial.salesOrderNo = invoice?.salesOrderNo || invoice?.sales_order_no || ''
     initial.accountManagerName = invoice?.accountManagerName || invoice?.account_manager_name || ''
     initial.poNoReference = invoice?.poNoReference || invoice?.po_no_reference || ''
-    initial.poDate = invoice?.poDate || invoice?.po_date || ''
+    initial.poDate = normalizeDate(invoice?.poDate || invoice?.po_date || '')
     
     // Step 2 - 18 fields
     initial.materialDescriptionType = invoice?.materialDescriptionType || invoice?.material_description_type || ''
@@ -180,62 +191,42 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     initial.payerNameAddress = invoice?.payerNameAddress || invoice?.payer_name_address || ''
     initial.city = invoice?.city || ''
     initial.lorryReceiptNo = invoice?.lorryReceiptNo || invoice?.lorry_receipt_no || ''
-    initial.lorryReceiptDate = invoice?.lorryReceiptDate || invoice?.lorry_receipt_date || ''
     initial.transporterName = invoice?.transporterName || invoice?.transporter_name || ''
     initial.deliveryChallanNo = invoice?.deliveryChallanNo || invoice?.delivery_challan_no || ''
-    initial.deliveryChallanDate = invoice?.deliveryChallanDate || invoice?.delivery_challan_date || ''
-    initial.materialInspectionRequestDate = invoice?.materialInspectionRequestDate || invoice?.material_inspection_request_date || ''
-    initial.inspectionOfferDate = invoice?.inspectionOfferDate || invoice?.inspection_offer_date || ''
-    initial.materialInspectionDate = invoice?.materialInspectionDate || invoice?.material_inspection_date || ''
-    initial.deliveryInstructionDate = invoice?.deliveryInstructionDate || invoice?.delivery_instruction_date || ''
-    initial.deliveryInspectionCipReceivedDate = invoice?.deliveryInspectionCipReceivedDate || invoice?.delivery_inspection_cip_received_date || ''
-    initial.miccReceiptDate = invoice?.miccReceiptDate || invoice?.micc_receipt_date || ''
-    initial.lastDateOfDispatch = invoice?.lastDateOfDispatch || invoice?.last_date_of_dispatch || ''
-    initial.invoiceReadyDate = invoice?.invoiceReadyDate || invoice?.invoice_ready_date || ''
     initial.courierDocumentNo = invoice?.courierDocumentNo || invoice?.courier_document_no || ''
-    initial.courierDocumentDate = invoice?.courierDocumentDate || invoice?.courier_document_date || ''
     initial.courierCompanyName = invoice?.courierCompanyName || invoice?.courier_company_name || ''
     initial.billSentToPersonName = invoice?.billSentToPersonName || invoice?.bill_sent_to_person_name || ''
-    initial.billSentDate = invoice?.billSentDate || invoice?.bill_sent_date || ''
-    initial.lastDateOfMaterialReceipt = invoice?.lastDateOfMaterialReceipt || invoice?.last_date_of_material_receipt || ''
-    initial.invoiceReceiptDate = invoice?.invoiceReceiptDate || invoice?.invoice_receipt_date || ''
     initial.invoiceReceiptPersonName = invoice?.invoiceReceiptPersonName || invoice?.invoice_receipt_person_name || ''
-    initial.materialVerificationDate = invoice?.materialVerificationDate || invoice?.material_verification_date || ''
-    initial.jvrDate = invoice?.jvrDate || invoice?.jvr_date || ''
-    initial.srnDate = invoice?.srnDate || invoice?.srn_date || ''
-    initial.mrcDate = invoice?.mrcDate || invoice?.mrc_date || ''
-    initial.invoiceSubmissionAtSiteDate = invoice?.invoiceSubmissionAtSiteDate || invoice?.invoice_submission_at_site_date || ''
     initial.invoiceForwardedToHo = invoice?.invoiceForwardedToHo || invoice?.invoice_forwarded_to_ho || ''
     initial.invoiceForwardedForPayment = invoice?.invoiceForwardedForPayment || invoice?.invoice_forwarded_for_payment || ''
     
     // Step 4 - 10 fields
     initial.paymentText = invoice?.paymentText || invoice?.payment_text || ''
     initial.paymentTerms = invoice?.paymentTerms || invoice?.payment_terms || 'Net 30'
-    initial.firstDueDate = invoice?.firstDueDate || invoice?.first_due_date || invoice?.dueDate || invoice?.due_date || ''
+    const firstDue = invoice?.firstDueDate || invoice?.first_due_date || invoice?.dueDate || invoice?.due_date || ''
+    initial.firstDueDate = normalizeDate(firstDue)
     initial.notes = invoice?.notes || ''
     initial.firstDueAmount = invoice?.firstDueAmount || invoice?.first_due_amount || 0
     initial.paymentReceivedAmountFirstDue = invoice?.paymentReceivedAmountFirstDue || invoice?.payment_received_amount_first_due || 0
-    initial.receiptDateFirstDue = invoice?.receiptDateFirstDue || invoice?.receipt_date_first_due || ''
+    initial.receiptDateFirstDue = normalizeDateField(invoice?.receiptDateFirstDue || invoice?.receipt_date_first_due)
     initial.firstDueBalance = invoice?.firstDueBalance || invoice?.first_due_balance || 0
     initial.notDueFirstDue = invoice?.notDueFirstDue || invoice?.not_due_first_due || 0
     initial.overDueFirstDue = invoice?.overDueFirstDue || invoice?.over_due_first_due || 0
     initial.noOfDaysOfPaymentReceiptFirstDue = invoice?.noOfDaysOfPaymentReceiptFirstDue || invoice?.no_of_days_of_payment_receipt_first_due || 0
     
-    // Step 5 - 9 fields
-    initial.secondDueDate = invoice?.secondDueDate || invoice?.second_due_date || ''
+    initial.secondDueDate = normalizeDateField(invoice?.secondDueDate || invoice?.second_due_date)
     initial.secondDueAmount = invoice?.secondDueAmount || invoice?.second_due_amount || 0
     initial.paymentReceivedAmountSecondDue = invoice?.paymentReceivedAmountSecondDue || invoice?.payment_received_amount_second_due || 0
-    initial.receiptDateSecondDue = invoice?.receiptDateSecondDue || invoice?.receipt_date_second_due || ''
+    initial.receiptDateSecondDue = normalizeDateField(invoice?.receiptDateSecondDue || invoice?.receipt_date_second_due)
     initial.secondDueBalance = invoice?.secondDueBalance || invoice?.second_due_balance || 0
     initial.notDueSecondDue = invoice?.notDueSecondDue || invoice?.not_due_second_due || 0
     initial.overDueSecondDue = invoice?.overDueSecondDue || invoice?.over_due_second_due || 0
     initial.noOfDaysOfPaymentReceiptSecondDue = invoice?.noOfDaysOfPaymentReceiptSecondDue || invoice?.no_of_days_of_payment_receipt_second_due || 0
     
-    // Step 6 - 23 fields
-    initial.thirdDueDate = invoice?.thirdDueDate || invoice?.third_due_date || ''
+    initial.thirdDueDate = normalizeDateField(invoice?.thirdDueDate || invoice?.third_due_date)
     initial.thirdDueAmount = invoice?.thirdDueAmount || invoice?.third_due_amount || 0
     initial.paymentReceivedAmountThirdDue = invoice?.paymentReceivedAmountThirdDue || invoice?.payment_received_amount_third_due || 0
-    initial.receiptDateThirdDue = invoice?.receiptDateThirdDue || invoice?.receipt_date_third_due || ''
+    initial.receiptDateThirdDue = normalizeDateField(invoice?.receiptDateThirdDue || invoice?.receipt_date_third_due)
     initial.thirdDueBalance = invoice?.thirdDueBalance || invoice?.third_due_balance || 0
     initial.notDueThirdDue = invoice?.notDueThirdDue || invoice?.not_due_third_due || 0
     initial.overDueThirdDue = invoice?.overDueThirdDue || invoice?.over_due_third_due || 0
@@ -271,7 +262,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
     const po = poEntries?.[0]
     const datedSample = {
       gstTaxInvoiceDate: addDays(0),
-      poDate: po?.poDate || po?.po_date || addDays(-10),
+      poDate: po?.poDate || po?.po_date ? (po.poDate || po.po_date).includes('T') ? (po.poDate || po.po_date).split('T')[0] : (po.poDate || po.po_date).split(' ')[0] : addDays(-10),
       lorryReceiptDate: addDays(-8),
       deliveryChallanDate: addDays(-7),
       materialInspectionRequestDate: addDays(-6),
@@ -408,7 +399,6 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
           const poRes = await api.get('/po-entry?limit=100')
           setPoEntries(poRes.data?.data || [])
         } catch (poErr) {
-          console.warn('Failed to load PO entries:', poErr)
         }
         
         // Load master data options (includes payment terms)
@@ -419,7 +409,6 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
             setPaymentTerms(masterData.paymentTerms)
           }
         } catch (masterErr) {
-          console.warn('Failed to load master data options:', masterErr)
         }
       } catch (err) {
         console.error('Failed to load data:', err)
@@ -666,7 +655,6 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
               const step = index + 1;
               const isCompleted = step < currentStep;
               const isActive = step === currentStep;
-              const isUpcoming = step > currentStep;
               
               return (
                 <button

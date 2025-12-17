@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Step1CompanyProfile from '../admin/master-data/Step1CompanyProfile';
 import Step2CustomerProfile from '../admin/master-data/Step2CustomerProfile';
-import Step3PaymentTerms from '../admin/master-data/Step3PaymentTerms';
+import Step6PaymentTerms from '../admin/master-data/Step6PaymentTerms';
 import Step4TeamProfiles from '../admin/master-data/Step4TeamProfiles';
 import Step5AdditionalStep from '../admin/master-data/Step5AdditionalStep';
 
@@ -41,7 +41,7 @@ const MasterDataForm = ({ initialData = {}, onSubmit, onBack }) => {
       case 2:
         return <Step2CustomerProfile {...commonProps} />;
       case 3:
-        return <Step3PaymentTerms {...commonProps} />;
+        return <Step6PaymentTerms {...commonProps} />;
       case 4:
         return <Step4TeamProfiles {...commonProps} />;
       case 5:

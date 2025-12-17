@@ -63,14 +63,7 @@ export default function SalesInvoiceDashboard() {
       if (showLoading) {
         setLoading(true);
       }
-      console.log('📊 Fetching dashboard data from API...');
       const response = await getSalesInvoiceDashboard(token);
-      console.log('📊 Dashboard data received:', {
-        success: response.success,
-        hasData: response.data?.hasData,
-        invoiceCount: response.data?.invoices?.length || 0,
-        totalInvoiceAmount: response.data?.summary?.totalInvoiceAmount || 0
-      });
       if (response.success) {
         const data = response.data || {};
         const hasInvoices = data.invoices && data.invoices.length > 0;
@@ -80,20 +73,13 @@ export default function SalesInvoiceDashboard() {
         // Check if we have actual data - either hasData flag is true OR we have invoices/amounts
         if (hasDataFlag || hasInvoices || hasAmount) {
           setDashboardData({ ...data, isPlaceholder: false });
-          console.log('✅ Dashboard data updated in state with real data:', {
-            hasDataFlag,
-            invoiceCount: data.invoices?.length || 0,
-            totalAmount: data.summary?.totalInvoiceAmount || 0
-          });
         } else {
           setDashboardData(createEmptyDashboard());
-          console.log('✅ Dashboard data set to empty (no data available)');
         }
       } else {
         throw new Error(response.message || 'Failed to fetch dashboard data');
       }
     } catch (err) {
-      console.error('❌ Error fetching dashboard:', err);
       setError(err.message || 'Failed to load dashboard data');
       // Only show toast on initial load, not on refresh
       if (showLoading) {
@@ -113,25 +99,19 @@ export default function SalesInvoiceDashboard() {
       setLoading(false);
       return;
     }
-    // Always fetch on mount
-    console.log('🔄 Initial dashboard load triggered', { hasToken: !!token });
     fetchDashboardData(true);
   }, [token, fetchDashboardData]);
 
   // Auto-refresh when import completes (refreshTrigger changes)
   useEffect(() => {
     if (token && refreshTrigger > 0) {
-      console.log('🔄 Dashboard refresh triggered by import:', { refreshTrigger });
       setIsRefreshing(true);
-      // Delay to ensure database transaction has fully committed
       const timer = setTimeout(() => {
-        console.log('🔄 Fetching dashboard data after import (ensuring DB commit)...');
-        fetchDashboardData(false); // Don't show loading spinner on refresh
-      }, 2000); // Delay to ensure DB commit completes
+        fetchDashboardData(false);
+      }, 2000);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshTrigger, token]);
+  }, [refreshTrigger, token, fetchDashboardData]);
 
 
   // Set up real-time socket updates
@@ -144,10 +124,6 @@ export default function SalesInvoiceDashboard() {
     // Listen for sales invoice dashboard updates
     const handleDashboardUpdate = (data) => {
       if (data && data.success && data.data) {
-        console.log('🔄 Real-time dashboard update received via socket:', {
-          hasData: data.data?.hasData,
-          invoiceCount: data.data?.invoices?.length || 0
-        });
         setDashboardData({ ...data.data, isPlaceholder: false });
         setIsRefreshing(false);
         toast.success('Dashboard updated with latest data', { duration: 3000 });
@@ -156,27 +132,14 @@ export default function SalesInvoiceDashboard() {
 
     socket.on('sales-invoice-dashboard:update', handleDashboardUpdate);
 
-    // Also listen for connection events
-    socket.on('connect', () => {
-      console.log('✅ Socket connected for real-time updates');
-    });
-
-    socket.on('disconnect', () => {
-      console.log('⚠️ Socket disconnected, will use polling fallback');
-    });
-
-    // Cleanup on unmount
     return () => {
       socket.off('sales-invoice-dashboard:update', handleDashboardUpdate);
-      socket.off('connect');
-      socket.off('disconnect');
     };
   }, [token]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    console.log('🔄 Manual refresh triggered');
-    await fetchDashboardData(false); // Don't show loading spinner on manual refresh
+    await fetchDashboardData(false);
     toast.success('Dashboard refreshed', { duration: 2000 });
   };
 
@@ -199,7 +162,6 @@ export default function SalesInvoiceDashboard() {
         throw new Error(response.data?.message || 'Failed to delete data');
       }
     } catch (err) {
-      console.error('❌ Error deleting data:', err);
       toast.error(err.response?.data?.message || err.message || 'Failed to delete data');
     } finally {
       setIsRefreshing(false);

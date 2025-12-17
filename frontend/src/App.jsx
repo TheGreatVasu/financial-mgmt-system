@@ -6,7 +6,6 @@ import Dashboard from './pages/dashboard'
 import LoginPage from './pages/index'
 import SignupPage from './pages/signup'
 import GoogleProfileCompletionPage from './pages/google-profile-completion'
-// Removed public marketing pages to ensure only login is visible before auth
 const PaymentsPage = lazy(() => import('./pages/payments'))
 const PaymentNewPage = lazy(() => import('./pages/payments/new.jsx'))
 const NotFoundPage = lazy(() => import('./pages/not-found'))
