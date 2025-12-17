@@ -30,7 +30,8 @@ const getPayments = asyncHandler(async (req, res) => {
         .orWhere('i.created_by', userId).whereNotNull('i.created_by');
     });
     
-    if (method) qb.where('p.payment_method', method);
+    // Filter by payment method (legacy column name is "method")
+    if (method) qb.where('p.method', method);
     if (status) qb.where('p.status', status);
     if (from) qb.where('p.payment_date', '>=', new Date(from));
     if (to) qb.where('p.payment_date', '<=', new Date(to));
@@ -140,8 +141,11 @@ const createPayment = asyncHandler(async (req, res) => {
       invoice_id: invoiceId,
       customer_id: inv.customer_id || 0, // May not exist for sales invoices
       amount: Number(payload.paymentAmount || payload.amount || 0),
-      payment_date: payload.paymentReceiptDate ? new Date(payload.paymentReceiptDate) : (payload.paymentDate ? new Date(payload.paymentDate) : now),
-      payment_method: payload.method || 'bank_transfer',
+      payment_date: payload.paymentReceiptDate
+        ? new Date(payload.paymentReceiptDate)
+        : (payload.paymentDate ? new Date(payload.paymentDate) : now),
+      // IMPORTANT: underlying column is "method" in the legacy schema
+      method: payload.method || 'bank_transfer',
       reference: payload.reference || paymentCode,
       status: 'completed',
       created_at: now,
@@ -183,7 +187,8 @@ const createPayment = asyncHandler(async (req, res) => {
           customer_id: inv.customer_id || 0,
           amount: Number(payload.paymentAmount || payload.amount || 0),
           payment_date: payload.paymentReceiptDate ? new Date(payload.paymentReceiptDate) : now,
-          payment_method: payload.method || 'bank_transfer',
+          // Use legacy "method" column only – safe on existing schema
+          method: payload.method || 'bank_transfer',
           reference: payload.reference || paymentCode,
           status: 'completed',
           created_at: now,

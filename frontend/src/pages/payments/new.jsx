@@ -5,6 +5,7 @@ import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createPaymentService } from '../../services/paymentService'
 import { getSalesInvoiceDashboard } from '../../services/salesInvoiceService'
+import { createInvoiceService } from '../../services/invoiceService.js'
 import { ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -28,9 +29,19 @@ export default function PaymentNewPage() {
     if (!token) return
     setInvoicesLoading(true)
     try {
-      const dashboardData = await getSalesInvoiceDashboard(token)
-      const invoicesList = dashboardData?.data?.invoices || []
-      setInvoices(invoicesList)
+      const invoiceApi = createInvoiceService(token)
+
+      const [dashboardData, simpleInvoicesResponse] = await Promise.all([
+        getSalesInvoiceDashboard(token),
+        invoiceApi.list({ limit: 100 }),
+      ])
+
+      const dashboardInvoices = dashboardData?.data?.invoices || []
+      const simpleInvoices = simpleInvoicesResponse?.data || []
+
+      // Merge legacy sales invoices and new app invoices using a common identifier
+      const merged = mergeInvoicesByNumber(dashboardInvoices, simpleInvoices)
+      setInvoices(merged)
     } catch (err) {
       console.error('Failed to load invoices:', err)
       toast.error('Failed to load invoices')
@@ -55,14 +66,29 @@ export default function PaymentNewPage() {
 
   function onInvoiceSelect(index, invoiceId) {
     const invoice = invoices.find(
-      (inv) => inv.id === invoiceId || inv.gst_tax_invoice_no === invoiceId
+      (inv) => getInvoiceIdentifier(inv) === invoiceId
     )
+
     if (invoice) {
       updateEntry(index, {
-        invoiceId: invoice.id || invoice.gst_tax_invoice_no,
-        customerName: invoice.customer_name || '',
-        projectName: invoice.business_unit || invoice.sales_order_no || '',
-        packageName: invoice.material_description || '',
+        // Always store the canonical invoice identifier so backend can resolve it
+        invoiceId: getInvoiceIdentifier(invoice),
+        customerName:
+          invoice.customer_name ||
+          invoice.customerName ||
+          invoice.customer?.companyName ||
+          '',
+        projectName:
+          invoice.project_name ||
+          invoice.business_unit ||
+          invoice.sales_order_no ||
+          invoice.salesOrderNo ||
+          '',
+        packageName:
+          invoice.package_name ||
+          invoice.material_description ||
+          invoice.materialDescriptionType ||
+          '',
       })
     } else {
       updateEntry(index, { invoiceId })
@@ -197,15 +223,15 @@ export default function PaymentNewPage() {
                         ? 'Loading invoices...'
                         : 'Select Invoice'}
                     </option>
-                    {invoices.map((inv) => (
-                      <option
-                        key={inv.id || inv.gst_tax_invoice_no}
-                        value={inv.id || inv.gst_tax_invoice_no}
-                      >
-                        {inv.gst_tax_invoice_no || inv.internal_invoice_no} -{' '}
-                        {inv.customer_name}
-                      </option>
-                    ))}
+                    {invoices.map((inv) => {
+                      const id = getInvoiceIdentifier(inv)
+                      if (!id) return null
+                      return (
+                        <option key={id} value={id}>
+                          {getInvoiceLabel(inv)} - {getInvoiceCustomer(inv)}
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
 
@@ -365,5 +391,52 @@ function defaultForm() {
     bankName: '',
     bankCreditDate: '',
   }
+}
+
+// Helpers to work with both legacy sales invoices and new simple invoices
+function getInvoiceIdentifier(inv) {
+  if (!inv) return ''
+  return (
+    inv.gst_tax_invoice_no ||
+    inv.internal_invoice_no ||
+    inv.invoiceNumber ||
+    inv.invoice_number ||
+    (inv.id != null ? String(inv.id) : '')
+  )
+}
+
+function getInvoiceLabel(inv) {
+  return (
+    inv.gst_tax_invoice_no ||
+    inv.internal_invoice_no ||
+    inv.invoiceNumber ||
+    inv.invoice_number ||
+    (inv.id != null ? `INV-${inv.id}` : 'Invoice')
+  )
+}
+
+function getInvoiceCustomer(inv) {
+  return (
+    inv.customer_name ||
+    inv.customerName ||
+    (inv.customer && inv.customer.companyName) ||
+    ''
+  )
+}
+
+function mergeInvoicesByNumber(...lists) {
+  const seen = new Set()
+  const result = []
+
+  lists.forEach((list) => {
+    ;(list || []).forEach((inv) => {
+      const key = getInvoiceIdentifier(inv)
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      result.push(inv)
+    })
+  })
+
+  return result
 }
 
