@@ -82,10 +82,19 @@ export default function LoginPage() {
           client_id: clientId,
           callback: async (response) => {
             try {
+              // Prevent any default behavior
+              if (!response?.credential) {
+                setError('Google sign-in failed: No credential received')
+                return
+              }
+              
               setLoading(true)
               setError('')
               setSuccessMessage('')
+              
+              // Explicitly call the POST-based login function
               const result = await loginWithGoogle(response.credential)
+              
               if (result.needsProfileCompletion) {
                 // Redirect to profile completion page with user data
                 navigate('/google-profile-completion', {
@@ -98,10 +107,15 @@ export default function LoginPage() {
                 }, 1500)
               }
             } catch (e) {
+              console.error('Google login error:', e)
               setError(e?.message || 'Google login failed')
               setLoading(false)
             }
           },
+          // Ensure we're using the one-tap flow properly
+          use_fedcm_for_prompt: false,
+          // Prevent auto sign-in that might cause issues
+          auto_select: false
         })
 
         // Render Google's official button
@@ -110,16 +124,33 @@ export default function LoginPage() {
           try {
             const buttonElement = document.getElementById('google-signin-button')
             if (buttonElement && window.google?.accounts?.id) {
+              // Prevent any form submission when button is clicked
+              buttonElement.addEventListener('click', (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }, true) // Use capture phase to catch early
+              
               window.google.accounts.id.renderButton(buttonElement, {
                 theme: 'outline',
                 size: 'large',
                 width: '100%',
                 text: 'signin_with',
-                locale: 'en'
+                locale: 'en',
+                type: 'standard' // Explicitly set button type
               })
+              
+              // Additional safeguard: prevent any form submission from button container
+              const form = buttonElement.closest('form')
+              if (form) {
+                // If button is still inside a form (shouldn't happen after our fix), prevent submission
+                buttonElement.addEventListener('click', (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                })
+              }
             }
           } catch (renderError) {
-            // Ignore render errors
+            console.error('Error rendering Google button:', renderError)
           }
         }, 100)
       } catch (e) {
@@ -302,6 +333,7 @@ export default function LoginPage() {
                   </div>
 
                   <button 
+                    type="submit"
                     className="btn btn-primary btn-lg w-full disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]" 
                     disabled={loading}
                   >
@@ -317,22 +349,30 @@ export default function LoginPage() {
                       'Sign In'
                     )}
                   </button>
-
-                  {/* Divider */}
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-200" />
-                    </div>
-                    <div className="relative flex justify-center text-xs">
-                      <span className="bg-white px-3 text-gray-500">Or continue with</span>
-                    </div>
-                  </div>
-
-                  {/* Social Login */}
-                  <div className="grid grid-cols-1 gap-3">
-                    <div id="google-signin-button" className="w-full"></div>
-                  </div>
                 </form>
+
+                {/* Divider */}
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-white px-3 text-gray-500">Or continue with</span>
+                  </div>
+                </div>
+
+                {/* Social Login - OUTSIDE form to prevent form submission */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div 
+                    id="google-signin-button" 
+                    className="w-full"
+                    onClick={(e) => {
+                      // Prevent any form submission if button is accidentally clicked
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                  ></div>
+                </div>
 
                 <div className="mt-6 text-center text-sm text-gray-600">
                   New to Startup Project?{' '}
