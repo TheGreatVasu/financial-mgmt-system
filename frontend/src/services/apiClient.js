@@ -4,10 +4,20 @@ export function createApiClient(token) {
   const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
   let baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim() : '/api'
   
+  // CRITICAL: For production URLs, ensure /api is appended
+  // When VITE_API_BASE_URL=https://api.nbaurum.com, result should be https://api.nbaurum.com/api
   if (baseURL.startsWith('http://') || baseURL.startsWith('https://')) {
+    // Remove trailing slash if present
+    baseURL = baseURL.replace(/\/+$/, '')
+    // Append /api if not already present
     if (!baseURL.endsWith('/api')) {
-      baseURL = baseURL.replace(/\/$/, '') + '/api'
+      baseURL = baseURL + '/api'
     }
+  }
+  
+  // Log baseURL in development for debugging
+  if (import.meta.env.DEV) {
+    console.log('🔧 API Client baseURL:', baseURL)
   }
 
   const instance = axios.create({
