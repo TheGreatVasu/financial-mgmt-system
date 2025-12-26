@@ -281,7 +281,32 @@ export async function changePasswordApi(token, { currentPassword, newPassword })
 export async function googleLogin(idToken) {
   const api = createApiClient()
   try {
+    // CRITICAL: Explicitly ensure POST method is used
+    console.log('🔵 googleLogin called with idToken length:', idToken?.length)
+    console.log('🔵 API base URL:', api.defaults.baseURL)
+    console.log('🔵 Making POST request to /auth/google-login')
+    
+    const requestConfig = {
+      method: 'POST',
+      url: '/auth/google-login',
+      data: { idToken },
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+    
+    console.log('🔵 Request config:', {
+      method: requestConfig.method,
+      url: requestConfig.url,
+      baseURL: api.defaults.baseURL,
+      hasData: !!requestConfig.data,
+      dataKeys: Object.keys(requestConfig.data || {})
+    })
+    
     const { data } = await api.post('/auth/google-login', { idToken })
+    
+    console.log('✅ Google login response received:', { success: data?.success })
+    
     if (!data?.success) {
       const errorMsg = data?.message || 'Google login failed'
       throw new Error(errorMsg)
@@ -292,6 +317,15 @@ export async function googleLogin(idToken) {
       needsProfileCompletion: data.needsProfileCompletion || false
     }
   } catch (err) {
+    console.error('❌ Google login error details:', {
+      message: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      method: err.config?.method,
+      url: err.config?.url,
+      baseURL: err.config?.baseURL,
+      fullURL: err.config ? `${err.config.baseURL}${err.config.url}` : 'unknown'
+    })
     // Enhanced error handling
     const status = err.response?.status
     const errorData = err.response?.data

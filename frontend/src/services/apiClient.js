@@ -13,6 +13,23 @@ export function createApiClient(token) {
   })
 
   instance.interceptors.request.use((config) => {
+    // CRITICAL: Ensure method is always explicitly set
+    if (!config.method) {
+      config.method = 'POST' // Default to POST if not set
+    }
+    
+    // Log request for debugging (only in development or for specific routes)
+    if (config.url?.includes('google-login')) {
+      console.log('🌐 API Request:', {
+        method: config.method,
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        hasData: !!config.data,
+        dataType: typeof config.data
+      })
+    }
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -20,6 +37,12 @@ export function createApiClient(token) {
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
     }
+    
+    // CRITICAL: Ensure POST requests have proper headers
+    if (config.method.toUpperCase() === 'POST' && !(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json'
+    }
+    
     return config
   })
 
