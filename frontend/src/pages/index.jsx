@@ -82,8 +82,9 @@ export default function LoginPage() {
           client_id: clientId,
           callback: async (response) => {
             try {
-              // CRITICAL: Prevent any navigation or default behavior
-              // This callback is called by Google SDK, not by browser form submission
+              // CRITICAL: This callback is ONLY called by Google SDK after user authentication
+              // It should NEVER trigger browser navigation or GET requests
+              
               if (!response?.credential) {
                 setError('Google sign-in failed: No credential received')
                 return
@@ -99,16 +100,18 @@ export default function LoginPage() {
               setError('')
               setSuccessMessage('')
               
-              // CRITICAL: Call POST-based login function - this sends POST /api/auth/google-login
-              // This is the ONLY way login should happen - no GET requests, no navigation
+              // CRITICAL: Call POST-based login function
+              // This sends: POST /api/auth/google-login with { idToken: response.credential }
+              // This is the ONLY way login should happen - no GET requests
+              console.log('Google OAuth callback triggered, calling loginWithGoogle...')
               const result = await loginWithGoogle(response.credential)
+              console.log('Google login successful:', result)
               
               // Only navigate AFTER successful POST request completes
               if (result.needsProfileCompletion) {
-                // Redirect to profile completion page with user data
                 navigate('/google-profile-completion', {
                   state: { user: result.user },
-                  replace: true // Use replace to prevent back button issues
+                  replace: true
                 })
               } else {
                 setSuccessMessage('Login successful! Redirecting to dashboard...')
@@ -128,64 +131,36 @@ export default function LoginPage() {
           auto_select: false
         })
 
-        // Render Google's official button
+        // Render Google's default sign-in button
         // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
           try {
             const buttonElement = document.getElementById('google-signin-button')
             if (buttonElement && window.google?.accounts?.id) {
-              // CRITICAL: Prevent ALL default behaviors and form associations
-              // Remove button from any form context
-              const form = buttonElement.closest('form')
-              if (form) {
-                // If somehow still in a form, move it out
-                const parent = buttonElement.parentElement
-                if (parent) {
-                  form.appendChild(document.createTextNode('')) // Dummy node
-                  parent.removeChild(buttonElement)
-                  form.parentElement?.insertBefore(buttonElement, form.nextSibling)
-                }
-              }
-              
-              // Aggressive event prevention - capture phase to intercept early
-              const preventAllDefaults = (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                e.stopImmediatePropagation()
-                return false
-              }
-              
-              // Add multiple layers of event prevention
-              buttonElement.addEventListener('click', preventAllDefaults, true) // Capture phase
-              buttonElement.addEventListener('mousedown', preventAllDefaults, true)
-              buttonElement.addEventListener('mouseup', preventAllDefaults, true)
-              buttonElement.addEventListener('submit', preventAllDefaults, true)
-              
-              // Render Google button
+              // Render Google's default button with standard configuration
+              // Note: width must be a number (pixels), not percentage
+              const buttonWidth = buttonElement.offsetWidth || 350 // Use actual width or default
               window.google.accounts.id.renderButton(buttonElement, {
                 theme: 'outline',
                 size: 'large',
-                width: '100%',
+                width: buttonWidth, // Use pixel value, not percentage
                 text: 'signin_with',
                 locale: 'en'
               })
               
-              // After Google renders its button, find and modify it
-              setTimeout(() => {
-                const googleButton = buttonElement.querySelector('div[role="button"], iframe, button')
-                if (googleButton) {
-                  // Ensure Google's rendered element doesn't trigger form submission
-                  googleButton.addEventListener('click', preventAllDefaults, true)
-                  googleButton.addEventListener('mousedown', preventAllDefaults, true)
-                  
-                  // If it's an iframe, we can't directly modify it, but the callback will handle it
-                  // If it's a button, ensure type is button
-                  if (googleButton.tagName === 'BUTTON') {
-                    googleButton.type = 'button'
-                    googleButton.setAttribute('type', 'button')
-                  }
+              // CRITICAL: Ensure the rendered button doesn't trigger form submission
+              // Google SDK creates an iframe, so we need to prevent events on the container
+              const preventNavigation = (e) => {
+                // Only prevent if it's not coming from the Google SDK callback
+                if (e.target !== buttonElement && !buttonElement.contains(e.target)) {
+                  e.preventDefault()
+                  e.stopPropagation()
                 }
-              }, 200)
+              }
+              
+              // Add event listeners to prevent any navigation
+              buttonElement.addEventListener('click', preventNavigation, true)
+              buttonElement.addEventListener('mousedown', preventNavigation, true)
             }
           } catch (renderError) {
             console.error('Error rendering Google button:', renderError)
@@ -409,28 +384,14 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Social Login - COMPLETELY SEPARATE from form, no form association */}
-                <div className="grid grid-cols-1 gap-3" style={{ isolation: 'isolate' }}>
+                {/* Social Login - COMPLETELY SEPARATE from form */}
+                <div className="grid grid-cols-1 gap-3">
+                  {/* Google's default sign-in button container */}
+                  {/* Width must be set via CSS, not in renderButton options */}
                   <div 
                     id="google-signin-button" 
                     className="w-full"
-                    role="presentation"
-                    onClick={(e) => {
-                      // Aggressive prevention of any default behavior
-                      e.preventDefault()
-                      e.stopPropagation()
-                      e.stopImmediatePropagation()
-                      return false
-                    }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }}
-                    style={{ 
-                      pointerEvents: 'auto',
-                      position: 'relative',
-                      zIndex: 1
-                    }}
+                    style={{ minWidth: '300px', maxWidth: '100%' }}
                   ></div>
                 </div>
 
