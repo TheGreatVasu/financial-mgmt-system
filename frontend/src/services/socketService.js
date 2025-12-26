@@ -11,7 +11,14 @@ export function initializeSocket(token) {
 
   // Socket connects directly to backend, not through proxy
   // In development, vite proxy handles /api, but socket needs direct connection
-  const socketUrl = 'http://localhost:5001';
+  // In production, use the API base URL from environment
+  const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
+  let socketUrl = 'http://localhost:5001' // Default for development
+  
+  if (envBaseUrl && envBaseUrl.trim() !== '' && (envBaseUrl.startsWith('http://') || envBaseUrl.startsWith('https://'))) {
+    // Production: extract base URL (remove /api if present, socket connects to root)
+    socketUrl = envBaseUrl.replace(/\/api\/?$/, '')
+  }
 
   socket = io(socketUrl, {
     auth: {

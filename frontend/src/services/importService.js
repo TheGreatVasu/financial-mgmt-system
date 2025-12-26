@@ -56,8 +56,18 @@ export async function importExcelFile(token, file) {
 }
 
 export async function downloadTemplate(token) {
-  const base = import.meta?.env?.VITE_API_BASE_URL?.trim() || '/api'
-  const apiUrl = base.replace(/\/$/, '')
+  // Use the same logic as apiClient to ensure consistency
+  const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
+  let baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim() : '/api'
+  
+  // Ensure baseURL always ends with /api for production
+  if (baseURL.startsWith('http://') || baseURL.startsWith('https://')) {
+    if (!baseURL.endsWith('/api')) {
+      baseURL = baseURL.replace(/\/$/, '') + '/api'
+    }
+  }
+  
+  const apiUrl = baseURL.replace(/\/$/, '')
   
   try {
     const response = await fetch(`${apiUrl}/import/template`, {
