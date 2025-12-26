@@ -82,9 +82,16 @@ export default function LoginPage() {
           client_id: clientId,
           callback: async (response) => {
             try {
-              // Prevent any default behavior
+              // CRITICAL: Prevent any navigation or default behavior
+              // This callback is called by Google SDK, not by browser form submission
               if (!response?.credential) {
                 setError('Google sign-in failed: No credential received')
+                return
+              }
+              
+              // Validate credential format
+              if (typeof response.credential !== 'string' || response.credential.length === 0) {
+                setError('Google sign-in failed: Invalid credential format')
                 return
               }
               
@@ -92,18 +99,21 @@ export default function LoginPage() {
               setError('')
               setSuccessMessage('')
               
-              // Explicitly call the POST-based login function
+              // CRITICAL: Call POST-based login function - this sends POST /api/auth/google-login
+              // This is the ONLY way login should happen - no GET requests, no navigation
               const result = await loginWithGoogle(response.credential)
               
+              // Only navigate AFTER successful POST request completes
               if (result.needsProfileCompletion) {
                 // Redirect to profile completion page with user data
                 navigate('/google-profile-completion', {
-                  state: { user: result.user }
+                  state: { user: result.user },
+                  replace: true // Use replace to prevent back button issues
                 })
               } else {
                 setSuccessMessage('Login successful! Redirecting to dashboard...')
                 setTimeout(() => {
-                  navigate('/dashboard')
+                  navigate('/dashboard', { replace: true })
                 }, 1500)
               }
             } catch (e) {
@@ -124,30 +134,58 @@ export default function LoginPage() {
           try {
             const buttonElement = document.getElementById('google-signin-button')
             if (buttonElement && window.google?.accounts?.id) {
-              // Prevent any form submission when button is clicked
-              buttonElement.addEventListener('click', (e) => {
+              // CRITICAL: Prevent ALL default behaviors and form associations
+              // Remove button from any form context
+              const form = buttonElement.closest('form')
+              if (form) {
+                // If somehow still in a form, move it out
+                const parent = buttonElement.parentElement
+                if (parent) {
+                  form.appendChild(document.createTextNode('')) // Dummy node
+                  parent.removeChild(buttonElement)
+                  form.parentElement?.insertBefore(buttonElement, form.nextSibling)
+                }
+              }
+              
+              // Aggressive event prevention - capture phase to intercept early
+              const preventAllDefaults = (e) => {
                 e.preventDefault()
                 e.stopPropagation()
-              }, true) // Use capture phase to catch early
+                e.stopImmediatePropagation()
+                return false
+              }
               
+              // Add multiple layers of event prevention
+              buttonElement.addEventListener('click', preventAllDefaults, true) // Capture phase
+              buttonElement.addEventListener('mousedown', preventAllDefaults, true)
+              buttonElement.addEventListener('mouseup', preventAllDefaults, true)
+              buttonElement.addEventListener('submit', preventAllDefaults, true)
+              
+              // Render Google button
               window.google.accounts.id.renderButton(buttonElement, {
                 theme: 'outline',
                 size: 'large',
                 width: '100%',
                 text: 'signin_with',
-                locale: 'en',
-                type: 'standard' // Explicitly set button type
+                locale: 'en'
               })
               
-              // Additional safeguard: prevent any form submission from button container
-              const form = buttonElement.closest('form')
-              if (form) {
-                // If button is still inside a form (shouldn't happen after our fix), prevent submission
-                buttonElement.addEventListener('click', (e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                })
-              }
+              // After Google renders its button, find and modify it
+              setTimeout(() => {
+                const googleButton = buttonElement.querySelector('div[role="button"], iframe, button')
+                if (googleButton) {
+                  // Ensure Google's rendered element doesn't trigger form submission
+                  googleButton.addEventListener('click', preventAllDefaults, true)
+                  googleButton.addEventListener('mousedown', preventAllDefaults, true)
+                  
+                  // If it's an iframe, we can't directly modify it, but the callback will handle it
+                  // If it's a button, ensure type is button
+                  if (googleButton.tagName === 'BUTTON') {
+                    googleButton.type = 'button'
+                    googleButton.setAttribute('type', 'button')
+                  }
+                }
+              }, 200)
             }
           } catch (renderError) {
             console.error('Error rendering Google button:', renderError)
@@ -272,7 +310,17 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <form onSubmit={onSubmit} className="space-y-5">
+                <form 
+                  onSubmit={onSubmit} 
+                  className="space-y-5"
+                  onKeyDown={(e) => {
+                    // Prevent form submission on Enter key if focus is outside form inputs
+                    if (e.key === 'Enter' && e.target.id === 'google-signin-button') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }
+                  }}
+                >
                   {/* Email */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -361,15 +409,27 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Social Login - OUTSIDE form to prevent form submission */}
-                <div className="grid grid-cols-1 gap-3">
+                {/* Social Login - COMPLETELY SEPARATE from form, no form association */}
+                <div className="grid grid-cols-1 gap-3" style={{ isolation: 'isolate' }}>
                   <div 
                     id="google-signin-button" 
                     className="w-full"
+                    role="presentation"
                     onClick={(e) => {
-                      // Prevent any form submission if button is accidentally clicked
+                      // Aggressive prevention of any default behavior
                       e.preventDefault()
                       e.stopPropagation()
+                      e.stopImmediatePropagation()
+                      return false
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    style={{ 
+                      pointerEvents: 'auto',
+                      position: 'relative',
+                      zIndex: 1
                     }}
                   ></div>
                 </div>
