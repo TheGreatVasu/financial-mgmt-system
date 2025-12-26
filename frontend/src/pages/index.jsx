@@ -27,8 +27,28 @@ export default function LoginPage() {
     }
   }, [location])
 
+  // Handle form submission - prevent default and call login
   async function onSubmit(e) {
+    // CRITICAL: Always prevent default form submission
     e.preventDefault()
+    e.stopPropagation()
+    await handleLogin()
+    return false // Additional safeguard
+  }
+  
+  // Separate login handler that can be called from button click or form submit
+  async function handleLogin() {
+    // Prevent if already loading
+    if (loading) {
+      return
+    }
+    
+    // Validate required fields
+    if (!email || !password) {
+      setError('Email and password are required')
+      return
+    }
+    
     setLoading(true)
     setError('')
     setSuccessMessage('')
@@ -288,8 +308,15 @@ export default function LoginPage() {
                 <form 
                   onSubmit={onSubmit} 
                   className="space-y-5"
+                  noValidate
                   onKeyDown={(e) => {
-                    // Prevent form submission on Enter key if focus is outside form inputs
+                    // Prevent form submission on Enter key in password field
+                    if (e.key === 'Enter' && e.target.type === 'password') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleLogin()
+                    }
+                    // Prevent form submission on Enter key if focus is on Google button
                     if (e.key === 'Enter' && e.target.id === 'google-signin-button') {
                       e.preventDefault()
                       e.stopPropagation()
@@ -356,7 +383,12 @@ export default function LoginPage() {
                   </div>
 
                   <button 
-                    type="submit"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleLogin()
+                    }}
                     className="btn btn-primary btn-lg w-full disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]" 
                     disabled={loading}
                   >

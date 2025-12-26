@@ -4,10 +4,7 @@ export function createApiClient(token) {
   const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
   let baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim() : '/api'
   
-  // CRITICAL: Ensure baseURL always ends with /api for production
-  // If VITE_API_BASE_URL is a full URL (starts with http/https), ensure it includes /api
   if (baseURL.startsWith('http://') || baseURL.startsWith('https://')) {
-    // Full URL provided - ensure it ends with /api
     if (!baseURL.endsWith('/api')) {
       baseURL = baseURL.replace(/\/$/, '') + '/api'
     }
