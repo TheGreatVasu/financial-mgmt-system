@@ -5,9 +5,59 @@ import SmartDropdown from '../components/ui/SmartDropdown.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { createMOMService } from '../services/momService'
 import { getSalesInvoiceDashboard } from '../services/salesInvoiceService'
+import { createInvoiceService } from '../services/invoiceService'
+import masterDataService from '../services/masterDataService'
 import { Plus, Search, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, Grid3x3, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+
+// Module-level helpers to work with both legacy sales invoices and new simple invoices.
+// Declared here so they are always defined when loadInvoices runs.
+function getInvoiceIdentifier(inv) {
+  if (!inv) return ''
+  return (
+    inv.gst_tax_invoice_no ||
+    inv.internal_invoice_no ||
+    inv.invoiceNumber ||
+    inv.invoice_number ||
+    (inv.id != null ? String(inv.id) : '')
+  )
+}
+
+function getInvoiceLabel(inv) {
+  return (
+    inv.gst_tax_invoice_no ||
+    inv.internal_invoice_no ||
+    inv.invoiceNumber ||
+    inv.invoice_number ||
+    (inv.id != null ? `INV-${inv.id}` : 'Invoice')
+  )
+}
+
+function getInvoiceCustomer(inv) {
+  return (
+    inv.customer_name ||
+    inv.customerName ||
+    (inv.customer && inv.customer.companyName) ||
+    ''
+  )
+}
+
+function mergeInvoicesByNumber(...lists) {
+  const seen = new Set()
+  const result = []
+
+  lists.forEach((list) => {
+    ;(list || []).forEach((inv) => {
+      const key = getInvoiceIdentifier(inv)
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      result.push(inv)
+    })
+  })
+
+  return result
+}
 
 export default function MOMPage() {
   const { token } = useAuthContext()
@@ -26,6 +76,7 @@ export default function MOMPage() {
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [invoices, setInvoices] = useState([])
   const [invoicesLoading, setInvoicesLoading] = useState(false)
+  const [masterPaymentDefaults, setMasterPaymentDefaults] = useState(null)
 
   const smart = useMemo(() => {
     const amount = Number(form.paymentAmount || 0)
@@ -83,9 +134,18 @@ export default function MOMPage() {
     if (!token) return
     setInvoicesLoading(true)
     try {
-      const dashboardData = await getSalesInvoiceDashboard(token)
-      const invoicesList = dashboardData?.data?.invoices || []
-      setInvoices(invoicesList)
+      const invoiceApi = createInvoiceService(token)
+
+      const [dashboardData, simpleInvoicesResponse] = await Promise.all([
+        getSalesInvoiceDashboard(token),
+        invoiceApi.list({ limit: 100 }),
+      ])
+
+      const dashboardInvoices = dashboardData?.data?.invoices || []
+      const simpleInvoices = simpleInvoicesResponse?.data || []
+
+      const merged = mergeInvoicesByNumber(dashboardInvoices, simpleInvoices)
+      setInvoices(merged)
     } catch (err) {
       console.error('Failed to load invoices:', err)
     } finally {
@@ -93,12 +153,55 @@ export default function MOMPage() {
     }
   }
 
+  async function loadMasterData() {
+    try {
+      const resp = await masterDataService.getMasterData()
+      const master = resp?.data || {}
+      const paymentTerms = master.paymentTerms || {}
+
+      const defaults = {}
+
+      if (paymentTerms.bankName) {
+        defaults.bankName = paymentTerms.bankName
+      }
+
+      if (paymentTerms.latePaymentInterest) {
+        // Extract numeric portion safely (handles values like "1.5" or "1.5% per month")
+        const numeric = parseFloat(
+          String(paymentTerms.latePaymentInterest).replace(/[^0-9.]/g, '')
+        )
+        if (!Number.isNaN(numeric)) {
+          defaults.interestRate = numeric
+        }
+      }
+
+      if (Object.keys(defaults).length > 0) {
+        setMasterPaymentDefaults(defaults)
+      }
+    } catch (err) {
+      // Master data is a nice-to-have for MOM; fail silently to avoid blocking the page
+      // eslint-disable-next-line no-console
+      console.error('Failed to load master data for MOM:', err)
+    }
+  }
+
   useEffect(() => {
     if (token) {
       load(1)
       loadInvoices()
+      loadMasterData()
     }
   }, [token, debounced.q, debounced.status, debounced.from, debounced.to])
+
+  // When creating a new MOM (not editing), apply master payment defaults into the form
+  useEffect(() => {
+    if (!momOpen || editingId || !masterPaymentDefaults) return
+
+    setForm((prev) => ({
+      ...prev,
+      ...masterPaymentDefaults,
+    }))
+  }, [momOpen, editingId, masterPaymentDefaults])
 
   async function submitMOM(e) {
     e?.preventDefault?.()
@@ -161,16 +264,79 @@ export default function MOMPage() {
   }
 
   function onInvoiceSelect(invoiceId) {
-    const invoice = invoices.find(inv => inv.id === invoiceId || inv.gst_tax_invoice_no === invoiceId)
+    const invoice = invoices.find(
+      (inv) => getInvoiceIdentifier(inv) === invoiceId
+    )
     if (invoice) {
       setForm(prev => ({
         ...prev,
-        invoiceId: invoice.id || invoice.gst_tax_invoice_no,
-        customerName: invoice.customer_name || '',
-        projectName: invoice.business_unit || invoice.sales_order_no || '',
-        packageName: invoice.material_description || '',
+        // Always store the canonical invoice identifier so backend can resolve it later
+        invoiceId: getInvoiceIdentifier(invoice),
+        customerName:
+          invoice.customer_name ||
+          invoice.customerName ||
+          (invoice.customer && invoice.customer.companyName) ||
+          '',
+        projectName:
+          invoice.project_name ||
+          invoice.business_unit ||
+          invoice.sales_order_no ||
+          invoice.salesOrderNo ||
+          '',
+        packageName:
+          invoice.package_name ||
+          invoice.material_description ||
+          invoice.materialDescriptionType ||
+          '',
       }))
     }
+  }
+
+  // Helpers to work with both legacy sales invoices and new simple invoices
+  function getInvoiceIdentifier(inv) {
+    if (!inv) return ''
+    return (
+      inv.gst_tax_invoice_no ||
+      inv.internal_invoice_no ||
+      inv.invoiceNumber ||
+      inv.invoice_number ||
+      (inv.id != null ? String(inv.id) : '')
+    )
+  }
+
+  function getInvoiceLabel(inv) {
+    return (
+      inv.gst_tax_invoice_no ||
+      inv.internal_invoice_no ||
+      inv.invoiceNumber ||
+      inv.invoice_number ||
+      (inv.id != null ? `INV-${inv.id}` : 'Invoice')
+    )
+  }
+
+  function getInvoiceCustomer(inv) {
+    return (
+      inv.customer_name ||
+      inv.customerName ||
+      (inv.customer && inv.customer.companyName) ||
+      ''
+    )
+  }
+
+  function mergeInvoicesByNumber(...lists) {
+    const seen = new Set()
+    const result = []
+
+    lists.forEach((list) => {
+      ;(list || []).forEach((inv) => {
+        const key = getInvoiceIdentifier(inv)
+        if (!key || seen.has(key)) return
+        seen.add(key)
+        result.push(inv)
+      })
+    })
+
+    return result
   }
 
   async function onDelete(id) {
@@ -679,18 +845,23 @@ export default function MOMPage() {
                   className="input"
                   value={form.invoiceId}
                   onChange={(e) => {
-                    setForm({ ...form, invoiceId: e.target.value })
-                    onInvoiceSelect(e.target.value)
+                    const value = e.target.value
+                    setForm({ ...form, invoiceId: value })
+                    onInvoiceSelect(value)
                   }}
                   required
                   disabled={invoicesLoading}
                 >
                   <option value="">Select Invoice</option>
-                  {invoices.map(inv => (
-                    <option key={inv.id || inv.gst_tax_invoice_no} value={inv.id || inv.gst_tax_invoice_no}>
-                      {inv.gst_tax_invoice_no || inv.internal_invoice_no} - {inv.customer_name}
-                    </option>
-                  ))}
+                  {invoices.map((inv) => {
+                    const id = getInvoiceIdentifier(inv)
+                    if (!id) return null
+                    return (
+                      <option key={id} value={id}>
+                        {getInvoiceLabel(inv)}{getInvoiceCustomer(inv) ? ` - ${getInvoiceCustomer(inv)}` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               <div>

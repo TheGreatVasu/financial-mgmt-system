@@ -223,97 +223,193 @@ export default function POEntry() {
   // Function to load sample data for testing
   function loadSampleData() {
     const sampleForm = {
-      // Customer Details
-      customerName: 'ABC Manufacturing Ltd.',
-      legalEntityName: 'ABC Manufacturing Private Limited',
-      customerAddress: '123 Industrial Area, Sector 5',
-      district: 'Gurgaon',
-      state: 'Haryana',
-      country: 'India',
-      pinCode: '122001',
-      gstNo: '06AABCU1234F1Z5',
-      businessUnit: 'North Zone',
-      segment: 'Domestic',
-      zone: 'North',
-      
-      // Contract and Purchase Order Details
-      contractAgreementNo: 'CA-2024-001',
-      contractAgreementDate: '2024-01-15',
-      poNo: 'PO-2024-001',
-      poDate: '2024-01-20',
-      letterOfIntentNo: 'LOI-2024-001',
-      letterOfIntentDate: '2024-01-10',
-      letterOfAwardNo: 'LOA-2024-001',
-      letterOfAwardDate: '2024-01-12',
-      tenderReferenceNo: 'TDR-2024-001',
-      tenderDate: '2024-01-05',
-      projectDescription: 'Supply of Steel Materials for Construction Project',
-      
-      // Payment Details
-      paymentType: 'Secured',
-      paymentTerms: 'Net 30',
-      paymentTermsClauseInPO: 'Payment to be made within 30 days of invoice date',
-      
-      // Insurance Details
-      insuranceType: 'Marine Insurance',
-      policyNo: 'POL-2024-001',
-      policyDate: '2024-01-20',
-      policyCompany: 'LIC General Insurance',
-      policyValidUpto: '2025-01-20',
-      policyClauseInPO: 'Marine insurance coverage as per standard terms',
-      policyRemarks: 'Coverage includes transit and storage',
-      
-      // Bank Guarantee Details
-      bankGuaranteeType: 'Advance Bank Guarantee',
-      bankGuaranteeNo: 'BG-2024-001',
-      bankGuaranteeDate: '2024-01-20',
-      bankGuaranteeValue: '500000',
-      bankName: 'State Bank of India',
-      bankGuaranteeValidity: '2025-01-20',
-      bankGuaranteeReleaseValidityClauseInPO: 'BG to be released after completion',
-      bankGuaranteeRemarks: 'Valid for 12 months',
-      
-      // Team Members
-      salesManager: 'Rajesh Kumar',
-      salesHead: 'Amit Sharma',
-      businessHead: 'Vikram Singh',
-      projectManager: 'Priya Patel',
-      projectHead: 'Suresh Mehta',
-      collectionIncharge: 'Anita Desai',
-      salesAgentName: 'Ravi Verma',
-      salesAgentCommission: '2.5',
-      collectionAgentName: 'Kiran Nair',
-      collectionAgentCommission: '1.5',
-      
-      // Additional Fields
-      deliveryScheduleClause: 'Delivery to be completed within 60 days',
-      liquidatedDamagesClause: 'LD @ 0.5% per week of delay',
-      lastDateOfDelivery: '2024-03-20',
-      poValidity: '2024-07-20',
-      poSignedConcernName: 'John Doe, Director',
-      
-      // Financial Summary
-      totalExWorks: '460.00',
-      totalFreightAmount: '10.00',
-      gst: '0.80',
-      totalPOValue: '470.80'
+   // ================= CUSTOMER DETAILS =================
+customerName: 'Aashway Technologies Pvt. Ltd.',
+legalEntityName: 'Aashway Technologies Private Limited',
+customerAddress: '3rd Floor, Sector 62, Noida',
+district: 'Gautam Buddh Nagar',
+state: 'Uttar Pradesh',
+country: 'India',
+pinCode: '201309',
+gstNo: '09ABCDE1234F1Z5',
+businessUnit: 'Enterprise Solutions',
+segment: 'Domestic',
+zone: 'North',
+
+// ================= CONTRACT & PO DETAILS =================
+contractAgreementNo: 'CA/ATS/2024/017',
+contractAgreementDate: '2024-01-10',
+poNo: 'PO/ATS/2024/042',
+poDate: '2024-01-15',
+letterOfIntentNo: 'LOI/ATS/2024/009',
+letterOfIntentDate: '2024-01-08',
+letterOfAwardNo: 'LOA/ATS/2024/011',
+letterOfAwardDate: '2024-01-09',
+tenderReferenceNo: 'TDR/ATS/2024/005',
+tenderDate: '2024-01-05',
+projectDescription: 'Supply, installation, and commissioning of IT infrastructure equipment',
+
+// ================= PAYMENT DETAILS =================
+paymentType: 'Secured',
+paymentTerms: 'Net 30 Days',
+paymentTermsClauseInPO:
+  '70% advance against PO, 20% upon delivery, balance 10% within 30 days from invoice date',
+
+// ================= INSURANCE DETAILS =================
+insuranceType: 'Marine-cum-Transit Insurance',
+policyNo: 'POL/ATS/2024/021',
+policyDate: '2024-01-15',
+policyCompany: 'HDFC ERGO General Insurance',
+policyValidUpto: '2025-01-14',
+policyClauseInPO:
+  'Insurance coverage including transit, handling, and storage risks to be borne by supplier',
+policyRemarks: 'Insurance covers material movement up to consignee location',
+
+// ================= BANK GUARANTEE DETAILS =================
+bankGuaranteeType: 'Advance Bank Guarantee',
+bankGuaranteeNo: 'BG/ATS/2024/013',
+bankGuaranteeDate: '2024-01-15',
+bankGuaranteeValue: '500000',
+bankName: 'HDFC Bank Ltd.',
+bankGuaranteeValidity: '2025-01-15',
+bankGuaranteeReleaseValidityClauseInPO:
+  'Bank Guarantee shall be released after successful completion and acceptance of project',
+bankGuaranteeRemarks: 'BG valid for 12 months from date of issue',
+
+// ================= TEAM MEMBERS =================
+salesManager: 'Aditya Singh',
+salesHead: 'Rohit Malhotra',
+businessHead: 'Sanjay Khanna',
+projectManager: 'Neha Gupta',
+projectHead: 'Amit Verma',
+collectionIncharge: 'Kavita Sharma',
+salesAgentName: 'Ravi Verma',
+salesAgentCommission: '2.5',
+collectionAgentName: 'Kiran Nair',
+collectionAgentCommission: '1.5',
+
+// ================= ADDITIONAL CLAUSES =================
+deliveryScheduleClause:
+  'Material delivery to be completed within 60 days from PO date',
+liquidatedDamagesClause:
+  'LD @ 0.5% of PO value per week of delay, subject to maximum of 5%',
+lastDateOfDelivery: '2024-03-15',
+poValidity: '2024-07-15',
+poSignedConcernName: 'Authorized Signatory – Aashway Technologies Pvt. Ltd.',
+
+// ================= FINANCIAL SUMMARY =================
+totalExWorks: '5650.80',
+totalFreightAmount: '73.00',
+gst: '3.40',
+totalPOValue: '5727.20'
+
     }
     
     setForm(sampleForm)
-    
-    // Set sample BOQ items
-    const sampleBOQItems = [
-      {
-        materialDescription: 'Steel',
-        qty: '20',
-        uom: 'MT',
-        unitPrice: '20',
-        unitCost: '23',
-        freight: '10',
-        gst: '0.80',
-        totalCost: '470.80'
-      }
-    ]
+  // Set sample BOQ items
+const sampleBOQItems = [
+  {
+    materialDescription: 'Structural Steel Beams',
+    qty: '20',
+    uom: 'MT',
+    unitPrice: '20',
+    unitCost: '23',
+    freight: '10',
+    gst: '0.80',
+    totalCost: '470.80'
+  },
+  {
+    materialDescription: 'TMT Steel Bars (Fe 500)',
+    qty: '35',
+    uom: 'MT',
+    unitPrice: '22',
+    unitCost: '25',
+    freight: '12',
+    gst: '0.90',
+    totalCost: '914.50'
+  },
+  {
+    materialDescription: 'MS Plates',
+    qty: '15',
+    uom: 'MT',
+    unitPrice: '24',
+    unitCost: '27',
+    freight: '8',
+    gst: '0.70',
+    totalCost: '430.50'
+  },
+  {
+    materialDescription: 'GI Sheets',
+    qty: '500',
+    uom: 'Sheets',
+    unitPrice: '1.2',
+    unitCost: '1.4',
+    freight: '5',
+    gst: '0.18',
+    totalCost: '770.00'
+  },
+  {
+    materialDescription: 'Cement (OPC 43 Grade)',
+    qty: '1000',
+    uom: 'Bags',
+    unitPrice: '0.35',
+    unitCost: '0.40',
+    freight: '6',
+    gst: '0.18',
+    totalCost: '580.00'
+  },
+  {
+    materialDescription: 'Coarse Aggregates (20mm)',
+    qty: '60',
+    uom: 'MT',
+    unitPrice: '0.9',
+    unitCost: '1.1',
+    freight: '4',
+    gst: '0.05',
+    totalCost: '351.00'
+  },
+  {
+    materialDescription: 'Fine Aggregates (River Sand)',
+    qty: '50',
+    uom: 'MT',
+    unitPrice: '1.0',
+    unitCost: '1.2',
+    freight: '4',
+    gst: '0.05',
+    totalCost: '310.00'
+  },
+  {
+    materialDescription: 'PVC Electrical Conduits',
+    qty: '800',
+    uom: 'Meters',
+    unitPrice: '0.15',
+    unitCost: '0.18',
+    freight: '3',
+    gst: '0.18',
+    totalCost: '214.40'
+  },
+  {
+    materialDescription: 'Copper Electrical Cables',
+    qty: '1200',
+    uom: 'Meters',
+    unitPrice: '0.45',
+    unitCost: '0.52',
+    freight: '6',
+    gst: '0.18',
+    totalCost: '830.40'
+  },
+  {
+    materialDescription: 'Ready Mix Concrete (M25)',
+    qty: '100',
+    uom: 'Cubic Meter',
+    unitPrice: '6.5',
+    unitCost: '7.2',
+    freight: '15',
+    gst: '0.18',
+    totalCost: '855.60'
+  }
+]
+
     
     setBoqItems(sampleBOQItems)
     setBoqEnabled(true)

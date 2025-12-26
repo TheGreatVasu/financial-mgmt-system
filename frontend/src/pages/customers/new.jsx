@@ -707,100 +707,100 @@ function updatePaymentTerm(index, field, value) {
   // Function to load sample data for testing
   function loadSampleData() {
     setCompanyProfile({
-      logo: null,
-      companyName: 'Tech Solutions Pvt. Ltd.',
-      legalEntityName: 'Tech Solutions Private Limited',
-      corporateAddress: '123 Business Park, Sector 18',
-      corporateDistrict: 'Gurgaon',
-      corporateState: 'Haryana',
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo_TCS.svg',
+      companyName: 'Rastogi Coders Pvt. Ltd.',
+      legalEntityName: 'Rastogi Coders Private Limited',
+      corporateAddress: '2nd Floor, Sector 62, Noida',
+      corporateDistrict: 'Gautam Buddh Nagar',
+      corporateState: 'Uttar Pradesh',
       corporateCountry: 'India',
-      corporatePinCode: '122015',
-      correspondenceAddress: '123 Business Park, Sector 18',
-      correspondenceDistrict: 'Gurgaon',
-      correspondenceState: 'Haryana',
+      corporatePinCode: '201309',
+      correspondenceAddress: '2nd Floor, Sector 62, Noida',
+      correspondenceDistrict: 'Gautam Buddh Nagar',
+      correspondenceState: 'Uttar Pradesh',
       correspondenceCountry: 'India',
-      correspondencePinCode: '122015',
+      correspondencePinCode: '201309',
       otherOfficeType: 'Branch Office',
-      otherOfficeAddress: '456 Industrial Area, Phase 2',
-      otherOfficeGst: '06AATCS1234F1Z5',
-      otherOfficeDistrict: 'Gurgaon',
-      otherOfficeState: 'Haryana',
+      otherOfficeAddress: '3rd Floor, IT Park, Gomti Nagar',
+      otherOfficeGst: '09AACCR1234F1Z9',
+      otherOfficeDistrict: 'Lucknow',
+      otherOfficeState: 'Uttar Pradesh',
       otherOfficeCountry: 'India',
-      otherOfficePinCode: '122016',
-      otherOfficeContactName: 'Rajesh Kumar',
-      otherOfficeContactNumber: '+919876543210',
-      otherOfficeEmail: 'rajesh.kumar@techsolutions.com',
+      otherOfficePinCode: '226010',
+      otherOfficeContactName: 'Saurabh Mishra',
+      otherOfficeContactNumber: '+919876540001',
+      otherOfficeEmail: 'saurabh.mishra@gmail.com',
       primaryContact: {
-        name: 'Rajesh Kumar',
-        contactNumber: '+919876543210',
-        email: 'rajesh.kumar@gmail.com',
+        name: 'Saurabh Mishra',
+        contactNumber: '+919876540001',
+        email: 'saurabh.mishra@gmail.com',
         department: 'Management',
-        designation: 'CEO',
+        designation: 'Director',
         jobRole: 'Executive',
         segment: 'Domestic'
       }
     })
-
+    
     setCustomerProfile({
-      logo: '',
-      customerName: 'ABC Manufacturing Ltd.',
-      legalEntityName: 'ABC Manufacturing Private Limited',
-      corporateOfficeAddress: '789 Factory Road, Industrial Estate',
-      correspondenceAddress: '789 Factory Road, Industrial Estate',
-      district: 'Gurgaon',
-      state: 'Haryana',
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/9/95/Infosys_logo.svg',
+      customerName: 'Aashway Technologies',
+      legalEntityName: 'Aashway Technologies Private Limited',
+      corporateOfficeAddress: '3rd Floor, Sector 62, Noida',
+      correspondenceAddress: '3rd Floor, Sector 62, Noida',
+      district: 'Gautam Buddh Nagar',
+      state: 'Uttar Pradesh',
       country: 'India',
-      pinCode: '122001',
+      pinCode: '201309',
       segment: 'Domestic',
-      gstNumber: '06AABCU1234F1Z5',
-      poIssuingAuthority: 'John Doe',
-      designation: 'Purchase Manager',
-      contactNumber: '+919876543211',
-      emailId: 'john.doe@gmail.com'
+      gstNumber: '09ABCDE1234F1Z5',
+      poIssuingAuthority: 'Kunal Verma',
+      designation: 'Procurement Manager',
+      contactNumber: '+919876540002',
+      emailId: 'kunal.verma@gmail.com'
     })
-
+    
     setConsigneeProfiles([{
-      logo: '',
-      consigneeName: 'ABC Manufacturing - Warehouse',
-      consigneeAddress: '789 Factory Road, Warehouse Block A',
-      customerName: 'ABC Manufacturing Ltd.',
-      legalEntityName: 'ABC Manufacturing Private Limited',
-      city: 'Gurgaon',
-      state: 'Haryana',
-      gstNumber: '06AABCU1234F1Z5',
-      contactPersonName: 'Jane Smith',
-      designation: 'Warehouse Manager',
-      contactNumber: '+919876543212',
-      emailId: 'jane.smith@gmail.com'
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Wipro_Logo.svg',
+      consigneeName: 'Aashway Technologies – Noida Warehouse',
+      consigneeAddress: 'Industrial Area, Phase 2, Noida',
+      customerName: 'Aashway Technologies',
+      legalEntityName: 'Aashway Technologies Private Limited',
+      city: 'Noida',
+      state: 'Uttar Pradesh',
+      gstNumber: '09ABCDE1234F1Z5',
+      contactPersonName: 'Ritika Sharma',
+      designation: 'Warehouse Supervisor',
+      contactNumber: '+919876540003',
+      emailId: 'ritika.sharma@gmail.com'
     }])
-
+    
     setPayerProfiles([{
-      logo: '',
-      payerName: 'ABC Manufacturing Ltd.',
-      payerAddress: '789 Factory Road, Accounts Department',
-      customerName: 'ABC Manufacturing Ltd.',
-      legalEntityName: 'ABC Manufacturing Private Limited',
-      city: 'Gurgaon',
-      state: 'Haryana',
-      gstNumber: '06AABCU1234F1Z5',
-      contactPersonName: 'Robert Wilson',
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/HCL_Technologies_logo.svg',
+      payerName: 'Aashway Technologies',
+      payerAddress: 'Accounts Department, Sector 62, Noida',
+      customerName: 'Aashway Technologies',
+      legalEntityName: 'Aashway Technologies Private Limited',
+      city: 'Noida',
+      state: 'Uttar Pradesh',
+      gstNumber: '09ABCDE1234F1Z5',
+      contactPersonName: 'Neeraj Gupta',
       designation: 'Accounts Manager',
-      contactNumber: '+919876543213',
-      emailId: 'robert.wilson@gmail.com'
+      contactNumber: '+919876540004',
+      emailId: 'neeraj.gupta@gmail.com'
     }])
-
+    
     setTeamProfiles([{
       role: 'Sales Manager',
-      name: 'Amit Sharma',
-      designation: 'Sales Manager',
-      contactNumber: '+919876543214',
-      email: 'amit.sharma@gmail.com',
-      department: 'Sales',
-      jobRole: 'Sales Executive',
+      name: 'Aditya Singh',
+      designation: 'Business Development Manager',
+      contactNumber: '+919876540005',
+      email: 'aditya.singh@gmail.com',
+      department: 'Sales & Marketing',
+      jobRole: 'Manager',
       segment: 'Domestic',
-      photo: ''
+      photo: 'https://upload.wikimedia.org/wikipedia/commons/9/99/Sample_User_Icon.png'
     }])
-
+    
     setPaymentTerms([{
       basic: '70%',
       freight: '10%',
@@ -809,9 +809,9 @@ function updatePaymentTerm(index, field, value) {
       due2: '60',
       due3: '90',
       finalDue: '120',
-      description: 'Net 30 Days with 70% advance, 10% on delivery, balance in 30 days'
+      description: '70% advance, 10% on delivery, balance payable within 30 days'
     }])
-
+    
     setCurrentStep(0)
     toast.success('Sample data loaded! You can now navigate through the steps to review it.')
   }

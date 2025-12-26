@@ -28,13 +28,24 @@ function authenticateSocket(socket, next) {
 
 // Initialize Socket.io
 function initializeSocket(server) {
+  const allowedOrigins = [
+    config.CORS_ORIGIN,
+    config.FRONTEND_URL,
+    'http://localhost:3001',
+    'http://localhost:3000'
+  ].filter(Boolean);
+  
   const io = new Server(server, {
     cors: {
-      origin: config.CORS_ORIGIN || 'http://localhost:3001',
+      origin: config.NODE_ENV === 'production' 
+        ? allowedOrigins 
+        : true, // Allow all in development
       methods: ['GET', 'POST'],
       credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
   });
   
   // Authentication middleware

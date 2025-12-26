@@ -176,89 +176,94 @@ export default function MasterDataWizard() {
   const loadSampleData = () => {
     const sampleData: MasterDataState = {
       companyProfile: {
-        companyName: 'Tech Solutions Pvt. Ltd.',
-        legalEntityName: 'Tech Solutions Private Limited',
-        corporateAddress: '123 Business Park, Sector 18',
-        corporateDistrict: 'Gurgaon',
-        corporateState: 'Haryana',
+        companyName: 'Rastogi Coders Pvt. Ltd.',
+        legalEntityName: 'Rastogi Coders Private Limited',
+        corporateAddress: '2nd Floor, Sector 62, Noida',
+        corporateDistrict: 'Gautam Buddh Nagar',
+        corporateState: 'Uttar Pradesh',
         corporateCountry: 'India',
-        corporatePinCode: '122015',
-        correspondenceAddress: '123 Business Park, Sector 18',
-        correspondenceDistrict: 'Gurgaon',
-        correspondenceState: 'Haryana',
+        corporatePinCode: '201309',
+        correspondenceAddress: '2nd Floor, Sector 62, Noida',
+        correspondenceDistrict: 'Gautam Buddh Nagar',
+        correspondenceState: 'Uttar Pradesh',
         correspondenceCountry: 'India',
-        correspondencePinCode: '122015',
+        correspondencePinCode: '201309',
         otherOfficeType: 'Branch Office',
-        otherOfficeAddress: '456 Industrial Area, Phase 2',
-        otherOfficeGst: '06AATCS1234F1Z5',
-        otherOfficeDistrict: 'Gurgaon',
-        otherOfficeState: 'Haryana',
+        otherOfficeAddress: '3rd Floor, IT Park, Gomti Nagar',
+        otherOfficeGst: '09AACCR1234F1Z9',
+        otherOfficeDistrict: 'Lucknow',
+        otherOfficeState: 'Uttar Pradesh',
         otherOfficeCountry: 'India',
-        otherOfficePinCode: '122016',
-        primaryContactName: 'Rajesh Kumar',
-        primaryContactNumber: '+919876543210',
-        primaryContactEmail: 'rajesh.kumar@techsolutions.com'
+        otherOfficePinCode: '226010',
+        primaryContactName: 'Saurabh Mishra',
+        primaryContactNumber: '+919876540001',
+        primaryContactEmail: 'saurabh.mishra@gmail.com'
       },
+      
       customerProfile: {
-        customerName: 'ABC Manufacturing Ltd.',
-        legalEntityName: 'ABC Manufacturing Private Limited',
-        corporateOfficeAddress: '789 Factory Road, Industrial Estate',
-        correspondenceAddress: '789 Factory Road, Industrial Estate',
-        district: 'Gurgaon',
-        state: 'Haryana',
+        customerName: 'Aashway Technologies',
+        legalEntityName: 'Aashway Technologies Private Limited',
+        corporateOfficeAddress: '3rd Floor, Sector 62, Noida',
+        correspondenceAddress: '3rd Floor, Sector 62, Noida',
+        district: 'Gautam Buddh Nagar',
+        state: 'Uttar Pradesh',
         country: 'India',
-        pinCode: '122001',
+        pinCode: '201309',
         segment: 'Domestic',
-        gstNumber: '06AABCU1234F1Z5',
-        poIssuingAuthority: 'John Doe',
-        designation: 'Purchase Manager',
-        contactNumber: '+919876543211',
-        emailId: 'john.doe@abcmanufacturing.com'
+        gstNumber: '09ABCDE1234F1Z5',
+        poIssuingAuthority: 'Kunal Verma',
+        designation: 'Procurement Manager',
+        contactNumber: '+919876540002',
+        emailId: 'kunal.verma@gmail.com'
       },
+      
       consigneeProfile: {
         consignees: [{
-          consigneeName: 'ABC Manufacturing - Warehouse',
-          consigneeAddress: '789 Factory Road, Warehouse Block A',
-          customerName: 'ABC Manufacturing Ltd.',
-          legalEntityName: 'ABC Manufacturing Private Limited',
-          city: 'Gurgaon',
-          state: 'Haryana',
-          gstNumber: '06AABCU1234F1Z5',
-          contactPersonName: 'Jane Smith',
-          designation: 'Warehouse Manager',
-          contactNumber: '+919876543212',
-          emailId: 'jane.smith@abcmanufacturing.com'
+          consigneeName: 'Aashway Technologies – Noida Warehouse',
+          consigneeAddress: 'Industrial Area, Phase 2, Noida',
+          customerName: 'Aashway Technologies',
+          legalEntityName: 'Aashway Technologies Private Limited',
+          city: 'Noida',
+          state: 'Uttar Pradesh',
+          gstNumber: '09ABCDE1234F1Z5',
+          contactPersonName: 'Ritika Sharma',
+          designation: 'Warehouse Supervisor',
+          contactNumber: '+919876540003',
+          emailId: 'ritika.sharma@gmail.com'
         }]
       },
+      
       payerProfile: {
         payers: [{
-          payerName: 'ABC Manufacturing Ltd.',
-          payerAddress: '789 Factory Road, Accounts Department',
-          customerName: 'ABC Manufacturing Ltd.',
-          legalEntityName: 'ABC Manufacturing Private Limited',
-          city: 'Gurgaon',
-          state: 'Haryana',
-          gstNumber: '06AABCU1234F1Z5',
-          contactPersonName: 'Robert Wilson',
+          payerName: 'Aashway Technologies',
+          payerAddress: 'Accounts Department, Sector 62, Noida',
+          customerName: 'Aashway Technologies',
+          legalEntityName: 'Aashway Technologies Private Limited',
+          city: 'Noida',
+          state: 'Uttar Pradesh',
+          gstNumber: '09ABCDE1234F1Z5',
+          contactPersonName: 'Neeraj Gupta',
           designation: 'Accounts Manager',
-          contactNumber: '+919876543213',
-          emailId: 'robert.wilson@abcmanufacturing.com'
+          contactNumber: '+919876540004',
+          emailId: 'neeraj.gupta@gmail.com'
         }]
       },
+      
       employeeProfile: {
-        teamMemberName: 'Amit Sharma',
-        employeeId: 'EMP001',
-        role: 'Sales Manager',
-        department: 'Sales',
-        contactNumber: '+919876543214',
-        emailId: 'amit.sharma@techsolutions.com',
-        reportingManager: 'Rajesh Kumar',
-        location: 'Gurgaon',
+        teamMemberName: 'Aditya Singh',
+        employeeId: 'RCPL-EMP-002',
+        role: 'Business Development Manager',
+        department: 'Sales & Marketing',
+        contactNumber: '+919876540005',
+        emailId: 'aditya.singh@gmail.com',
+        reportingManager: 'Saurabh Mishra',
+        location: 'Noida',
         accessLevel: 'Manager',
-        remarks: 'Handles key accounts in North Zone'
+        remarks: 'Handles enterprise clients and key partnerships'
       },
+      
       paymentTerms: {
-        paymentTermName: 'Net 30 Days',
+        paymentTermName: 'Net 30',
         creditPeriod: '30',
         advanceRequired: 'No',
         advancePercentage: '',
@@ -266,13 +271,13 @@ export default function MasterDataWizard() {
         latePaymentInterest: '1.5% per month',
         billingCycle: 'Monthly',
         paymentMethod: 'Bank Transfer',
-        bankName: 'State Bank of India',
-        bankAccountNumber: '1234567890123456',
-        ifscCode: 'SBIN0001234',
-        upiId: 'techsolutions@paytm',
-        notes: 'Payment to be made within 30 days of invoice date'
+        bankName: 'HDFC Bank',
+        bankAccountNumber: '50200012345678',
+        ifscCode: 'HDFC0000123',
+        upiId: 'rastogicoders@hdfcbank',
+        notes: 'Payment due within 30 days from invoice date'
       }
-    }
+    }      
     
     setMasterData(sampleData)
     setCurrentStep(1)

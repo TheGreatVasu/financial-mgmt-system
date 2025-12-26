@@ -57,7 +57,7 @@ if (config.NODE_ENV === 'production') {
   console.info('⚠️  Rate limiting is disabled in non-production environments.');
 }
 
-// CORS configuration - Allow both localhost:3000 and localhost:3001
+// CORS configuration - Production-ready with proper origin validation
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -65,21 +65,31 @@ app.use(cors({
     
     const allowedOrigins = [
       config.CORS_ORIGIN,
+      config.FRONTEND_URL,
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001'
-    ];
+    ].filter(Boolean); // Remove undefined/null values
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
+    // In production, strictly validate origins
+    if (config.NODE_ENV === 'production') {
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️  CORS: Blocked request from origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
     } else {
-      callback(null, true); // Allow all origins in development
+      // In development, allow all origins for easier testing
+      callback(null, true);
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // 24 hours
 }));
 
 // Body parsing middleware

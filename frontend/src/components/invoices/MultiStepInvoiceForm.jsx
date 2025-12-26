@@ -11,92 +11,123 @@ import Step6ThirdDueSummary from './steps/Step6ThirdDueSummary'
 import Step7Summary from './steps/Step7Summary'
 
 const SAMPLE_INVOICE_DATA = {
-  keyId: '',
+  // ================= BASIC INVOICE DETAILS =================
+  keyId: 'INV-KEY-001',
   gstTaxInvoiceNo: 'GST-INV-2025-001',
-  gstTaxInvoiceDate: '',
+  gstTaxInvoiceDate: '2025-01-15',
   internalInvoiceNo: 'INT-INV-045',
   invoiceType: 'GST',
+  invoiceStatus: 'Submitted',
   businessUnit: 'Energy',
-  customerId: '',
+
+  // ================= CUSTOMER / PO =================
+  customerId: 'CUST-1021',
   customerName: 'Sample Manufacturing Ltd.',
   segment: 'Industrial',
   region: 'North',
   zone: 'Zone 1',
+  stateOfSupply: 'Maharashtra',
+  placeOfSupply: 'Maharashtra',
+
+  poEntryId: 'PO-ENTRY-458',
+  poNoReference: 'PO-78945',
+  poDate: '2024-12-28',
   salesOrderNo: 'SO-7845',
   accountManagerName: 'Amit Sharma',
-  poEntryId: '',
-  poNoReference: 'PO-78945',
-  poDate: '',
+
+  // ================= MATERIAL DETAILS =================
   materialDescriptionType: 'High-efficiency pump system',
-  stateOfSupply: 'Maharashtra',
+  hsnCode: '841370',
   qty: 4,
   unit: 'Nos',
   currency: 'INR',
   basicRate: 250000,
   basicValue: 1000000,
+
+  // ================= FREIGHT =================
   freightInvoiceNo: 'FR-2201',
   freightRate: 15000,
   freightValue: 15000,
-  sgstOutput: 90000,
+
+  // ================= GST BREAKUP =================
+  gstRate: 18,
   cgstOutput: 90000,
+  sgstOutput: 90000,
   igstOutput: 0,
   ugstOutput: 0,
   totalGst: 180000,
+
+  // ================= TOTALS =================
   tcs: 0,
   subTotal: 1015000,
+  roundOff: 0,
   totalInvoiceValue: 1195000,
+
+  // ================= CONSIGNEE / PAYER =================
   consigneeNameAddress: 'ABC Plant, Plot 21, MIDC Industrial Area, Pune',
   consigneeCity: 'Pune',
-  payerNameAddress: 'ABC Manufacturing Ltd, Corporate Office, Mumbai',
+  payerNameAddress: 'ABC Manufacturing Ltd., Corporate Office, Mumbai',
   city: 'Mumbai',
+
+  // ================= LOGISTICS =================
   lorryReceiptNo: 'LR-55421',
-  lorryReceiptDate: '',
+  lorryReceiptDate: '2025-01-16',
   transporterName: 'Blue Dart Logistics',
+  ewayBillNo: '181245789632',
+  ewayBillDate: '2025-01-16',
+  vehicleNo: 'MH12AB4567',
+
   deliveryChallanNo: 'DC-88321',
-  deliveryChallanDate: '',
-  materialInspectionRequestDate: '',
-  inspectionOfferDate: '',
-  materialInspectionDate: '',
-  deliveryInstructionDate: '',
-  deliveryInspectionCipReceivedDate: '',
-  miccReceiptDate: '',
-  lastDateOfDispatch: '',
-  invoiceReadyDate: '',
-  courierDocumentNo: 'CR-11223',
-  courierDocumentDate: '',
-  courierCompanyName: 'DTDC',
-  billSentToPersonName: 'Vikram Desai',
-  billSentDate: '',
-  lastDateOfMaterialReceipt: '',
-  invoiceReceiptDate: '',
+  deliveryChallanDate: '2025-01-16',
+  lastDateOfDispatch: '2025-01-17',
+  lastDateOfMaterialReceipt: '2025-01-20',
+
+  // ================= INSPECTION & DOCUMENT FLOW =================
+  materialInspectionRequestDate: '2025-01-18',
+  inspectionOfferDate: '2025-01-19',
+  materialInspectionDate: '2025-01-20',
+  materialVerificationDate: '2025-01-21',
+
+  deliveryInstructionDate: '2025-01-17',
+  deliveryInspectionCipReceivedDate: '2025-01-21',
+  miccReceiptDate: '2025-01-22',
+
+  invoiceReadyDate: '2025-01-18',
+  invoiceSubmissionAtSiteDate: '2025-01-19',
+  invoiceReceiptDate: '2025-01-21',
   invoiceReceiptPersonName: 'Nidhi Rao',
-  materialVerificationDate: '',
-  jvrDate: '',
-  srnDate: '',
-  mrcDate: '',
-  invoiceSubmissionAtSiteDate: '',
-  invoiceForwardedToHo: 'Yes',
-  invoiceForwardedForPayment: 'Yes',
+
+  courierDocumentNo: 'CR-11223',
+  courierDocumentDate: '2025-01-19',
+  courierCompanyName: 'DTDC',
+
+  billSentToPersonName: 'Vikram Desai',
+  billSentDate: '2025-01-19',
+
+  // ================= PAYMENT TERMS =================
   paymentText: 'Net 30 days from invoice date',
   paymentTerms: 'Net 30',
-  firstDueDate: '',
-  notes: 'Sample invoice generated for testing the form.',
+  firstDueDate: '2025-02-14',
+
+  // ================= PAYMENT SCHEDULE =================
   firstDueAmount: 398333.33,
   paymentReceivedAmountFirstDue: 200000,
-  receiptDateFirstDue: '',
+  receiptDateFirstDue: '2025-02-10',
   firstDueBalance: 198333.33,
   notDueFirstDue: 0,
   overDueFirstDue: 0,
   noOfDaysOfPaymentReceiptFirstDue: 5,
-  secondDueDate: '',
+
+  secondDueDate: '2025-03-16',
   secondDueAmount: 398333.33,
-  paymentReceivedAmountSecondDue: 0,
-  receiptDateSecondDue: '',
-  secondDueBalance: 398333.33,
-  notDueSecondDue: 398333.33,
+  paymentReceivedAmountSecondDue: 100000,
+  receiptDateSecondDue: '2025-03-10',
+  secondDueBalance: 298333.33,
+  notDueSecondDue: 0,
   overDueSecondDue: 0,
-  noOfDaysOfPaymentReceiptSecondDue: 0,
-  thirdDueDate: '',
+  noOfDaysOfPaymentReceiptSecondDue: 4,
+
+  thirdDueDate: '2025-04-15',
   thirdDueAmount: 398333.34,
   paymentReceivedAmountThirdDue: 0,
   receiptDateThirdDue: '',
@@ -104,24 +135,34 @@ const SAMPLE_INVOICE_DATA = {
   notDueThirdDue: 398333.34,
   overDueThirdDue: 0,
   noOfDaysOfPaymentReceiptThirdDue: 0,
-  totalBalance: 995000,
-  notDueTotal: 796666.67,
+
+  // ================= BALANCE SUMMARY =================
+  totalBalance: 894999.99,
+  notDueTotal: 696666.67,
   overDueTotal: 0,
-  itTds2PercentService: 0,
-  itTds1PercentUs194Q: 0,
-  lcessBoq1PercentWorks: 0,
+
+  // ================= DEDUCTIONS & CHARGES =================
+  itTds2PercentService: 20300,
+  itTds1PercentUs194Q: 10150,
+  lcessBoq1PercentWorks: 10150,
   tds2PercentCgst1PercentSgst1Percent: 0,
-  tdsOnCgst1Percent: 0,
-  tdsOnSgst1Percent: 0,
-  excessSupplyQty: 0,
-  interestOnAdvance: 0,
-  anyHold: 'No',
-  penaltyLdDeduction: 0,
+  tdsOnCgst1Percent: 900,
+  tdsOnSgst1Percent: 900,
+
+  excessSupplyQty: 1,
+  interestOnAdvance: 4500,
+  anyHold: 'Yes',
+  penaltyLdDeduction: 12000,
   bankCharges: 1200,
-  lcDiscrepancyCharge: 0,
-  provisionForBadDebts: 0,
-  badDebts: 0
+  lcDiscrepancyCharge: 3500,
+  provisionForBadDebts: 8000,
+  badDebts: 5000,
+
+  // ================= NOTES =================
+  notes:
+    'Sample GST invoice with logistics, inspection, deductions, and payment tracking for end-to-end testing.'
 }
+
 
 const STEP_TITLES = ['Invoice Data Entry', 'Review & Submit']
 const TOTAL_STEPS = STEP_TITLES.length

@@ -50,9 +50,10 @@ async function startServer() {
     }
     
     // Start server on the determined port
-    server = app.listen(ACTUAL_PORT, () => {
+    server = app.listen(ACTUAL_PORT, '0.0.0.0', () => {
       logger.info(`Server running in ${config.NODE_ENV} mode on port ${ACTUAL_PORT}`);
       console.log(`✅ Server started successfully on port ${ACTUAL_PORT}`);
+      console.log(`🌐 Server listening on 0.0.0.0:${ACTUAL_PORT} (accessible from all network interfaces)`);
       if (ACTUAL_PORT !== DESIRED_PORT) {
         console.log(`💡 Note: Desired port ${DESIRED_PORT} was in use, using port ${ACTUAL_PORT} instead`);
       }
@@ -61,6 +62,11 @@ async function startServer() {
       const io = initializeSocket(server);
       setIOInstance(io);
       console.log('✅ Socket.io initialized');
+      
+      // Signal PM2 that server is ready (for wait_ready)
+      if (process.send) {
+        process.send('ready');
+      }
     });
     
     // Handle server errors
