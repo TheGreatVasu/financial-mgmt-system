@@ -283,8 +283,8 @@ export async function googleLogin(idToken) {
   try {
     // Only log in development
     if (import.meta.env.DEV) {
-      console.log('🔵 googleLogin called with idToken length:', idToken?.length)
-      console.log('🔵 API base URL:', api.defaults.baseURL)
+    console.log('🔵 googleLogin called with idToken length:', idToken?.length)
+    console.log('🔵 API base URL:', api.defaults.baseURL)
     }
     
     const { data } = await api.post('/auth/google-login', { idToken })
@@ -301,15 +301,15 @@ export async function googleLogin(idToken) {
   } catch (err) {
     // Only log detailed error info in development
     if (import.meta.env.DEV) {
-      console.error('❌ Google login error details:', {
-        message: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        method: err.config?.method,
-        url: err.config?.url,
-        baseURL: err.config?.baseURL,
-        fullURL: err.config ? `${err.config.baseURL}${err.config.url}` : 'unknown'
-      })
+    console.error('❌ Google login error details:', {
+      message: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      method: err.config?.method,
+      url: err.config?.url,
+      baseURL: err.config?.baseURL,
+      fullURL: err.config ? `${err.config.baseURL}${err.config.url}` : 'unknown'
+    })
     }
     // Enhanced error handling
     const status = err.response?.status
