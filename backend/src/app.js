@@ -70,7 +70,7 @@ app.use(cors({
       'http://localhost:3001',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
-      'http://103.192.198.70:5001',
+      'http://103.192.198.70:5000',
       'https://nbaurum.com',
       'https://www.nbaurum.com'
     ].filter(Boolean); // Remove undefined/null values
