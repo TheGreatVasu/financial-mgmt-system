@@ -116,6 +116,22 @@ export default function LoginPage() {
 
   // Load Google Identity Services with cache-busting and clear diagnostics
   useEffect(() => {
+    const forceServer = import.meta.env?.VITE_FORCE_SERVER_OAUTH === 'true'
+
+    const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
+    const backendOrigin = envBaseUrl ? envBaseUrl.replace(/\/api\/?$/, '') : ''
+    const backendAuthUrl = backendOrigin ? `${backendOrigin}/auth/google?next=/dashboard` : null
+    // expose for markup
+    if (typeof window !== 'undefined') window.__BACKEND_AUTH_URL__ = backendAuthUrl || null
+
+    // If the app is configured to force server OAuth, don't load the Google client library
+    if (forceServer) {
+      if (!backendAuthUrl) {
+        setError('Server-side Google OAuth is enabled, but VITE_API_BASE_URL is not set.')
+      }
+      return
+    }
+
     const clientId =
       import.meta?.env?.VITE_GOOGLE_CLIENT_ID ||
       (document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || '').trim() ||
