@@ -1,20 +1,29 @@
 require('dotenv').config();
 
 module.exports = {
-  PORT: process.env.PORT || 5000
+  PORT: process.env.PORT || 5000,
   NODE_ENV: process.env.NODE_ENV || 'development',
-  // Removed MongoDB usage; using MySQL via Knex
+
+  // Auth / Security
   JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
   JWT_EXPIRE: process.env.JWT_EXPIRE || '7d',
+
+  // Email
   EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
   EMAIL_PORT: process.env.EMAIL_PORT || 587,
   EMAIL_USER: process.env.EMAIL_USER || '',
   EMAIL_PASS: process.env.EMAIL_PASS || '',
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3001',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3001',
-  // Canonical Google OAuth redirect URI
-  GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || 'https://api.nbaurum.com/auth/google/callback',
-  // MySQL configuration (optional). If not provided, the app runs in offline/mock mode.
+
+  // Frontend + CORS
+  FRONTEND_URL: process.env.FRONTEND_URL || 'https://nbaurum.com',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'https://nbaurum.com',
+
+  // Google OAuth
+  GOOGLE_OAUTH_REDIRECT_URI:
+    process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+    'https://nbaurum.com/api/auth/google/callback',
+
+  // MySQL
   MYSQL_HOST: process.env.MYSQL_HOST || '',
   MYSQL_PORT: parseInt(process.env.MYSQL_PORT || '3306', 10),
   MYSQL_USER: process.env.MYSQL_USER || '',
