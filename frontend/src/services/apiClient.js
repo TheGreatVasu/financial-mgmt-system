@@ -2,26 +2,13 @@ import axios from 'axios'
 
 export function createApiClient(token) {
   // Use the Vite env directly. Do NOT fallback to '/api' or auto-append paths.
-  const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-  const baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim().replace(/\/+$/, '') : undefined
-  
-  // Helpful debug message in development
-  if (import.meta.env.DEV) {
-    console.log('🔧 API Client baseURL:', baseURL ?? '(not set - will use current origin)')
-  }
 
-  // In production, fail fast if VITE_API_BASE_URL is missing — do NOT fallback to '/api' or current origin.
+  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
   if (!baseURL) {
-    if (import.meta.env.PROD) {
-      throw new Error('VITE_API_BASE_URL must be set in production (e.g. https://api.nbaurum.com/api). Aborting API requests to avoid sending traffic to the frontend.')
-    } else {
-      console.warn('⚠️ VITE_API_BASE_URL is not set. Using current origin for APIs during development.')
-    }
+    throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests.');
   }
-
-  // For this project the backend routes live under '/api', so require the provided VITE_API_BASE_URL to include '/api'
-  if (import.meta.env.PROD && baseURL && !/\/api(\/|$)/.test(baseURL)) {
-    throw new Error(`VITE_API_BASE_URL must include '/api' in Production (e.g. https://api.nbaurum.com/api). Found: ${baseURL}`)
+  if (import.meta.env.DEV) {
+    console.log('🔧 API Client baseURL:', baseURL);
   }
 
   const instance = axios.create({

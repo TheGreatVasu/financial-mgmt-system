@@ -56,13 +56,10 @@ export async function importExcelFile(token, file) {
 }
 
 export async function downloadTemplate(token) {
-  // Use VITE_API_BASE_URL directly; do NOT fallback to '/api' or auto-append it
-  const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-  const baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim().replace(/\/+$/, '') : undefined
 
-  // In production, require base URL to be explicitly provided
-  if (!baseURL && import.meta.env.PROD) {
-    throw new Error('VITE_API_BASE_URL must be set in production to download templates')
+  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
+  if (!baseURL) {
+    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to download templates');
   }
 
   const url = baseURL ? `${baseURL}/import/template` : '/import/template'

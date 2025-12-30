@@ -12,12 +12,10 @@ export function initializeSocket(token) {
   // Socket connects directly to backend, not through proxy
   // In development, vite proxy handles /api, but socket needs direct connection
   // Use VITE_API_BASE_URL when present (remove trailing /api); otherwise fall back to window.location.origin in development
-  const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-  const baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim().replace(/\/+$/, '') : undefined
 
-  // In production, require base URL to be explicitly set
-  if (!baseURL && import.meta.env.PROD) {
-    throw new Error('VITE_API_BASE_URL must be set in production to initialize sockets')
+  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
+  if (!baseURL) {
+    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to initialize sockets');
   }
 
   const socketUrl = baseURL ? baseURL.replace(/\/api\/?$/, '') : (typeof window !== 'undefined' ? window.location.origin : 'https://api.nbaurum.com')
