@@ -10,10 +10,10 @@ export function createApiClient(token) {
     console.log('🔧 API Client baseURL:', baseURL ?? '(not set - will use current origin)')
   }
 
-  // In production, surface a clear error if VITE_API_BASE_URL is missing so deploy problems are obvious
+  // In production, fail fast if VITE_API_BASE_URL is missing — do NOT fallback to '/api' or current origin.
   if (!baseURL) {
     if (import.meta.env.PROD) {
-      console.error('❌ VITE_API_BASE_URL is NOT set in production. The frontend will send API requests to the frontend origin (causing 405).\nSet VITE_API_BASE_URL=https://api.nbaurum.com/api in Vercel (Production) and redeploy the site to fix this.')
+      throw new Error('VITE_API_BASE_URL must be set in production (e.g. https://api.nbaurum.com or https://api.nbaurum.com/api). Aborting API requests to avoid sending traffic to the frontend.')
     } else {
       console.warn('⚠️ VITE_API_BASE_URL is not set. Using current origin for APIs during development.')
     }

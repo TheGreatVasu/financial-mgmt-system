@@ -60,6 +60,11 @@ export async function downloadTemplate(token) {
   const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
   const baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim().replace(/\/+$/, '') : undefined
 
+  // In production, require base URL to be explicitly provided
+  if (!baseURL && import.meta.env.PROD) {
+    throw new Error('VITE_API_BASE_URL must be set in production to download templates')
+  }
+
   const url = baseURL ? `${baseURL}/import/template` : '/import/template'
 
   try {
