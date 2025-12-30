@@ -10,6 +10,15 @@ export function createApiClient(token) {
     console.log('🔧 API Client baseURL:', baseURL ?? '(not set - will use current origin)')
   }
 
+  // In production, surface a clear error if VITE_API_BASE_URL is missing so deploy problems are obvious
+  if (!baseURL) {
+    if (import.meta.env.PROD) {
+      console.error('❌ VITE_API_BASE_URL is NOT set in production. The frontend will send API requests to the frontend origin (causing 405).\nSet VITE_API_BASE_URL=https://api.nbaurum.com/api in Vercel (Production) and redeploy the site to fix this.')
+    } else {
+      console.warn('⚠️ VITE_API_BASE_URL is not set. Using current origin for APIs during development.')
+    }
+  }
+
   const instance = axios.create({
     baseURL,
     headers: {
