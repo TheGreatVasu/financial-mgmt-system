@@ -55,14 +55,33 @@ export async function importExcelFile(token, file) {
   }
 }
 
-export async function downloadTemplate(token) {
-
-  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
+/**
+ * Gets the API base URL from environment variables.
+ * Validates lazily and logs warnings instead of throwing at module scope.
+ * @returns {string|undefined} The API base URL or undefined if not set
+ */
+function getApiBaseUrl() {
+  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' 
+    ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
+    : undefined;
+  
   if (!baseURL) {
-    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to download templates');
+    console.error('❌ VITE_API_BASE_URL is not set. Template download will fail.');
+    console.error('   Set VITE_API_BASE_URL in your .env file before building.');
+    return undefined;
+  }
+  
+  return baseURL;
+}
+
+export async function downloadTemplate(token) {
+  // Lazy validation - only throws when function is actually called
+  const baseURL = getApiBaseUrl();
+  if (!baseURL) {
+    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to download templates. Check your environment variables and rebuild the application.');
   }
 
-  const url = baseURL ? `${baseURL}/import/template` : '/import/template'
+  const url = `${baseURL}/import/template`
 
   try {
     const response = await fetch(url, {
@@ -76,16 +95,20 @@ export async function downloadTemplate(token) {
     }
 
     const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
+    const blobUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
+    link.href = blobUrl
     link.download = 'import_format.xlsx'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(blobUrl)
   } catch (error) {
-    throw new Error('Failed to download template file')
+    // Provide more context in error message
+    if (error.message.includes('VITE_API_BASE_URL')) {
+      throw error; // Re-throw validation errors as-is
+    }
+    throw new Error(`Failed to download template file: ${error.message || 'Unknown error'}`)
   }
 }
 

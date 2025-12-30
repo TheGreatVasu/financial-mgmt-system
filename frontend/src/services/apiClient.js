@@ -1,12 +1,38 @@
 import axios from 'axios'
 
-export function createApiClient(token) {
-  // Use the Vite env directly. Do NOT fallback to '/api' or auto-append paths.
-
-  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
+/**
+ * Gets the API base URL from environment variables.
+ * Validates lazily and logs warnings instead of throwing at module scope.
+ * @returns {string|undefined} The API base URL or undefined if not set
+ */
+function getApiBaseUrl() {
+  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' 
+    ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
+    : undefined;
+  
   if (!baseURL) {
-    throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests.');
+    console.error('❌ VITE_API_BASE_URL is not set. API requests will fail.');
+    console.error('   Set VITE_API_BASE_URL in your .env file before building.');
+    return undefined;
   }
+  
+  return baseURL;
+}
+
+/**
+ * Creates an Axios instance configured for API requests.
+ * Validates environment variables lazily - only throws when actually called.
+ * @param {string|null} token - Optional JWT token for authentication
+ * @returns {import('axios').AxiosInstance} Configured Axios instance
+ * @throws {Error} If VITE_API_BASE_URL is not set (only when function is called)
+ */
+export function createApiClient(token) {
+  // Lazy validation - only throws when function is actually called
+  const baseURL = getApiBaseUrl();
+  if (!baseURL) {
+    throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests. Check your environment variables and rebuild the application.');
+  }
+
   // Only log in development, never in production
   if (import.meta.env.DEV) {
     console.log('🔧 API Client baseURL:', baseURL);
