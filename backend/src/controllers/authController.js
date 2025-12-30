@@ -1043,6 +1043,7 @@ module.exports = {
   changePassword,
   logout,
   googleLogin,
+  googleStart,
   googleCallback,
   completeGoogleProfile,
   uploadAvatar,
