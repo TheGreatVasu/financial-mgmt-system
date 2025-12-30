@@ -57,38 +57,56 @@ if (config.NODE_ENV === 'production') {
   console.info('⚠️  Rate limiting is disabled in non-production environments.');
 }
 
-// CORS configuration - Production-ready with proper origin validation
+// CORS configuration - Production-ready with strict origin validation
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    // This is safe because these requests don't have cookies/credentials
+    if (!origin) {
+      // In production, log but allow no-origin requests (needed for health checks, etc.)
+      if (config.NODE_ENV === 'production') {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    }
     
-    const allowedOrigins = [
+    // Production: Strict origin validation - ONLY allow configured frontend URL
+    if (config.NODE_ENV === 'production') {
+      // Normalize origins for comparison (remove trailing slashes)
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+      const normalizedAllowed = config.CORS_ORIGIN?.replace(/\/+$/, '') || '';
+      const normalizedFrontend = config.FRONTEND_URL?.replace(/\/+$/, '') || '';
+      
+      // Check against configured CORS_ORIGIN and FRONTEND_URL
+      if (normalizedOrigin === normalizedAllowed || normalizedOrigin === normalizedFrontend) {
+        return callback(null, true);
+      }
+      
+      // Log blocked request in production
+      if (config.NODE_ENV === 'production') {
+        console.warn(`⚠️  CORS: Blocked request from origin: ${origin} (allowed: ${normalizedAllowed})`);
+      }
+      return callback(new Error(`Not allowed by CORS. Origin ${origin} is not authorized.`));
+    }
+    
+    // Development: Allow common localhost origins for easier testing
+    const devOrigins = [
       config.CORS_ORIGIN,
       config.FRONTEND_URL,
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
-      'http://127.0.0.1:3001',
-      'http://103.192.198.70:5000',
-      'https://nbaurum.com',
-      'https://www.nbaurum.com'
-    ].filter(Boolean); // Remove undefined/null values
+      'http://127.0.0.1:3001'
+    ].filter(Boolean);
     
-    // In production, strictly validate origins
-    if (config.NODE_ENV === 'production') {
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.warn(`⚠️  CORS: Blocked request from origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    } else {
-      // In development, allow all origins for easier testing
-      callback(null, true);
+    if (devOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
     }
+    
+    // In development, allow all origins for flexibility
+    return callback(null, true);
   },
-  credentials: true,
+  credentials: true, // Required for cookies/auth tokens
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],

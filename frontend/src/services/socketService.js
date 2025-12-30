@@ -10,8 +10,8 @@ export function initializeSocket(token) {
   }
 
   // Socket connects directly to backend, not through proxy
-  // In development, vite proxy handles /api, but socket needs direct connection
-  // Use VITE_API_BASE_URL when present (remove trailing /api); otherwise fall back to window.location.origin in development
+  // In production, use VITE_API_BASE_URL (must be set)
+  // Remove trailing /api to get the base URL for socket connection
 
   const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : undefined;
   if (!baseURL) {
@@ -31,12 +31,16 @@ export function initializeSocket(token) {
   });
 
   socket.on('connect', () => {
-    console.log('✅ Socket.io connected');
+    if (import.meta.env.DEV) {
+      console.log('✅ Socket.io connected');
+    }
     reconnectAttempts = 0;
   });
 
   socket.on('disconnect', (reason) => {
-    console.log('❌ Socket.io disconnected:', reason);
+    if (import.meta.env.DEV) {
+      console.log('❌ Socket.io disconnected:', reason);
+    }
     if (reason === 'io server disconnect') {
       // Server disconnected, reconnect manually
       socket.connect();
@@ -44,10 +48,13 @@ export function initializeSocket(token) {
   });
 
   socket.on('connect_error', (error) => {
-    console.error('Socket.io connection error:', error);
+    // Always log connection errors, but less verbosely in production
+    if (import.meta.env.DEV) {
+      console.error('Socket.io connection error:', error);
+    }
     reconnectAttempts++;
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('Max reconnection attempts reached');
+      console.error('Socket.io: Max reconnection attempts reached');
     }
   });
 

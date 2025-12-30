@@ -225,7 +225,9 @@ const login = asyncHandler(async (req, res) => {
   let found;
   try {
     found = await findByEmailWithPassword(normalizedEmail);
-    console.log(`User lookup for ${normalizedEmail}:`, found ? `Found (ID: ${found.id})` : 'Not found - user must register first');
+    if (config.NODE_ENV !== 'production') {
+      console.log(`User lookup for ${normalizedEmail}:`, found ? `Found (ID: ${found.id})` : 'Not found - user must register first');
+    }
   } catch (dbError) {
     console.error('Database error during login lookup:', dbError);
     return res.status(500).json({
@@ -272,9 +274,10 @@ const login = asyncHandler(async (req, res) => {
   // Check password
   let isMatch = false;
   try {
-    console.log(`🔐 Comparing password for user: ${normalizedEmail} (ID: ${found.id})`);
+    if (config.NODE_ENV !== 'production') {
+      console.log(`🔐 Comparing password for user: ${normalizedEmail} (ID: ${found.id})`);
+    }
     isMatch = await comparePassword(password, found.password_hash);
-    console.log(`Password comparison result: ${isMatch ? '✅ MATCH' : '❌ NO MATCH'}`);
     
     if (!isMatch) {
       console.warn(`❌ Login attempt failed: Invalid password for email: ${normalizedEmail} (User ID: ${found.id}, Role: ${found.role})`);
@@ -945,7 +948,13 @@ const googleStart = asyncHandler(async (req, res) => {
   }
 
   try {
-    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI || 'https://api.nbaurum.com/auth/google/callback';
+    // CRITICAL: OAuth redirect URI must be exactly https://nbaurum.com/api/auth/google/callback
+    // The API is served behind Nginx at /api, so the full callback URL includes /api
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI;
+    if (!redirectUri) {
+      console.error('Google OAuth redirect URI is not configured. Set GOOGLE_OAUTH_REDIRECT_URI environment variable.');
+      return res.status(500).send('Google OAuth not configured');
+    }
     const oauth2Client = new OAuth2Client(googleClientId, googleClientSecret, redirectUri);
 
     const authUrl = oauth2Client.generateAuthUrl({
@@ -955,8 +964,10 @@ const googleStart = asyncHandler(async (req, res) => {
     });
 
     // Optional: preserve a "next" param for redirect after login
-    const next = req.query.next ? `&state=${encodeURIComponent(JSON.stringify({ next: req.query.next }))}` : ''
-    console.log('Redirecting user to Google OAuth consent screen:', authUrl + next);
+    const next = req.query.next ? `&state=${encodeURIComponent(JSON.stringify({ next: req.query.next }))}` : '';
+    if (config.NODE_ENV !== 'production') {
+      console.log('Redirecting user to Google OAuth consent screen:', authUrl + next);
+    }
     return res.redirect(authUrl + next);
   } catch (err) {
     console.error('Error initiating Google OAuth flow:', err);
@@ -977,9 +988,16 @@ const googleCallback = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Construct OAuth2 client for server-side exchange using the canonical redirect URI
-    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI || 'https://api.nbaurum.com/auth/google/callback';
-    console.log('Using Google OAuth redirect URI:', redirectUri);
+    // CRITICAL: OAuth redirect URI must be exactly https://nbaurum.com/api/auth/google/callback
+    // The API is served behind Nginx at /api, so the full callback URL includes /api
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI;
+    if (!redirectUri) {
+      console.error('Google OAuth redirect URI is not configured. Set GOOGLE_OAUTH_REDIRECT_URI environment variable.');
+      return res.status(500).send('Google OAuth not configured');
+    }
+    if (config.NODE_ENV === 'production') {
+      console.log('Using Google OAuth redirect URI:', redirectUri);
+    }
     const oauth2Client = new OAuth2Client(googleClientId, googleClientSecret, redirectUri);
 
     // Exchange code for tokens
@@ -1024,9 +1042,14 @@ const googleCallback = asyncHandler(async (req, res) => {
     }
 
     // Redirect to dedicated frontend callback page with JWT token (frontend will read token and complete login)
-    const frontend = (config.FRONTEND_URL || 'https://www.nbaurum.com').replace(/\/+$/, '')
+    const frontend = (config.FRONTEND_URL || 'https://nbaurum.com').replace(/\/+$/, '');
     const redirectUrl = `${frontend}/auth/callback?token=${encodeURIComponent(token)}`;
-    console.log('Redirecting to frontend auth callback after Google OAuth:', redirectUrl);
+    if (config.NODE_ENV === 'production') {
+      // Only log in production if needed for debugging
+      // console.log('Redirecting to frontend auth callback after Google OAuth:', redirectUrl);
+    } else {
+      console.log('Redirecting to frontend auth callback after Google OAuth:', redirectUrl);
+    }
     return res.redirect(redirectUrl);
 
   } catch (err) {

@@ -172,9 +172,10 @@ export default function LoginPage() {
               // CRITICAL: Call POST-based login function
               // This sends: POST /api/auth/google-login with { idToken: response.credential }
               // This is the ONLY way login should happen - no GET requests
-              console.log('Google OAuth callback triggered, calling loginWithGoogle...')
+              if (import.meta.env.DEV) {
+                console.log('Google OAuth callback triggered, calling loginWithGoogle...')
+              }
               const result = await loginWithGoogle(response.credential)
-              console.log('Google login successful:', result)
               
               // Only navigate AFTER successful POST request completes
               if (result.needsProfileCompletion) {

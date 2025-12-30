@@ -7,6 +7,7 @@ export function createApiClient(token) {
   if (!baseURL) {
     throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests.');
   }
+  // Only log in development, never in production
   if (import.meta.env.DEV) {
     console.log('🔧 API Client baseURL:', baseURL);
   }
@@ -25,8 +26,8 @@ export function createApiClient(token) {
       config.method = 'POST' // Default to POST if not set
     }
     
-    // Log request for debugging (only in development or for specific routes)
-    if (config.url?.includes('google-login')) {
+    // Log request for debugging (only in development)
+    if (import.meta.env.DEV && config.url?.includes('google-login')) {
       console.log('🌐 API Request:', {
         method: config.method,
         url: config.url,
