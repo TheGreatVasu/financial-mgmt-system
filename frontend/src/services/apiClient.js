@@ -1,23 +1,13 @@
 import axios from 'axios'
 
 export function createApiClient(token) {
+  // Use the Vite env directly. Do NOT fallback to '/api' or auto-append paths.
   const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-  let baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim() : '/api'
+  const baseURL = envBaseUrl && envBaseUrl.trim() !== '' ? envBaseUrl.trim().replace(/\/+$/, '') : undefined
   
-  // CRITICAL: For production URLs, ensure /api is appended
-  // When VITE_API_BASE_URL=https://api.nbaurum.com, result should be https://api.nbaurum.com/api
-  if (baseURL.startsWith('http://') || baseURL.startsWith('https://')) {
-    // Remove trailing slash if present
-    baseURL = baseURL.replace(/\/+$/, '')
-    // Append /api if not already present
-    if (!baseURL.endsWith('/api')) {
-      baseURL = baseURL + '/api'
-    }
-  }
-  
-  // Log baseURL in development for debugging
+  // Helpful debug message in development
   if (import.meta.env.DEV) {
-    console.log('🔧 API Client baseURL:', baseURL)
+    console.log('🔧 API Client baseURL:', baseURL ?? '(not set - will use current origin)')
   }
 
   const instance = axios.create({
@@ -40,7 +30,7 @@ export function createApiClient(token) {
         method: config.method,
         url: config.url,
         baseURL: config.baseURL,
-        fullURL: `${config.baseURL}${config.url}`,
+        fullURL: config.baseURL ? `${config.baseURL.replace(/\/$/, '')}${config.url}` : config.url,
         hasData: !!config.data,
         dataType: typeof config.data
       })
