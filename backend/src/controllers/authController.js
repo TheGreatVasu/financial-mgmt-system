@@ -977,9 +977,20 @@ const googleStart = asyncHandler(async (req, res) => {
 
 const googleCallback = asyncHandler(async (req, res) => {
   const code = req.query.code;
+  const error = req.query.error;
+  
+  // Handle OAuth errors from Google (user denied access, etc.)
+  if (error) {
+    console.error('Google OAuth error:', error, req.query.error_description || '');
+    const frontend = (config.FRONTEND_URL || 'https://nbaurum.com').replace(/\/+$/, '');
+    return res.redirect(`${frontend}/login?error=oauth_cancelled`);
+  }
+  
+  // Check for missing authorization code
   if (!code) {
-    console.error('Missing code in Google callback');
-    return res.status(400).send('Missing code');
+    console.error('Missing authorization code in Google OAuth callback');
+    const frontend = (config.FRONTEND_URL || 'https://nbaurum.com').replace(/\/+$/, '');
+    return res.redirect(`${frontend}/login?error=oauth_failed`);
   }
 
   if (!googleClientId || !googleClientSecret) {

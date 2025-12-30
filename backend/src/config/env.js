@@ -36,11 +36,12 @@ const config = {
   CORS_ORIGIN: requireEnv('CORS_ORIGIN', isProduction ? undefined : 'http://localhost:3001'),
 
   // Google OAuth - REQUIRED if using Google login
-  // CRITICAL: Must be exactly https://nbaurum.com/api/auth/google/callback
-  // The API is served behind Nginx at /api, so the full callback URL includes /api
+  // CRITICAL: Must match the route accessible via Nginx
+  // Backend route is at /auth/google/callback, Nginx proxies /auth/* to backend
+  // So the redirect URI is: https://nbaurum.com/auth/google/callback (not /api/auth/google/callback)
   GOOGLE_OAUTH_REDIRECT_URI: requireEnv(
     'GOOGLE_OAUTH_REDIRECT_URI',
-    isProduction ? undefined : 'https://nbaurum.com/api/auth/google/callback'
+    isProduction ? undefined : 'https://nbaurum.com/auth/google/callback'
   ),
 
   // MySQL - REQUIRED in production

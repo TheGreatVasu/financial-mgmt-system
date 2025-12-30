@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, googleLogin as apiGoogleLogin, microsoftLogin as apiMicrosoftLogin, clearUserCache } from '../services/authService'
+import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, microsoftLogin as apiMicrosoftLogin, clearUserCache } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -80,18 +80,6 @@ export function AuthProvider({ children }) {
     setToken(t)
     localStorage.setItem('fms_token', t)
     return u
-  }
-
-  async function loginWithGoogle(idToken) {
-    const { user: u, token: t, needsProfileCompletion } = await apiGoogleLogin(idToken)
-    // Ensure we're not setting a mock user/token
-    if (t === 'mock-token' || u?.id === 'mock-user') {
-      throw new Error('Google login failed: Received mock credentials. Please check your connection and try again.')
-    }
-    setUser(u)
-    setToken(t)
-    localStorage.setItem('fms_token', t)
-    return { user: u, needsProfileCompletion: needsProfileCompletion || false }
   }
 
   async function loginWithMicrosoft() {
@@ -196,7 +184,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithGoogle, loginWithMicrosoft, loginWithToken, logout, refresh, updateProfile, updateUserPreferences }),
+    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithMicrosoft, loginWithToken, logout, refresh, updateProfile, updateUserPreferences }),
     [user, token, loading]
   )
 

@@ -4,7 +4,7 @@ import { useAuthContext } from '../context/AuthContext.jsx'
 import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, loginWithToken } = useAuthContext()
+  const { login, loginWithToken } = useAuthContext()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -26,6 +26,24 @@ export default function LoginPage() {
       return () => clearTimeout(timer)
     }
   }, [location])
+
+  // Check for OAuth error in URL query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const errorParam = params.get('error')
+    if (errorParam === 'oauth_cancelled') {
+      setError('Google sign-in was cancelled. Please try again.')
+      // Remove error from URL
+      params.delete('error')
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+      window.history.replaceState({}, document.title, newUrl)
+    } else if (errorParam === 'oauth_failed') {
+      setError('Google sign-in failed. Please try again.')
+      params.delete('error')
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+      window.history.replaceState({}, document.title, newUrl)
+    }
+  }, [])
 
   // Auto-login: handle token returned from server-side OAuth callback
   useEffect(() => {
@@ -114,157 +132,29 @@ export default function LoginPage() {
     }
   }
 
-  // Load Google Identity Services with cache-busting and clear diagnostics
+  // Validate API base URL for Google OAuth redirect
   useEffect(() => {
-    const forceServer = import.meta.env?.VITE_FORCE_SERVER_OAUTH === 'true'
-
-    const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-    const backendOrigin = envBaseUrl ? envBaseUrl.replace(/\/api\/?$/, '') : ''
-    const backendAuthUrl = backendOrigin ? `${backendOrigin}/auth/google?next=/dashboard` : null
-    // expose for markup
-    if (typeof window !== 'undefined') window.__BACKEND_AUTH_URL__ = backendAuthUrl || null
-
-    // If the app is configured to force server OAuth, don't load the Google client library
-    if (forceServer) {
-      if (!backendAuthUrl) {
-        setError('Server-side Google OAuth is enabled, but VITE_API_BASE_URL is not set.')
-      }
+    // Server-side OAuth: Use the API base URL directly
+    // VITE_API_BASE_URL should be https://nbaurum.com/api
+    // OAuth route is at /auth/google (backend route, not under /api in Express, but proxied via Nginx)
+    // Nginx proxies both /api/* and /auth/* to backend
+    const apiBaseUrl = import.meta?.env?.VITE_API_BASE_URL
+    if (!apiBaseUrl || apiBaseUrl.trim() === '') {
+      setError('VITE_API_BASE_URL is not set. Google sign-in will not work.')
       return
     }
-
-    const clientId =
-      import.meta?.env?.VITE_GOOGLE_CLIENT_ID ||
-      (document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || '').trim() ||
-      (typeof window !== 'undefined' ? (window.__APP_CONFIG__?.googleClientId || localStorage.getItem('VITE_GOOGLE_CLIENT_ID') || '') : '')
-    if (!clientId) {
-      setError('Google sign-in is not configured. Missing client ID.')
-      return
+    
+    // Remove /api suffix to get base domain, then add /auth/google
+    // Result: https://nbaurum.com/auth/google?next=/dashboard
+    // Nginx will proxy /auth/* to backend where route is registered at /auth/google
+    const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    const googleAuthUrl = `${baseUrl}/auth/google?next=/dashboard`
+    
+    // Store in window for use in markup (simple full-page redirect)
+    if (typeof window !== 'undefined') {
+      window.__GOOGLE_AUTH_URL__ = googleAuthUrl
     }
-    function onLoad() {
-      /* global google */
-      if (!window.google) {
-        setError('Google sign-in failed to initialize.')
-        return
-      }
-      try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response) => {
-            try {
-              // CRITICAL: This callback is ONLY called by Google SDK after user authentication
-              // It should NEVER trigger browser navigation or GET requests
-              
-              if (!response?.credential) {
-                setError('Google sign-in failed: No credential received')
-                return
-              }
-              
-              // Validate credential format
-              if (typeof response.credential !== 'string' || response.credential.length === 0) {
-                setError('Google sign-in failed: Invalid credential format')
-                return
-              }
-              
-              setLoading(true)
-              setError('')
-              setSuccessMessage('')
-              
-              // CRITICAL: Call POST-based login function
-              // This sends: POST /api/auth/google-login with { idToken: response.credential }
-              // This is the ONLY way login should happen - no GET requests
-              if (import.meta.env.DEV) {
-                console.log('Google OAuth callback triggered, calling loginWithGoogle...')
-              }
-              const result = await loginWithGoogle(response.credential)
-              
-              // Only navigate AFTER successful POST request completes
-              if (result.needsProfileCompletion) {
-                navigate('/google-profile-completion', {
-                  state: { user: result.user },
-                  replace: true
-                })
-              } else {
-                setSuccessMessage('Login successful! Redirecting to dashboard...')
-                setTimeout(() => {
-                  navigate('/dashboard', { replace: true })
-                }, 1500)
-              }
-            } catch (e) {
-              console.error('Google login error:', e)
-              setError(e?.message || 'Google login failed')
-              setLoading(false)
-            }
-          },
-          // Ensure we're using the one-tap flow properly
-          use_fedcm_for_prompt: false,
-          // Prevent auto sign-in that might cause issues
-          auto_select: false
-        })
-
-        // Render Google's default sign-in button
-        // Use setTimeout to ensure DOM is ready
-        setTimeout(() => {
-          try {
-            const buttonElement = document.getElementById('google-signin-button')
-            if (buttonElement && window.google?.accounts?.id) {
-              // Render Google's default button with standard configuration
-              // Note: width must be a number (pixels), not percentage
-              const buttonWidth = buttonElement.offsetWidth || 350 // Use actual width or default
-              window.google.accounts.id.renderButton(buttonElement, {
-                theme: 'outline',
-                size: 'large',
-                width: buttonWidth, // Use pixel value, not percentage
-                text: 'signin_with',
-                locale: 'en'
-              })
-
-              // CRITICAL: Ensure the rendered button doesn't trigger form submission
-              // Google SDK creates an iframe, so we need to prevent events on the container
-              const preventNavigation = (e) => {
-                // Only prevent if it's not coming from the Google SDK callback
-                if (e.target !== buttonElement && !buttonElement.contains(e.target)) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }
-              }
-
-              // Add event listeners to prevent any navigation
-              buttonElement.addEventListener('click', preventNavigation, true)
-              buttonElement.addEventListener('mousedown', preventNavigation, true)
-            }
-          } catch (renderError) {
-            console.error('Error rendering Google button:', renderError)
-          }
-        }, 100)
-
-        // Additionally, provide a server-side redirect flow (full page redirect) as a fallback
-        // This avoids popup/one-tap issues and uses backend to perform OAuth and redirect back
-        const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
-        const backendOrigin = envBaseUrl ? envBaseUrl.replace(/\/api\/?$/, '') : ''
-        const backendAuthUrl = backendOrigin ? `${backendOrigin}/auth/google?next=/dashboard` : null
-        // Expose global so it can be used in markup below
-        window.__BACKEND_AUTH_URL__ = backendAuthUrl || null
-
-      } catch (e) {
-        setError('Google sign-in failed to initialize.')
-      }
-    }
-    // Remove any existing script to force reload from network
-    const existing = document.getElementById('gis')
-    if (existing) existing.remove()
-    const s = document.createElement('script')
-    s.src = `https://accounts.google.com/gsi/client?cbust=${Date.now()}`
-    s.async = true
-    s.defer = true
-    s.id = 'gis'
-    s.onload = onLoad
-    s.onerror = () => {
-      console.error('[Google Sign-In] Failed to load GIS script (network/cache)')
-      setError('Failed to load Google sign-in script. Check your connection.')
-    }
-    document.head.appendChild(s)
-    // No cleanup necessary beyond script removal on next effect run
-  }, [loginWithGoogle, navigate])
+  }, [])
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4 py-8">
@@ -375,11 +265,6 @@ export default function LoginPage() {
                       e.stopPropagation()
                       handleLogin()
                     }
-                    // Prevent form submission on Enter key if focus is on Google button
-                    if (e.key === 'Enter' && e.target.id === 'google-signin-button') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }
                   }}
                 >
                   {/* Email */}
@@ -475,24 +360,38 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Social Login - COMPLETELY SEPARATE from form */}
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Google's default sign-in button container */}
-                  {/* Width must be set via CSS, not in renderButton options */}
-                  <div 
-                    id="google-signin-button" 
-                    className="w-full"
-                    style={{ minWidth: '300px', maxWidth: '100%' }}
-                  ></div>
-
-                  {/* Server-side redirect fallback: full page redirect to backend (/auth/google) */}
-                  {typeof window !== 'undefined' && window.__BACKEND_AUTH_URL__ ? (
-                    <div className="mt-3">
-                      <a href={window.__BACKEND_AUTH_URL__} className="inline-block w-full text-center bg-white border border-gray-200 rounded-md text-sm py-2 px-3 shadow-sm">
-                        Sign in with Google (redirect)
-                      </a>
+                {/* Google Sign-In - Server-Side OAuth Redirect Only */}
+                <div className="w-full">
+                  {typeof window !== 'undefined' && window.__GOOGLE_AUTH_URL__ ? (
+                    <a
+                      href={window.__GOOGLE_AUTH_URL__}
+                      className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-white border border-gray-300 rounded-xl shadow-sm hover:bg-gray-50 transition-colors duration-200 font-medium text-gray-700"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      Sign in with Google
+                    </a>
+                  ) : (
+                    <div className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-xl text-gray-500 text-sm">
+                      Google sign-in is not available
                     </div>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="mt-6 text-center text-sm text-gray-600">
