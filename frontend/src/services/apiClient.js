@@ -13,10 +13,15 @@ export function createApiClient(token) {
   // In production, fail fast if VITE_API_BASE_URL is missing — do NOT fallback to '/api' or current origin.
   if (!baseURL) {
     if (import.meta.env.PROD) {
-      throw new Error('VITE_API_BASE_URL must be set in production (e.g. https://api.nbaurum.com or https://api.nbaurum.com/api). Aborting API requests to avoid sending traffic to the frontend.')
+      throw new Error('VITE_API_BASE_URL must be set in production (e.g. https://api.nbaurum.com/api). Aborting API requests to avoid sending traffic to the frontend.')
     } else {
       console.warn('⚠️ VITE_API_BASE_URL is not set. Using current origin for APIs during development.')
     }
+  }
+
+  // For this project the backend routes live under '/api', so require the provided VITE_API_BASE_URL to include '/api'
+  if (import.meta.env.PROD && baseURL && !/\/api(\/|$)/.test(baseURL)) {
+    throw new Error(`VITE_API_BASE_URL must include '/api' in Production (e.g. https://api.nbaurum.com/api). Found: ${baseURL}`)
   }
 
   const instance = axios.create({
