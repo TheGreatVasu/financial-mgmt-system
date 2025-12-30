@@ -996,10 +996,10 @@ const googleCallback = asyncHandler(async (req, res) => {
       }
     }
 
-    // Redirect to frontend with JWT token (frontend should read token from query and store it)
-    const frontend = config.FRONTEND_URL || 'https://www.nbaurum.com';
-    const redirectUrl = `${frontend}${frontend.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
-    console.log('Redirecting to frontend after Google OAuth callback:', redirectUrl);
+    // Redirect to dedicated frontend callback page with JWT token (frontend will read token and complete login)
+    const frontend = (config.FRONTEND_URL || 'https://www.nbaurum.com').replace(/\/+$/, '')
+    const redirectUrl = `${frontend}/auth/callback?token=${encodeURIComponent(token)}`;
+    console.log('Redirecting to frontend auth callback after Google OAuth:', redirectUrl);
     return res.redirect(redirectUrl);
 
   } catch (err) {
