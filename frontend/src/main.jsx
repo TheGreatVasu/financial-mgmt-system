@@ -6,6 +6,9 @@ import './styles/globals.css'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import TourProvider from './components/tour/TourProvider.jsx'
 
+// Temp debug: print the build-time Vite env for API base so production builds can be verified
+console.log('📡 VITE_API_BASE_URL (build-time):', import.meta.env.VITE_API_BASE_URL ?? '(undefined)', 'MODE:', import.meta.env.MODE)
+
 // Simple scroll restoration on route change
 function ScrollToTop() {
   const { pathname } = window.location
