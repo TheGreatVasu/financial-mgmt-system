@@ -18,7 +18,7 @@ export function initializeSocket(token) {
     throw new Error('VITE_API_BASE_URL must be set (non-empty string) to initialize sockets');
   }
 
-  const socketUrl = baseURL ? baseURL.replace(/\/api\/?$/, '') : (typeof window !== 'undefined' ? window.location.origin : 'https://api.nbaurum.com')
+  const socketUrl = baseURL.replace(/\/api\/?$/, '');
   
   socket = io(socketUrl, {
     auth: {
