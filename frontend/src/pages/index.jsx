@@ -200,7 +200,7 @@ export default function LoginPage() {
                 text: 'signin_with',
                 locale: 'en'
               })
-              
+
               // CRITICAL: Ensure the rendered button doesn't trigger form submission
               // Google SDK creates an iframe, so we need to prevent events on the container
               const preventNavigation = (e) => {
@@ -210,7 +210,7 @@ export default function LoginPage() {
                   e.stopPropagation()
                 }
               }
-              
+
               // Add event listeners to prevent any navigation
               buttonElement.addEventListener('click', preventNavigation, true)
               buttonElement.addEventListener('mousedown', preventNavigation, true)
@@ -219,6 +219,15 @@ export default function LoginPage() {
             console.error('Error rendering Google button:', renderError)
           }
         }, 100)
+
+        // Additionally, provide a server-side redirect flow (full page redirect) as a fallback
+        // This avoids popup/one-tap issues and uses backend to perform OAuth and redirect back
+        const envBaseUrl = import.meta?.env?.VITE_API_BASE_URL
+        const backendOrigin = envBaseUrl ? envBaseUrl.replace(/\/api\/?$/, '') : ''
+        const backendAuthUrl = backendOrigin ? `${backendOrigin}/auth/google?next=/dashboard` : null
+        // Expose global so it can be used in markup below
+        window.__BACKEND_AUTH_URL__ = backendAuthUrl || null
+
       } catch (e) {
         setError('Google sign-in failed to initialize.')
       }
@@ -458,6 +467,15 @@ export default function LoginPage() {
                     className="w-full"
                     style={{ minWidth: '300px', maxWidth: '100%' }}
                   ></div>
+
+                  {/* Server-side redirect fallback: full page redirect to backend (/auth/google) */}
+                  {typeof window !== 'undefined' && window.__BACKEND_AUTH_URL__ ? (
+                    <div className="mt-3">
+                      <a href={window.__BACKEND_AUTH_URL__} className="inline-block w-full text-center bg-white border border-gray-200 rounded-md text-sm py-2 px-3 shadow-sm">
+                        Sign in with Google (redirect)
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-6 text-center text-sm text-gray-600">
