@@ -122,11 +122,17 @@ Print this checklist and check off items as you complete them.
 
 Once all items are checked, your backend is deployed and ready!
 
-**Backend URL:** `http://your-server-ip:5001` or `https://api.your-domain.com`
+**Backend URL:** `https://api.nbaurum.com` (production)
+
+**Health Check:** `https://api.nbaurum.com/health`
+
+**Google Cloud Console (final required settings):**
+- Authorized JavaScript Origins: `https://www.nbaurum.com`
+- Authorized Redirect URIs: `https://api.nbaurum.com/auth/google/callback`
 
 **Next Steps:**
 1. Monitor logs for first 24 hours
-2. Test all features thoroughly
+2. Test all features thoroughly (login, Google OAuth, sockets)
 3. Setup regular database backups
 4. Configure monitoring alerts (optional)
 
@@ -148,7 +154,7 @@ pm2 restart financial-mgmt-backend
 pm2 stop financial-mgmt-backend
 
 # Health Check
-curl http://localhost:5001/health
+curl https://api.nbaurum.com/health
 ```
 
 ---

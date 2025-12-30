@@ -934,6 +934,80 @@ const storeGoogleTokens = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Google OAuth callback (server-side flow)
+// @route   GET /auth/google/callback
+// @access  Public
+const googleCallback = asyncHandler(async (req, res) => {
+  const code = req.query.code;
+  if (!code) {
+    console.error('Missing code in Google callback');
+    return res.status(400).send('Missing code');
+  }
+
+  if (!googleClientId || !googleClientSecret) {
+    console.error('Google OAuth server-side flow not configured (missing client id/secret)');
+    return res.status(500).send('Google OAuth not configured');
+  }
+
+  try {
+    // Construct OAuth2 client for server-side exchange using the canonical redirect URI
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI || 'https://api.nbaurum.com/auth/google/callback';
+    console.log('Using Google OAuth redirect URI:', redirectUri);
+    const oauth2Client = new OAuth2Client(googleClientId, googleClientSecret, redirectUri);
+
+    // Exchange code for tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    const idToken = tokens.id_token || tokens.idToken;
+    if (!idToken) {
+      console.error('No ID token returned from Google during code exchange');
+      return res.status(400).send('No ID token from Google');
+    }
+
+    // Verify ID token and extract user info
+    const ticket = await oauth2Client.verifyIdToken({ idToken, audience: googleClientId });
+    const payload = ticket.getPayload();
+    const email = payload.email;
+    const firstName = payload.given_name || (payload.name && payload.name.split(' ')[0]) || '';
+    const lastName = payload.family_name || (payload.name && payload.name.split(' ').slice(1).join(' ')) || '';
+
+    // Create or get Google user
+    const { createOrGetGoogleUser } = require('../services/userRepo');
+    const user = await createOrGetGoogleUser({ email, firstName, lastName });
+
+    // Generate JWT and create session
+    const token = generateToken(user.id);
+    try {
+      await createOrUpdateSession(user.id, token, req);
+    } catch (sessionErr) {
+      console.warn('Failed to create session during Google callback:', sessionErr);
+    }
+
+    // Store Google tokens (access/refresh) if provided (used by Google Sheets integration)
+    if (tokens.access_token) {
+      try {
+        const { updateGoogleTokens } = require('../services/userRepo');
+        await updateGoogleTokens(user.id, {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || null,
+          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined
+        });
+      } catch (tokenErr) {
+        console.warn('Failed to store Google tokens from callback:', tokenErr);
+      }
+    }
+
+    // Redirect to frontend with JWT token (frontend should read token from query and store it)
+    const frontend = config.FRONTEND_URL || 'https://www.nbaurum.com';
+    const redirectUrl = `${frontend}${frontend.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+    console.log('Redirecting to frontend after Google OAuth callback:', redirectUrl);
+    return res.redirect(redirectUrl);
+
+  } catch (err) {
+    console.error('Error handling Google OAuth callback:', err);
+    return res.status(500).send('Google OAuth callback error');
+  }
+});
+
 module.exports = {
   register,
   login,
@@ -942,6 +1016,7 @@ module.exports = {
   changePassword,
   logout,
   googleLogin,
+  googleCallback,
   completeGoogleProfile,
   uploadAvatar,
   updatePreferences,

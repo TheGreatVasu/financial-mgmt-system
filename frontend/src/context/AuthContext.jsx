@@ -106,6 +106,32 @@ export function AuthProvider({ children }) {
     return u
   }
 
+  // Login with an existing JWT token (used for server-side OAuth redirects)
+  async function loginWithToken(t) {
+    if (!t) throw new Error('Token is required')
+    // Store token immediately so other code that reads localStorage sees it
+    setToken(t)
+    localStorage.setItem('fms_token', t)
+
+    try {
+      const me = await getCurrentUser(t)
+      if (!me) {
+        // Token didn't return a user; clear and throw
+        setToken(null)
+        localStorage.removeItem('fms_token')
+        throw new Error('Invalid token')
+      }
+      setUser(me)
+      return me
+    } catch (e) {
+      // On any error, clear stored token
+      console.error('loginWithToken error:', e)
+      setToken(null)
+      localStorage.removeItem('fms_token')
+      throw e
+    }
+  }
+
   async function logout() {
     try {
       if (token) await apiLogout(token)
@@ -170,7 +196,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithGoogle, loginWithMicrosoft, logout, refresh, updateProfile, updateUserPreferences }),
+    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithGoogle, loginWithMicrosoft, loginWithToken, logout, refresh, updateProfile, updateUserPreferences }),
     [user, token, loading]
   )
 

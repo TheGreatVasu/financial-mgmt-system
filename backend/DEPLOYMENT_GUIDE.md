@@ -1,6 +1,10 @@
-# 🚀 Backend Deployment Guide - Neev Cloud Server
+# DEPRECATED
 
-This guide will walk you through deploying the Financial Management System backend on your Neev cloud server.
+This file is deprecated. See `README.md` for the canonical deployment and configuration instructions.
+
+**Summary:** The canonical README contains exact production envs, Google Cloud Console entries, and verification steps.
+
+See: `./README.md`
 
 ## 📋 Prerequisites
 

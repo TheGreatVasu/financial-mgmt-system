@@ -57,5 +57,9 @@ curl http://localhost:5001/health
 
 ## 📖 Full Guide
 
-See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed instructions.
+# DEPRECATED
+
+This file is deprecated. See `README.md` for the canonical deployment and configuration instructions.
+
+See: `./README.md`
 

@@ -4,7 +4,7 @@ import { useAuthContext } from '../context/AuthContext.jsx'
 import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuthContext()
+  const { login, loginWithGoogle, loginWithToken } = useAuthContext()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -26,6 +26,39 @@ export default function LoginPage() {
       return () => clearTimeout(timer)
     }
   }, [location])
+
+  // Auto-login: handle token returned from server-side OAuth callback
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const tokenFromUrl = params.get('token')
+      if (!tokenFromUrl) return
+
+      ;(async () => {
+        try {
+          setLoading(true)
+          setError('')
+          await loginWithToken(tokenFromUrl)
+
+          // Remove token from the URL to avoid leaking it in history
+          params.delete('token')
+          const newSearch = params.toString()
+          const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '')
+          window.history.replaceState({}, document.title, newUrl)
+
+          setSuccessMessage('Login successful! Redirecting to dashboard...')
+          setTimeout(() => navigate('/dashboard', { replace: true }), 1000)
+        } catch (e) {
+          console.error('Auto-login via token failed', e)
+          setError('Login failed. Please try signing in manually.')
+        } finally {
+          setLoading(false)
+        }
+      })()
+    } catch (e) {
+      // Ignore - window might be undefined in SSR
+    }
+  }, [loginWithToken, navigate])
 
   // Handle form submission - prevent default and call login
   async function onSubmit(e) {

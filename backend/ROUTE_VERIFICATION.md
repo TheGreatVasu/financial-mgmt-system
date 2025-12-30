@@ -1,7 +1,10 @@
 # Backend Route Verification
 
-## Google Login Route Structure
+# DEPRECATED
 
+This file is deprecated. See `README.md` for the canonical deployment and configuration instructions.
+
+See: `./README.md`
 ### Route Definition
 
 **File: `backend/src/routes/authRoutes.js`**

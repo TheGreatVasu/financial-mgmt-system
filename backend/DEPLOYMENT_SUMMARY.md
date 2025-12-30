@@ -1,4 +1,8 @@
-# 📋 Deployment Summary - Backend Changes Made
+# DEPRECATED
+
+This file has been deprecated and its content consolidated into `README.md` (the single source of truth).
+
+Please refer to `backend/README.md` for all deployment and configuration instructions (production envs, Google Cloud Console settings, verification steps).
 
 ## ✅ Changes Completed
 
@@ -36,9 +40,11 @@
 - ✅ PM2 process management
 
 ### 7. **Documentation**
-- ✅ `DEPLOYMENT_GUIDE.md` - Comprehensive step-by-step guide
-- ✅ `README_DEPLOYMENT.md` - Quick reference guide
-- ✅ `DEPLOYMENT_SUMMARY.md` - This file
+# DEPRECATED
+
+This file is deprecated. See `README.md` for the canonical deployment and configuration instructions.
+
+See: `./README.md`
 
 ---
 
