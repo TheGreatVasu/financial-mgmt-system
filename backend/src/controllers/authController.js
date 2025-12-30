@@ -937,6 +937,33 @@ const storeGoogleTokens = asyncHandler(async (req, res) => {
 // @desc    Google OAuth callback (server-side flow)
 // @route   GET /auth/google/callback
 // @access  Public
+// Initiate Google OAuth server-side flow by redirecting to Google's consent page
+const googleStart = asyncHandler(async (req, res) => {
+  if (!googleClientId || !googleClientSecret) {
+    console.error('Google OAuth server-side flow not configured (missing client id/secret)');
+    return res.status(500).send('Google OAuth not configured');
+  }
+
+  try {
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || config.GOOGLE_OAUTH_REDIRECT_URI || 'https://api.nbaurum.com/auth/google/callback';
+    const oauth2Client = new OAuth2Client(googleClientId, googleClientSecret, redirectUri);
+
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['openid', 'email', 'profile'],
+      prompt: 'consent'
+    });
+
+    // Optional: preserve a "next" param for redirect after login
+    const next = req.query.next ? `&state=${encodeURIComponent(JSON.stringify({ next: req.query.next }))}` : ''
+    console.log('Redirecting user to Google OAuth consent screen:', authUrl + next);
+    return res.redirect(authUrl + next);
+  } catch (err) {
+    console.error('Error initiating Google OAuth flow:', err);
+    return res.status(500).send('Failed to initiate Google OAuth');
+  }
+});
+
 const googleCallback = asyncHandler(async (req, res) => {
   const code = req.query.code;
   if (!code) {

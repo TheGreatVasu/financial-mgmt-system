@@ -119,10 +119,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Google OAuth server-side callback (canonical URL used in Google Cloud Console)
-// This endpoint lives at the root path (not under /api) so it matches
-// the registered redirect URI: https://api.nbaurum.com/auth/google/callback
-const { googleCallback } = require('./controllers/authController');
+// Google OAuth server-side start & callback endpoints (root paths used to match Google Console entries)
+// Start: GET /auth/google -> redirects to Google consent screen
+// Callback: GET /auth/google/callback -> exchange code and redirect to frontend
+const { googleStart, googleCallback } = require('./controllers/authController');
+app.get('/auth/google', googleStart);
 app.get('/auth/google/callback', googleCallback);
 
 // API routes
