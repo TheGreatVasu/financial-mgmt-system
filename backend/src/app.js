@@ -110,7 +110,7 @@ if (config.NODE_ENV === 'development') {
 }
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Financial Management System API is running',
