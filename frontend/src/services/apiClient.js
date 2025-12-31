@@ -6,19 +6,24 @@ import axios from 'axios'
  * @returns {string|undefined} The API base URL or undefined if not set
  */
 function getApiBaseUrl() {
-  const baseURL = typeof import.meta?.env?.VITE_API_BASE_URL === 'string' 
-    ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
-    : undefined;
-  
-  if (!baseURL && import.meta.env.DEV) {
-    console.warn('⚠️  VITE_API_BASE_URL is not set. Using Vite proxy for development.');
+  // ✅ DEVELOPMENT → use Vite proxy
+  if (import.meta.env.DEV) {
+    console.log('ℹ️ DEV mode: using Vite proxy /api');
+    return '/api';
   }
-  if (!baseURL) {
-    return undefined;
+
+  // ✅ PRODUCTION → must have env
+  const baseURL = import.meta.env.VITE_API_BASE_URL;
+
+  if (!baseURL || !baseURL.trim()) {
+    throw new Error(
+      '❌ VITE_API_BASE_URL is required in production. Rebuild the app.'
+    );
   }
-  
-  return baseURL;
+
+  return baseURL.trim().replace(/\/+$/, '');
 }
+
 
 /**
  * Creates an Axios instance configured for API requests.
