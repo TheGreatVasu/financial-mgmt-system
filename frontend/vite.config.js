@@ -10,12 +10,12 @@ module.exports = defineConfig({
         target: process.env.VITE_API_BASE_URL || 'http://localhost:5001',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api'),
       }
     }
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    emptyOutDir: true
   }
 })
