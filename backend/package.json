@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node --no-deprecation src/server.js",
+    "build": "node --check src/server.js && echo ✓ Backend validated successfully",
     "dev": "nodemon",
     "kill-port": "./kill-port.sh",
     "dev:clean": "npm run kill-port && npm run dev",

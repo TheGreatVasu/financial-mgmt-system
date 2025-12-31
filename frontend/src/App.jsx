@@ -5,8 +5,6 @@ import { Suspense, lazy } from 'react'
 import Dashboard from './pages/dashboard'
 import LoginPage from './pages/index'
 import SignupPage from './pages/signup'
-import GoogleProfileCompletionPage from './pages/google-profile-completion'
-import AuthCallbackPage from './pages/auth-callback'
 const PaymentsPage = lazy(() => import('./pages/payments'))
 const PaymentNewPage = lazy(() => import('./pages/payments/new.jsx'))
 const NotFoundPage = lazy(() => import('./pages/not-found'))
@@ -63,9 +61,6 @@ export default function App() {
         <Route path="/loading" element={<LoadingScreen />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/google-profile-completion" element={<GoogleProfileCompletionPage />} />
-        {/* OAuth server-side callback landing page (receives ?token=JWT) */}
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route
           path="/dashboard"

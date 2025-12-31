@@ -26,32 +26,7 @@ export async function login({ email, password }) {
     
     return { user, token: data.data.token }
   } catch (err) {
-    // Log error details for debugging
-    const errorDetails = {
-      message: err.message,
-      response: err.response?.data,
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-      code: err.code
-    }
-    
-    
-    // Only use mock fallback for true network errors (offline mode)
-    // For authentication errors (401, 403, 400), propagate the error
-    const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK'
-    
-    if (isNetworkError) {
-      // Only fallback to mock in true offline scenarios
-      const mockUser = {
-        id: 'mock-user',
-        firstName: 'Demo',
-        lastName: 'User',
-        email,
-        role: 'admin',
-      }
-      const mockToken = 'mock-token'
-      return { user: mockUser, token: mockToken }
-    }
+    // Extract error message from response with specific handling
     
     // Extract error message from response with specific handling
     const status = err.response?.status
@@ -85,10 +60,6 @@ let cacheTimestamp = 0
 const CACHE_DURATION = 5000 // 5 seconds cache
 
 export async function getCurrentUser(token) {
-  if (token === 'mock-token') {
-    return { id: 'mock-user', firstName: 'Demo', lastName: 'User', email: 'demo@example.com', role: 'admin' }
-  }
-  
   if (!token) return null
   
   const now = Date.now()
@@ -161,7 +132,7 @@ export async function getCurrentUser(token) {
     }
     
     const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK'
-    if (isNetworkError && token !== 'mock-token') {
+    if (isNetworkError) {
       return null
     }
     
@@ -220,13 +191,8 @@ export async function updateProfile(token, { firstName, lastName, email, phoneNu
     if (!data?.success) throw new Error(data?.message || 'Failed to update profile')
     return data.data
   } catch (err) {
-    // Only use mock fallback for true network errors
-    const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK'
-    if (isNetworkError) {
-      return { id: 'mock-user', firstName: firstName || 'Demo', lastName: lastName || 'User', email: email || 'demo@example.com', phoneNumber: phoneNumber || '', role: 'admin' }
-    }
-    // For validation/auth errors, throw to let UI handle
-    throw err
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to update profile'
+    throw new Error(errorMessage)
   }
 }
 
@@ -272,91 +238,12 @@ export async function changePasswordApi(token, { currentPassword, newPassword })
     const { data } = await api.put('/auth/change-password', { currentPassword, newPassword })
     if (!data?.success) throw new Error(data?.message || 'Failed to change password')
     return true
-  } catch {
-    // offline/mock fallback: pretend success
-    return true
-  }
-}
-
-export async function googleLogin(idToken) {
-  const api = createApiClient()
-  try {
-    // Only log in development
-    if (import.meta.env.DEV) {
-    console.log('🔵 googleLogin called with idToken length:', idToken?.length)
-    console.log('🔵 API base URL:', api.defaults.baseURL)
-    }
-    
-    const { data } = await api.post('/auth/google-login', { idToken })
-    
-    if (!data?.success) {
-      const errorMsg = data?.message || 'Google login failed'
-      throw new Error(errorMsg)
-    }
-    return { 
-      user: data.data.user, 
-      token: data.data.token,
-      needsProfileCompletion: data.needsProfileCompletion || false
-    }
   } catch (err) {
-    // Only log detailed error info in development
-    if (import.meta.env.DEV) {
-    console.error('❌ Google login error details:', {
-      message: err.message,
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-      method: err.config?.method,
-      url: err.config?.url,
-      baseURL: err.config?.baseURL,
-      fullURL: err.config ? `${err.config.baseURL}${err.config.url}` : 'unknown'
-    })
-    }
-    // Enhanced error handling
-    const status = err.response?.status
-    const errorData = err.response?.data
-    
-    let errorMessage = 'Google login failed. Please try again.'
-    
-    if (status === 500) {
-      errorMessage = errorData?.message || 'Server error during Google login. Please contact support.'
-      if (errorData?.code === 'SCHEMA_ERROR' || errorData?.code === 'ER_BAD_FIELD_ERROR') {
-        errorMessage = 'Database configuration error. Please contact support.'
-      }
-    } else if (status === 400) {
-      errorMessage = errorData?.message || 'Invalid Google account. Please try again.'
-    } else if (status === 503) {
-      errorMessage = errorData?.message || 'Database connection unavailable. Please try again later.'
-    } else if (errorData?.message) {
-      errorMessage = errorData.message
-    } else if (err.message) {
-      errorMessage = err.message
-    }
-    
-    
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to change password'
     throw new Error(errorMessage)
   }
 }
 
-export async function completeGoogleProfile(token, { firstName, lastName, phoneNumber, role }) {
-  const api = createApiClient(token)
-  try {
-    const { data } = await api.post('/auth/complete-google-profile', {
-      firstName,
-      lastName,
-      phoneNumber,
-      role
-    })
-    if (!data?.success) throw new Error(data?.message || 'Failed to complete profile')
-    
-    // Clear user cache after profile completion to ensure fresh data
-    clearUserCache()
-    
-    return data.data
-  } catch (err) {
-    const errorMessage = err.response?.data?.message || err.message || 'Failed to complete profile'
-    throw new Error(errorMessage)
-  }
-}
 
 export async function microsoftLogin() {
   const api = createApiClient()
@@ -365,15 +252,8 @@ export async function microsoftLogin() {
     if (!data?.success) throw new Error('Microsoft login failed')
     return { user: data.data.user, token: data.data.token }
   } catch (err) {
-    // Only use mock fallback for true network errors
-    const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK'
-    if (isNetworkError) {
-      const mockUser = { id: 'mock-user', firstName: 'Demo', lastName: 'User', email: 'demo@microsoft.com', role: 'admin' }
-      const mockToken = 'mock-token'
-      return { user: mockUser, token: mockToken }
-    }
-    // For authentication errors, throw to let UI handle
-    throw err
+    const errorMessage = err.response?.data?.message || err.message || 'Microsoft login failed'
+    throw new Error(errorMessage)
   }
 }
 

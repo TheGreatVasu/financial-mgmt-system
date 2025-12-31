@@ -4,6 +4,7 @@ import { Edit, Trash2, Download, ArrowLeft, FileText, Calendar, User, DollarSign
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import { useAuthContext } from '../../context/AuthContext.jsx';
 import { createInvoiceService } from '../../services/invoiceService.js';
+import { createApiClient } from '../../services/apiClient';
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -74,7 +75,6 @@ export default function InvoiceDetail() {
 
   async function handleExportPDF() {
     try {
-      const { createApiClient } = await import('../../services/apiClient');
       const api = createApiClient(token);
       const response = await api.get(`/invoices/${id}/pdf`, {
         responseType: 'blob'

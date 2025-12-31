@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, microsoftLogin as apiMicrosoftLogin, clearUserCache } from '../services/authService'
+import { getCurrentUser, login as apiLogin, logout as apiLogout, updateProfile as apiUpdateProfile, updatePreferences as apiUpdatePreferences, microsoftLogin as apiMicrosoftLogin, clearUserCache } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -37,7 +37,6 @@ export function AuthProvider({ children }) {
       } catch (e) {
         // Handle rate limiting (429) - don't clear token, just show error
         if (e?.response?.status === 429 || e?.status === 429) {
-          console.warn('Rate limit exceeded, keeping token but not updating user:', e.message)
           // Don't clear token on rate limit, just keep existing state
           setLoading(false)
           return
@@ -55,14 +54,11 @@ export function AuthProvider({ children }) {
           e?.response?.status === 404
         
         if (isAuthError) {
-          console.warn('Token invalid, clearing:', e.message)
           setToken(null)
           setUser(null)
           localStorage.removeItem('fms_token')
-        } else {
-          // Network or other errors - keep token, might be temporary
-          console.warn('Error fetching user, but keeping token:', e.message)
         }
+        // Network or other errors - keep token, might be temporary
       } finally {
         setLoading(false)
       }
@@ -94,31 +90,6 @@ export function AuthProvider({ children }) {
     return u
   }
 
-  // Login with an existing JWT token (used for server-side OAuth redirects)
-  async function loginWithToken(t) {
-    if (!t) throw new Error('Token is required')
-    // Store token immediately so other code that reads localStorage sees it
-    setToken(t)
-    localStorage.setItem('fms_token', t)
-
-    try {
-      const me = await getCurrentUser(t)
-      if (!me) {
-        // Token didn't return a user; clear and throw
-        setToken(null)
-        localStorage.removeItem('fms_token')
-        throw new Error('Invalid token')
-      }
-      setUser(me)
-      return me
-    } catch (e) {
-      // On any error, clear stored token
-      console.error('loginWithToken error:', e)
-      setToken(null)
-      localStorage.removeItem('fms_token')
-      throw e
-    }
-  }
 
   async function logout() {
     try {
@@ -141,24 +112,18 @@ export function AuthProvider({ children }) {
       
       const me = await getCurrentUser(token)
       if (me) {
-        // Verify the user ID matches the token's user ID
         setUser(me)
-        console.log('✅ User refreshed:', { id: me.id, email: me.email })
-      } else {
-        console.warn('⚠️ refresh: getCurrentUser returned null')
       }
       // If me is null, keep existing user state (might be temporary network issue)
     } catch (e) {
       // Handle rate limiting - don't clear user on rate limit
       if (e?.response?.status === 429 || e?.status === 429) {
-        console.warn('Rate limit exceeded during refresh, keeping existing user state')
         return
       }
       
       // Only clear user if it's definitely an auth error
       const isAuthError = e?.response?.status === 401 || e?.response?.status === 403
       if (isAuthError) {
-        console.warn('Auth error during refresh, clearing session')
         setUser(null)
         setToken(null)
         localStorage.removeItem('fms_token')
@@ -177,14 +142,13 @@ export function AuthProvider({ children }) {
 
   async function updateUserPreferences(preferences) {
     if (!token) return
-    const { updatePreferences: apiUpdatePrefs } = await import('../services/authService')
-    const updated = await apiUpdatePrefs(token, preferences)
+    const updated = await apiUpdatePreferences(token, preferences)
     setUser(updated)
     return updated
   }
 
   const value = useMemo(
-    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithMicrosoft, loginWithToken, logout, refresh, updateProfile, updateUserPreferences }),
+    () => ({ user, token, isAuthenticated: Boolean(user && token), loading, login, loginWithMicrosoft, logout, refresh, updateProfile, updateUserPreferences }),
     [user, token, loading]
   )
 

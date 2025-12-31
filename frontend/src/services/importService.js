@@ -1,13 +1,6 @@
 import { createApiClient } from './apiClient'
 
 export async function importExcelFile(token, file) {
-  console.log('📤 importExcelFile called:', {
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-    hasToken: !!token
-  });
-  
   const api = createApiClient(token)
   const formData = new FormData()
   formData.append('file', file)
@@ -16,17 +9,9 @@ export async function importExcelFile(token, file) {
     // Always try sales invoice import first (93 columns format)
     // This will parse any valid Excel file with the expected 93 columns regardless of filename
     // Note: Don't set Content-Type header - let browser set it automatically with boundary for FormData
-    console.log('📤 Sending POST request to /import/sales-invoice...');
     const { data } = await api.post('/import/sales-invoice', formData)
-    console.log('✅ Import response received:', data);
     return data
   } catch (error) {
-    console.error('❌ Import error:', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message
-    });
     // Handle 400 Bad Request errors with detailed validation messages
     if (error.response?.status === 400) {
       const errorData = error.response?.data || {}
@@ -65,9 +50,10 @@ function getApiBaseUrl() {
     ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
     : undefined;
   
+  if (!baseURL && import.meta.env.DEV) {
+    console.warn('⚠️  VITE_API_BASE_URL is not set. Template download will likely fail.');
+  }
   if (!baseURL) {
-    console.error('❌ VITE_API_BASE_URL is not set. Template download will fail.');
-    console.error('   Set VITE_API_BASE_URL in your .env file before building.');
     return undefined;
   }
   

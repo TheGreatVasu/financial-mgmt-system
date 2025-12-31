@@ -1,6 +1,6 @@
 import { createApiClient } from './apiClient'
 
-const MOCK_SETTINGS = {
+const DEFAULT_SETTINGS = {
   theme: 'system',
   notifications: {
     product: true,
@@ -25,19 +25,21 @@ const MOCK_SETTINGS = {
 
 export async function fetchSettings(token) {
   if (!token) {
-    // Return default settings if no token
-    return MOCK_SETTINGS
+    return DEFAULT_SETTINGS
   }
 
   const api = createApiClient(token)
   try {
     const { data } = await api.get('/settings')
     if (!data?.success) throw new Error(data?.message || 'Failed to fetch settings')
-    return data.data || MOCK_SETTINGS
-  } catch (error) {
-    console.error('Error fetching settings:', error)
-    // Return mock settings as fallback
-    return MOCK_SETTINGS
+    return data.data || DEFAULT_SETTINGS
+  } catch (err) {
+    // If settings endpoint doesn't exist yet, return defaults
+    if (err.response?.status === 404) {
+      return DEFAULT_SETTINGS
+    }
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch settings'
+    throw new Error(errorMessage)
   }
 }
 
@@ -51,10 +53,8 @@ export async function updateSettings(token, payload) {
     const { data } = await api.put('/settings', payload)
     if (!data?.success) throw new Error(data?.message || 'Failed to update settings')
     return data.data || payload
-  } catch (error) {
-    console.error('Error updating settings:', error)
-    // Merge with existing settings as fallback
-    const errorMessage = error.response?.data?.message || error.message || 'Failed to update settings'
+  } catch (err) {
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to update settings'
     throw new Error(errorMessage)
   }
 }

@@ -8,6 +8,7 @@ import {
   runSeeds,
   getTableStructure
 } from '../../services/databaseService';
+import { createApiClient } from '../../services/apiClient';
 import {
   Database,
   RefreshCw,
@@ -159,7 +160,6 @@ export default function DatabaseManagementPage() {
       setActionLoading('export');
       setError(null);
       
-      const { createApiClient } = await import('../../services/apiClient');
       const api = createApiClient(tokenToUse);
       const response = await api.get('/admin/database/export', {
         responseType: 'blob'

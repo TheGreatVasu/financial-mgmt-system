@@ -10,9 +10,10 @@ function getApiBaseUrl() {
     ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
     : undefined;
   
+  if (!baseURL && import.meta.env.DEV) {
+    console.warn('⚠️  VITE_API_BASE_URL is not set. Using Vite proxy for development.');
+  }
   if (!baseURL) {
-    console.error('❌ VITE_API_BASE_URL is not set. API requests will fail.');
-    console.error('   Set VITE_API_BASE_URL in your .env file before building.');
     return undefined;
   }
   
@@ -33,10 +34,6 @@ export function createApiClient(token) {
     throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests. Check your environment variables and rebuild the application.');
   }
 
-  // Only log in development, never in production
-  if (import.meta.env.DEV) {
-    console.log('🔧 API Client baseURL:', baseURL);
-  }
 
   const instance = axios.create({
     baseURL,
@@ -52,17 +49,6 @@ export function createApiClient(token) {
       config.method = 'POST' // Default to POST if not set
     }
     
-    // Log request for debugging (only in development)
-    if (import.meta.env.DEV && config.url?.includes('google-login')) {
-      console.log('🌐 API Request:', {
-        method: config.method,
-        url: config.url,
-        baseURL: config.baseURL,
-        fullURL: config.baseURL ? `${config.baseURL.replace(/\/$/, '')}${config.url}` : config.url,
-        hasData: !!config.data,
-        dataType: typeof config.data
-      })
-    }
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

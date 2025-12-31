@@ -14,9 +14,10 @@ function getSocketUrl() {
     ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
     : undefined;
   
+  if (!baseURL && import.meta.env.DEV) {
+    console.warn('⚠️  VITE_API_BASE_URL is not set. Socket connection will likely fail.');
+  }
   if (!baseURL) {
-    console.error('❌ VITE_API_BASE_URL is not set. Socket connection will fail.');
-    console.error('   Set VITE_API_BASE_URL in your .env file before building.');
     return undefined;
   }
 
@@ -55,14 +56,12 @@ function getSocketUrl() {
 
   socket.on('connect', () => {
     if (import.meta.env.DEV) {
-      console.log('✅ Socket.io connected');
     }
     reconnectAttempts = 0;
   });
 
   socket.on('disconnect', (reason) => {
     if (import.meta.env.DEV) {
-      console.log('❌ Socket.io disconnected:', reason);
     }
     if (reason === 'io server disconnect') {
       // Server disconnected, reconnect manually
@@ -73,11 +72,9 @@ function getSocketUrl() {
   socket.on('connect_error', (error) => {
     // Always log connection errors, but less verbosely in production
     if (import.meta.env.DEV) {
-      console.error('Socket.io connection error:', error);
     }
     reconnectAttempts++;
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('Socket.io: Max reconnection attempts reached');
     }
   });
 
