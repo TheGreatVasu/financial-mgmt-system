@@ -116,33 +116,31 @@ export default function SalesInvoiceDashboard() {
 
   // Set up real-time socket updates
   useEffect(() => {
-    if (!token) return;
+  if (!token) return;
 
-    // Initialize socket connection (may be null if env var not set)
-    const socket = initializeSocket(token);
+  const socket = initializeSocket(token);
 
-    // If socket is unavailable, just load data normally
-    if (!socket) {
-      console.warn('Socket not available - using polling only');
-      loadDashboard();
-      return;
+  if (!socket) {
+    console.warn('Socket not available - using polling only');
+    fetchDashboardData(false);
+    return;
+  }
+
+  const handleDashboardUpdate = (data) => {
+    if (data && data.success && data.data) {
+      setDashboardData({ ...data.data, isPlaceholder: false });
+      setIsRefreshing(false);
+      toast.success('Dashboard updated with latest data', { duration: 3000 });
     }
+  };
 
-    // Listen for sales invoice dashboard updates
-    const handleDashboardUpdate = (data) => {
-      if (data && data.success && data.data) {
-        setDashboardData({ ...data.data, isPlaceholder: false });
-        setIsRefreshing(false);
-        toast.success('Dashboard updated with latest data', { duration: 3000 });
-      }
-    };
+  socket.on('sales-invoice-dashboard:update', handleDashboardUpdate);
 
-    socket.on('sales-invoice-dashboard:update', handleDashboardUpdate);
+  return () => {
+    socket.off('sales-invoice-dashboard:update', handleDashboardUpdate);
+  };
+}, [token, fetchDashboardData]);
 
-    return () => {
-      socket.off('sales-invoice-dashboard:update', handleDashboardUpdate);
-    };
-  }, [token]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
