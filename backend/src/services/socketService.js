@@ -54,9 +54,6 @@ function initializeSocket(server) {
   // Connection handler
   io.on('connection', async (socket) => {
     const userId = socket.userId;
-    const token = socket.token;
-    
-    console.log(`Socket connected: User ${userId}, Socket ${socket.id}`);
     
     // Add socket to user's socket set
     if (!userSockets.has(userId)) {

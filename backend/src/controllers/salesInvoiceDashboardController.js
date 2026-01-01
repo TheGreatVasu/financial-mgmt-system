@@ -135,7 +135,6 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
   
   try {
     const invoices = await invoicesQuery.orderBy('gst_tax_invoice_date', 'desc').limit(10000);
-    console.log(`📊 Fetched ${invoices.length} invoices for user ${userId}`);
 
     const allInvoices = await db('sales_invoice_master')
       .select('customer_name', 'business_unit', 'region', 'zone', 'invoice_type')
@@ -149,7 +148,6 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
     const invoiceTypes = [...new Set(allInvoices.map((inv) => inv.invoice_type).filter(Boolean))].sort();
 
     if (invoices.length === 0) {
-      console.log(`ℹ️ No invoices found for user ${userId}, returning empty dashboard`);
       return buildEmptyDashboard({ customers, businessUnits, regions, zones, invoiceTypes });
     }
 
@@ -282,13 +280,6 @@ async function buildSalesInvoiceDashboardData(userId, filters = {}) {
         amount: parseFloat(inv.total_invoice_value || 0),
       })),
   };
-
-    console.log(`📊 Sales Invoice Dashboard data for user ${userId}:`, {
-      totalInvoices: invoices.length,
-      totalInvoiceAmount: summary.totalInvoiceAmount,
-      netReceivables: summary.netReceivables,
-      hasData: invoices.length > 0,
-    });
 
     return {
       hasData: true,

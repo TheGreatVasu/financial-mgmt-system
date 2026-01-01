@@ -43,18 +43,6 @@ function initializeGoogleClient() {
   googleClientId = process.env.GOOGLE_CLIENT_ID || '';
   googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
   googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
-  
-  if (googleClientId) {
-    console.log('✅ Google OAuth client initialized');
-    console.log(`   Client ID: ${googleClientId.substring(0, 20)}...${googleClientId.substring(googleClientId.length - 10)}`);
-    if (googleClientSecret) {
-      console.log('   Client Secret: ✅ Configured');
-    } else {
-      console.log('   Client Secret: ⚠️  Not set (optional for ID token verification)');
-    }
-  } else {
-    console.warn('⚠️  Google OAuth client not initialized: GOOGLE_CLIENT_ID not set');
-  }
 }
 
 // Initialize on module load
@@ -171,10 +159,9 @@ const register = asyncHandler(async (req, res) => {
   // Initialize user's dashboard
   try {
     await initializeUserDashboard(user.id);
-    console.log(`✅ Dashboard initialized for new user: ${user.email} (ID: ${user.id})`);
   } catch (dashboardError) {
     // Don't fail registration if dashboard initialization fails
-    console.warn(`Failed to initialize dashboard for user ${user.id}:`, dashboardError);
+    console.error('Dashboard init failed for user:', user.id);
   }
 
   // Log registration
@@ -235,11 +222,8 @@ const login = asyncHandler(async (req, res) => {
   let found;
   try {
     found = await findByEmailWithPassword(normalizedEmail);
-    if (config.NODE_ENV !== 'production') {
-      console.log(`User lookup for ${normalizedEmail}:`, found ? `Found (ID: ${found.id})` : 'Not found - user must register first');
-    }
   } catch (dbError) {
-    console.error('Database error during login lookup:', dbError);
+    console.error('Database error during login:', dbError.message);
     return res.status(500).json({
       success: false,
       message: 'Database error. Please try again later.'
@@ -248,7 +232,6 @@ const login = asyncHandler(async (req, res) => {
 
   // User not found - require registration first
   if (!found) {
-    console.log(`❌ Login attempt failed: User not found for email: ${normalizedEmail}`);
     return res.status(401).json({
       success: false,
       message: 'User not found. Please create an account first.',
@@ -284,15 +267,9 @@ const login = asyncHandler(async (req, res) => {
   // Check password
   let isMatch = false;
   try {
-    if (config.NODE_ENV !== 'production') {
-      console.log(`🔐 Comparing password for user: ${normalizedEmail} (ID: ${found.id})`);
-    }
     isMatch = await comparePassword(password, found.password_hash);
     
     if (!isMatch) {
-      console.warn(`❌ Login attempt failed: Invalid password for email: ${normalizedEmail} (User ID: ${found.id}, Role: ${found.role})`);
-      // Log password hash length for debugging (don't log actual hash)
-      console.warn(`Password hash length: ${found.password_hash ? found.password_hash.length : 'NULL'}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password. Please check your credentials and try again.',
@@ -300,7 +277,7 @@ const login = asyncHandler(async (req, res) => {
       });
     }
   } catch (compareError) {
-    console.error('❌ Password comparison error:', compareError);
+    console.error('Password comparison error:', compareError.message);
     return res.status(500).json({
       success: false,
       message: 'Authentication error. Please try again.'

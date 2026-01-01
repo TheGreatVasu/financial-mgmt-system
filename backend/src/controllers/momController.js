@@ -1,6 +1,5 @@
 const { getDb } = require('../config/db');
 const { asyncHandler } = require('../middlewares/errorHandler');
-const { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = require('../services/calendarService');
 
 function computeSmart({ paymentAmount = 0, interestRate = 0, dueDate }) {
   const today = new Date();

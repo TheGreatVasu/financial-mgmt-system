@@ -110,9 +110,6 @@ const createInvoice = asyncHandler(async (req, res) => {
   const db = getDb();
   const payload = req.body || {};
   
-  // Enhanced logging for debugging
-  console.log('Creating invoice with payload:', JSON.stringify(payload, null, 2));
-  
   try {
     // Validate required fields
     if (!payload.customerId) {
@@ -143,7 +140,6 @@ const createInvoice = asyncHandler(async (req, res) => {
     let invoiceNumber;
     try {
       invoiceNumber = await generateInvoiceNumber(issueDate);
-      console.log('Generated invoice number:', invoiceNumber);
     } catch (genError) {
       console.error('Error generating invoice number:', genError);
       return res.status(500).json({ 
@@ -279,12 +275,9 @@ const createInvoice = asyncHandler(async (req, res) => {
           // Continue without items column if it fails
         }
         
-        console.log('Inserting invoice row:', JSON.stringify(row, null, 2));
-        
         let id;
         try {
           [id] = await db('invoices').insert(row);
-          console.log('Invoice created with ID:', id);
         } catch (insertError) {
           console.error('Database insert error:', insertError);
           console.error('Error code:', insertError.code);

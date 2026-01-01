@@ -195,16 +195,9 @@ async function createUser({ username, email, password, firstName, lastName, phon
     }
     
     const createdUser = await findById(id);
-    console.log(`✅ User created successfully: ${email} (ID: ${id})`);
     return createdUser;
   } catch (error) {
-    console.error('❌ Error in createUser:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      sqlState: error.sqlState,
-      sqlMessage: error.sqlMessage
-    });
+    console.error('Error creating user:', error.message);
     throw error;
   }
 }
@@ -229,7 +222,6 @@ async function createOrGetGoogleUser({ email, firstName, lastName }) {
     .first();
   
   if (existing) {
-    console.log(`✅ Google user found: ${normalizedEmail} (ID: ${existing.id})`);
     return await findById(existing.id);
   }
   
@@ -237,7 +229,6 @@ async function createOrGetGoogleUser({ email, firstName, lastName }) {
   const username = normalizedEmail.split('@')[0].slice(0, 30).replace(/[^a-zA-Z0-9_]/g, '_');
   
   try {
-    console.log(`Creating new Google user: email=${normalizedEmail}, username=${username}`);
     
     const [id] = await db('users').insert({
       username,
@@ -251,7 +242,6 @@ async function createOrGetGoogleUser({ email, firstName, lastName }) {
       updated_at: db.fn.now()
     });
     
-    console.log(`✅ Google user created: ${normalizedEmail} (ID: ${id})`);
     return await findById(id);
   } catch (error) {
     console.error('❌ Error creating Google user:', error);
@@ -521,16 +511,13 @@ async function initializeUserDashboard(userId) {
       updated_at: db.fn.now()
     });
     
-    console.log(`✅ Dashboard initialized for user ${userId}`);
     return true;
   } catch (error) {
-    // If table doesn't exist yet (migration not run), log warning but don't fail
     if (error.message && error.message.includes("doesn't exist")) {
-      console.warn(`user_dashboards table doesn't exist yet. Run migration: 202510160002_create_user_dashboards.sql`);
+      console.warn('user_dashboards table missing. Run migration.');
       return false;
     }
-    console.error(`Error initializing dashboard for user ${userId}:`, error);
-    // Don't throw - dashboard initialization shouldn't block user creation
+    console.error('Dashboard init failed:', error.message);
     return false;
   }
 }

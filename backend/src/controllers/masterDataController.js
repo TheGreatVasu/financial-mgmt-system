@@ -28,9 +28,6 @@ const submitMasterData = asyncHandler(async (req, res) => {
   const userId = requireUser(req);
   const payload = req.body || {};
   
-  console.log('Submitting master data for user:', userId);
-  console.log('Payload keys:', Object.keys(payload));
-  
   // Validate required sections
   if (!payload.companyProfile || !payload.customerProfile) {
     return res.status(400).json({
@@ -42,14 +39,12 @@ const submitMasterData = asyncHandler(async (req, res) => {
   try {
     // Save master data
     const saved = await saveMasterData(userId, payload);
-    console.log('Master data saved successfully');
     
     // Sync customer profile from master data to customers table
     let syncResult = null;
     if (payload.customerProfile) {
       try {
         syncResult = await syncMasterDataToCustomers(userId, payload);
-        console.log('Customer sync result:', syncResult);
       } catch (syncError) {
         console.error('Error syncing master data to customers:', syncError);
         // Don't fail the request if sync fails, just log it

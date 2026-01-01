@@ -1,7 +1,5 @@
 const { validationResult, body } = require('express-validator');
 const repo = require('../services/actionItemsRepo');
-const { createCalendarEvent } = require('../services/calendarService');
-const reminderService = require('../services/reminderService');
 
 exports.validateCreate = [
   body('title').isString().trim().notEmpty(),
@@ -16,10 +14,6 @@ exports.create = async (req, res) => {
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
   const { actionId, title, ownerName, ownerEmail, dueDate, notes } = req.body;
   const item = await repo.createActionItem({ actionId, title, ownerName, ownerEmail, dueDate, status: 'open', notes });
-  try {
-    await createCalendarEvent({ momId: actionId || item.id, meetingTitle: title, meetingDate: dueDate });
-  } catch {}
-  reminderService.scheduleOneDayBefore({ id: item.id, title, ownerName, ownerEmail, dueDate });
   res.status(201).json({ success: true, data: item });
 };
 
@@ -38,8 +32,6 @@ exports.bulkCreateFromMom = async (req, res) => {
       status: raw.status || 'open',
       notes: raw.notes || undefined,
     });
-    try { await createCalendarEvent({ momId: item.actionId || item.id, meetingTitle: item.title, meetingDate: item.dueDate }); } catch {}
-    reminderService.scheduleOneDayBefore({ id: item.id, title: item.title, ownerName: item.ownerName, ownerEmail: item.ownerEmail, dueDate: item.dueDate });
     created.push(item);
   }
   res.status(201).json({ success: true, data: created });
