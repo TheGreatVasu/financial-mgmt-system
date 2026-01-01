@@ -9,7 +9,7 @@ export async function login({ email, password }) {
       throw new Error('Email and password are required')
     }
     
-    const { data } = await api.post('/api/auth/login', { email, password })
+    const { data } = await api.post('/auth/login', { email, password })
     
     if (!data?.success) {
       throw new Error(data?.message || 'Login failed')
@@ -155,7 +155,7 @@ export async function register({ firstName, lastName, email, phoneNumber, role, 
       throw new Error('All fields are required')
     }
     
-    const { data } = await api.post('/api/auth/register', {
+    const { data } = await api.post('/auth/register', {
       firstName,
       lastName,
       email,
