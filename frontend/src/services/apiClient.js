@@ -2,23 +2,21 @@ import axios from 'axios'
 
 /**
  * Gets the API base URL from environment variables.
- * Validates lazily and logs warnings instead of throwing at module scope.
+ * Returns graceful fallbacks instead of throwing errors.
  * @returns {string|undefined} The API base URL or undefined if not set
  */
 function getApiBaseUrl() {
   // ✅ DEVELOPMENT → use Vite proxy
   if (import.meta.env.DEV) {
-    console.log('ℹ️ DEV mode: using Vite proxy /api');
     return '/api';
   }
 
-  // ✅ PRODUCTION → must have env
+  // ✅ PRODUCTION → use env var or return undefined
   const baseURL = import.meta.env.VITE_API_BASE_URL;
 
   if (!baseURL || !baseURL.trim()) {
-    throw new Error(
-      '❌ VITE_API_BASE_URL is required in production. Rebuild the app.'
-    );
+    console.warn('⚠️  VITE_API_BASE_URL is not set in production. API requests may fail.');
+    return undefined;
   }
 
   return baseURL.trim().replace(/\/+$/, '');
@@ -27,51 +25,50 @@ function getApiBaseUrl() {
 
 /**
  * Creates an Axios instance configured for API requests.
- * Validates environment variables lazily - only throws when actually called.
+ * Gracefully handles missing environment variables instead of throwing.
  * @param {string|null} token - Optional JWT token for authentication
  * @returns {import('axios').AxiosInstance} Configured Axios instance
- * @throws {Error} If VITE_API_BASE_URL is not set (only when function is called)
  */
 export function createApiClient(token) {
-  // Lazy validation - only throws when function is actually called
+  // Get base URL gracefully - may be undefined if not configured
   const baseURL = getApiBaseUrl();
+  
+  // Log warning if base URL is missing but continue anyway
   if (!baseURL) {
-    throw new Error('VITE_API_BASE_URL must be set (non-empty string) for API requests. Check your environment variables and rebuild the application.');
+    console.warn('⚠️  Creating API client without base URL. API requests will fail.');
   }
 
-
   const instance = axios.create({
-    baseURL,
+    baseURL: baseURL || '', // Use empty string as fallback
     headers: {
       'Content-Type': 'application/json',
     },
     withCredentials: false,
-  })
+  });
 
   instance.interceptors.request.use((config) => {
     // CRITICAL: Ensure method is always explicitly set
     if (!config.method) {
-      config.method = 'POST' // Default to POST if not set
+      config.method = 'POST'; // Default to POST if not set
     }
     
-    
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`;
     }
     // Don't set Content-Type for FormData, let browser set it with boundary
     if (config.data instanceof FormData) {
-      delete config.headers['Content-Type']
+      delete config.headers['Content-Type'];
     }
     
     // CRITICAL: Ensure POST requests have proper headers
     if (config.method.toUpperCase() === 'POST' && !(config.data instanceof FormData)) {
-      config.headers['Content-Type'] = 'application/json'
+      config.headers['Content-Type'] = 'application/json';
     }
     
-    return config
-  })
+    return config;
+  });
 
-  return instance
+  return instance;
 }
 
 

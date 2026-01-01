@@ -38,48 +38,52 @@ function getSocketUrl() {
     return socket;
   }
 
-  // Lazy validation - only throws when function is actually called
+  // Lazy validation - gracefully handle missing env var
   const socketUrl = getSocketUrl();
   if (!socketUrl) {
-    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to initialize sockets. Check your environment variables and rebuild the application.');
+    console.warn('⚠️  Socket initialization skipped: VITE_API_BASE_URL is not set. Real-time features will be unavailable.');
+    return null;
   }
   
-  socket = io(socketUrl, {
-    auth: {
-      token: token
-    },
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS
-  });
+  try {
+    socket = io(socketUrl, {
+      auth: {
+        token: token
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS
+    });
 
-  socket.on('connect', () => {
-    if (import.meta.env.DEV) {
-    }
-    reconnectAttempts = 0;
-  });
+    socket.on('connect', () => {
+      if (import.meta.env.DEV) {
+      }
+      reconnectAttempts = 0;
+    });
 
-  socket.on('disconnect', (reason) => {
-    if (import.meta.env.DEV) {
-    }
-    if (reason === 'io server disconnect') {
-      // Server disconnected, reconnect manually
-      socket.connect();
-    }
-  });
+    socket.on('disconnect', (reason) => {
+      if (import.meta.env.DEV) {
+      }
+      if (reason === 'io server disconnect') {
+        socket.connect();
+      }
+    });
 
-  socket.on('connect_error', (error) => {
-    // Always log connection errors, but less verbosely in production
-    if (import.meta.env.DEV) {
-    }
-    reconnectAttempts++;
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    }
-  });
+    socket.on('connect_error', (error) => {
+      if (import.meta.env.DEV) {
+      }
+      reconnectAttempts++;
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      }
+    });
 
-  return socket;
-}
+    return socket;
+  } catch (error) {
+    console.warn('⚠️  Socket connection failed:', error.message);
+    socket = null;
+    return null;
+  }}
 
 export function disconnectSocket() {
   if (socket) {

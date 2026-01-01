@@ -42,7 +42,7 @@ export async function importExcelFile(token, file) {
 
 /**
  * Gets the API base URL from environment variables.
- * Validates lazily and logs warnings instead of throwing at module scope.
+ * Returns graceful fallbacks instead of throwing errors.
  * @returns {string|undefined} The API base URL or undefined if not set
  */
 function getApiBaseUrl() {
@@ -51,50 +51,44 @@ function getApiBaseUrl() {
     : undefined;
   
   if (!baseURL && import.meta.env.DEV) {
-    console.warn('⚠️  VITE_API_BASE_URL is not set. Template download will likely fail.');
-  }
-  if (!baseURL) {
-    return undefined;
+    console.warn('⚠️  VITE_API_BASE_URL is not set. Template operations may be unavailable.');
   }
   
   return baseURL;
 }
 
 export async function downloadTemplate(token) {
-  // Lazy validation - only throws when function is actually called
+  // Gracefully handle missing base URL
   const baseURL = getApiBaseUrl();
   if (!baseURL) {
-    throw new Error('VITE_API_BASE_URL must be set (non-empty string) to download templates. Check your environment variables and rebuild the application.');
+    console.warn('⚠️  Template download skipped: VITE_API_BASE_URL is not configured. Please set the API base URL and try again.');
+    throw new Error('Template download is temporarily unavailable. Please check your configuration.');
   }
 
-  const url = `${baseURL}/import/template`
+  const url = `${baseURL}/import/template`;
 
   try {
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
-    })
+    });
 
     if (!response.ok) {
-      throw new Error('Failed to download template')
+      throw new Error('Failed to download template');
     }
 
-    const blob = await response.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = 'import_format.xlsx'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(blobUrl)
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'import_format.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
   } catch (error) {
-    // Provide more context in error message
-    if (error.message.includes('VITE_API_BASE_URL')) {
-      throw error; // Re-throw validation errors as-is
-    }
-    throw new Error(`Failed to download template file: ${error.message || 'Unknown error'}`)
+    throw new Error(`Failed to download template file: ${error.message || 'Unknown error'}`);
   }
 }
 

@@ -118,8 +118,15 @@ export default function SalesInvoiceDashboard() {
   useEffect(() => {
     if (!token) return;
 
-    // Initialize socket connection
+    // Initialize socket connection (may be null if env var not set)
     const socket = initializeSocket(token);
+
+    // If socket is unavailable, just load data normally
+    if (!socket) {
+      console.warn('Socket not available - using polling only');
+      loadDashboard();
+      return;
+    }
 
     // Listen for sales invoice dashboard updates
     const handleDashboardUpdate = (data) => {

@@ -79,8 +79,13 @@ export default function Profile() {
 
     setCurrentToken(token)
 
-    // Initialize Socket.io
+    // Initialize Socket.io (may be null if env var not set)
     const socket = initializeSocket(token)
+    if (!socket) {
+      console.warn('Socket not available - real-time features disabled')
+      loadSessions()
+      return
+    }
 
     // Set up session update listener
     socket.on('sessions:update', (updatedSessions) => {
