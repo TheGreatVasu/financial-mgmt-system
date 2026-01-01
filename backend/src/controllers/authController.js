@@ -148,6 +148,16 @@ const register = asyncHandler(async (req, res) => {
   }
   const userRole = requestedRole;
 
+  // Check database connection before attempting registration
+  const { hasDb } = require('../services/userRepo');
+  if (!hasDb()) {
+    console.error('Registration failed: Database not connected');
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection unavailable. Please try again later.'
+    });
+  }
+
   // Create user
   const user = await createUser({ username, email, password, firstName, lastName, phoneNumber, role: userRole });
 

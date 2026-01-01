@@ -153,8 +153,13 @@ async function createUser({ username, email, password, firstName, lastName, phon
   
   try {
     const hash = await bcrypt.hash(password, 12);
-    const validRoles = ['admin', 'user', 'company'];
-    const userRole = validRoles.includes(role) ? role : 'user';
+    // Accept both old role format (admin, user, company) and new professional roles (business_user, company_admin, system_admin)
+    const validRoles = ['admin', 'user', 'company', 'business_user', 'company_admin', 'system_admin'];
+    const userRole = validRoles.includes(role) ? role : 'business_user';
+    
+    if (!validRoles.includes(userRole)) {
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+    }
     
     console.log(`Creating user in database: email=${email}, username=${username}, phone=${phoneNumber || 'N/A'}, role=${userRole}`);
     
