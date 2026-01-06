@@ -130,7 +130,7 @@ export default function InvoiceNewPage() {
               <CheckCircle2 className="h-5 w-5 text-success-600" />
               <div>
                 <p className="text-sm font-semibold text-success-900">Invoice created successfully!</p>
-                <p className="text-xs text-success-700">Your invoice has been saved and is ready to view.</p>
+                <p className="text-xs text-success-700">Invoice Key ID: <span className="font-mono font-semibold">{createdInvoice.id || createdInvoice._id || 'N/A'}</span></p>
               </div>
             </div>
             <InvoicePreviewCard invoice={createdInvoice} />
@@ -158,6 +158,7 @@ export default function InvoiceNewPage() {
               <MultiStepInvoiceForm
                 onSubmit={handleSubmit}
                 onCancel={() => navigate('/invoices')}
+                createdId={null}
               />
             </div>
           </div>

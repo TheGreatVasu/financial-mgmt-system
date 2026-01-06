@@ -168,7 +168,7 @@ const STEP_TITLES = ['Invoice Data Entry', 'Review & Submit']
 const TOTAL_STEPS = STEP_TITLES.length
 const IS_DEV_MODE = typeof import.meta !== 'undefined' && import.meta.env?.MODE !== 'production'
 
-export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
+export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel, createdId = null }) {
   const { token } = useAuthContext()
   const [customers, setCustomers] = useState([])
   const [poEntries, setPoEntries] = useState([])
@@ -614,6 +614,7 @@ export default function MultiStepInvoiceForm({ invoice, onSubmit, onCancel }) {
             customers={customers}
             poEntries={poEntries}
             paymentTerms={paymentTerms}
+            createdId={createdId}
           />
           <Step2ItemTax
             formData={formData}

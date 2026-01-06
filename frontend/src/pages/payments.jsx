@@ -7,9 +7,10 @@ import { useAuthContext } from '../context/AuthContext.jsx'
 import { createPaymentService } from '../services/paymentService'
 import { getSalesInvoiceDashboard } from '../services/salesInvoiceService'
 import { createInvoiceService } from '../services/invoiceService.js'
-import { Plus, Search, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, Building2, Package, CreditCard, Banknote } from 'lucide-react'
+import { Plus, Search, Calendar, DollarSign, Loader2, AlertCircle, X, Edit, Trash2, CheckCircle2, Clock, AlertTriangle, FileText, Building2, Package, CreditCard, Banknote, TrendingUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 
 export default function PaymentsPage() {
   const { token } = useAuthContext()
@@ -26,20 +27,48 @@ export default function PaymentsPage() {
   const [form, setForm] = useState(defaultForm())
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
+  const [showTotalModal, setShowTotalModal] = useState(false)
 
   const debounced = useDebounce(filters, 400)
 
   // Calculate statistics
   const stats = useMemo(() => {
     const totalAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    const completedAmount = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    const pendingAmount = payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    const outstandingAmount = pendingAmount
     const paidCount = payments.filter(p => p.status === 'completed').length
     const pendingCount = payments.filter(p => p.status === 'pending').length
+    const failedCount = payments.filter(p => p.status === 'failed').length
+    
+    // Customer-wise breakdown
+    const customerBreakdown = payments.reduce((acc, p) => {
+      const customer = p.customerName || p.customer_name || 'Unknown'
+      const existing = acc.find(c => c.name === customer)
+      if (existing) {
+        existing.amount += Number(p.amount) || 0
+        existing.count += 1
+      } else {
+        acc.push({ name: customer, amount: Number(p.amount) || 0, count: 1 })
+      }
+      return acc
+    }, []).sort((a, b) => b.amount - a.amount)
     
     return {
       totalAmount,
+      completedAmount,
+      pendingAmount,
+      outstandingAmount,
       paidCount,
       pendingCount,
-      totalCount: payments.length
+      failedCount,
+      totalCount: payments.length,
+      chartData: [
+        { name: 'Completed', value: paidCount, amount: completedAmount, color: '#10B981' },
+        { name: 'Pending', value: pendingCount, amount: pendingAmount, color: '#F59E0B' },
+        { name: 'Failed', value: failedCount, amount: 0, color: '#EF4444' }
+      ],
+      customerBreakdown
     }
   }, [payments])
 
@@ -270,28 +299,34 @@ export default function PaymentsPage() {
           )}
         </AnimatePresence>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Amount Clickable Card */}
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={() => setShowTotalModal(true)}
+          className="w-full bg-gradient-to-br from-blue-600 via-blue-500 to-blue-700 rounded-2xl p-6 text-white shadow-xl shadow-blue-500/30 hover:shadow-2xl hover:shadow-blue-500/40 transition-all duration-300 transform hover:scale-105 cursor-pointer border border-blue-400/30"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+              <DollarSign className="h-6 w-6" />
+            </div>
+            <div className="flex items-center gap-1 text-blue-100 text-xs font-medium bg-white/10 px-2.5 py-1 rounded-lg">
+              <TrendingUp className="h-3 w-3" />
+              Click to View Details
+            </div>
+          </div>
+          <p className="text-blue-100 text-sm font-medium mb-1">Total Amount</p>
+          <p className="text-4xl font-bold">₹{stats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-blue-100 text-xs mt-3">{stats.totalCount} total payments</p>
+        </motion.button>
+
+        {/* Statistics Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/25"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <DollarSign className="h-6 w-6" />
-              </div>
-            </div>
-            <p className="text-blue-100 text-sm font-medium mb-1">Total Amount</p>
-            <p className="text-2xl font-bold">₹{stats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-blue-100 text-xs mt-2">{stats.totalCount} payments</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
             className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg shadow-green-500/25"
           >
             <div className="flex items-center justify-between mb-4">
@@ -300,14 +335,17 @@ export default function PaymentsPage() {
               </div>
             </div>
             <p className="text-green-100 text-sm font-medium mb-1">Completed</p>
-            <p className="text-2xl font-bold">{stats.paidCount}</p>
-            <p className="text-green-100 text-xs mt-2">Payments received</p>
+            <p className="text-3xl font-bold mb-2">{stats.paidCount}</p>
+            <p className="text-green-100 text-xs mb-3">Payments received</p>
+            <div className="pt-3 border-t border-white/20">
+              <p className="text-green-100 text-xs font-medium">Amount: ₹{stats.completedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.2 }}
             className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-6 text-white shadow-lg shadow-amber-500/25"
           >
             <div className="flex items-center justify-between mb-4">
@@ -316,26 +354,95 @@ export default function PaymentsPage() {
               </div>
             </div>
             <p className="text-amber-100 text-sm font-medium mb-1">Pending</p>
-            <p className="text-2xl font-bold">{stats.pendingCount}</p>
-            <p className="text-amber-100 text-xs mt-2">Awaiting processing</p>
+            <p className="text-3xl font-bold mb-2">{stats.pendingCount}</p>
+            <p className="text-amber-100 text-xs mb-3">Awaiting processing</p>
+            <div className="pt-3 border-t border-white/20">
+              <p className="text-amber-100 text-xs font-medium">Amount: ₹{stats.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg shadow-purple-500/25"
+            transition={{ delay: 0.3 }}
+            className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-500/25"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <FileText className="h-6 w-6" />
+                <AlertTriangle className="h-6 w-6" />
               </div>
             </div>
-            <p className="text-purple-100 text-sm font-medium mb-1">Invoices</p>
-            <p className="text-2xl font-bold">{invoices.length}</p>
-            <p className="text-purple-100 text-xs mt-2">Available for payment</p>
+            <p className="text-red-100 text-sm font-medium mb-1">Outstanding</p>
+            <p className="text-3xl font-bold mb-2">₹{stats.outstandingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-red-100 text-xs mb-3">{stats.pendingCount} pending payments</p>
+            <div className="pt-3 border-t border-white/20">
+              <p className="text-red-100 text-xs font-medium">To be collected</p>
+            </div>
           </motion.div>
         </div>
+
+        {/* Payment Statistics Bar Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+        >
+          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <h2 className="text-xl font-bold text-gray-900">Payment Status Overview</h2>
+            <p className="text-sm text-gray-600 mt-1">Visual breakdown of payment counts and amounts by status</p>
+          </div>
+          <div className="p-6">
+            {stats.chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart
+                  data={stats.chartData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    label={{ value: 'Count', angle: -90, position: 'insideLeft' }}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    label={{ value: 'Amount (₹)', angle: 90, position: 'insideRight' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#fff', 
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value, name) => {
+                      if (name === 'amount') {
+                        return [`₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, 'Amount'];
+                      }
+                      return [value, name];
+                    }}
+                  />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="value" fill="#3B82F6" name="Count" radius={[8, 8, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="amount" fill="#10B981" name="Amount" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center py-16 text-gray-500">
+                <p>No payment data available for chart</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
 
         {/* Filters */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
@@ -634,6 +741,74 @@ export default function PaymentsPage() {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* Total Amount Modal - Customer Breakdown */}
+      <Modal
+        isOpen={showTotalModal}
+        onClose={() => setShowTotalModal(false)}
+        title="Total Payment Breakdown"
+        subtitle="Payment amounts by customer"
+      >
+        <div className="space-y-4 max-h-96 overflow-y-auto">
+          {stats.customerBreakdown.length > 0 ? (
+            <>
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-blue-600 font-medium">Total Amount</p>
+                    <p className="text-3xl font-bold text-blue-900 mt-1">₹{stats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">From</p>
+                    <p className="text-2xl font-bold text-blue-900 mt-1">{stats.customerBreakdown.length}</p>
+                    <p className="text-xs text-blue-600">customers</p>
+                  </div>
+                </div>
+              </div>
+
+              {stats.customerBreakdown.map((customer, idx) => (
+                <motion.div
+                  key={customer.name}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900">{customer.name}</h3>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                      {customer.count} payment{customer.count > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-sm text-gray-600">Amount Received</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      ₹{customer.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="mt-3 bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                      style={{ width: `${(customer.amount / stats.totalAmount) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {((customer.amount / stats.totalAmount) * 100).toFixed(1)}% of total
+                  </p>
+                </motion.div>
+              ))}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-gray-100 p-4 mb-4">
+                <CreditCard className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-gray-600 font-medium">No payments yet</p>
+              <p className="text-sm text-gray-500 mt-1">Create your first payment to see the breakdown</p>
+            </div>
+          )}
+        </div>
       </Modal>
     </DashboardLayout>
   )

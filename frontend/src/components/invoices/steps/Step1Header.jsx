@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { useAuthContext } from '../../../context/AuthContext'
+
 const BUSINESS_UNIT_OPTIONS = [
   'Automation',
   'Energy',
@@ -7,7 +10,7 @@ const BUSINESS_UNIT_OPTIONS = [
   'Other'
 ]
 
-export default function Step1Header({ formData, updateFormData, errors, customers = [], poEntries = [], paymentTerms = [] }) {
+export default function Step1Header({ formData, updateFormData, errors, customers = [], poEntries = [], paymentTerms = [], createdId = null }) {
   
   // Handle PO Entry selection - auto-fill customer and related fields
   const handlePOEntrySelect = (poEntryId) => {
@@ -59,8 +62,8 @@ export default function Step1Header({ formData, updateFormData, errors, customer
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-secondary-700 mb-1">Key ID</label>
-          <div className="input pointer-events-none cursor-not-allowed bg-secondary-50 text-secondary-600">
-            {formData.keyId || 'Assigned automatically on save'}
+          <div className="input pointer-events-none cursor-not-allowed bg-secondary-50 text-secondary-900 font-semibold text-lg">
+            {createdId ? createdId : <span className="text-secondary-400 text-sm font-normal">—</span>}
           </div>
         </div>
 

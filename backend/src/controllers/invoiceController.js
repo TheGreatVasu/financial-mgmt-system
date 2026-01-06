@@ -260,6 +260,9 @@ const createInvoice = asyncHandler(async (req, res) => {
         if (payload.poRef) {
           row.po_ref = payload.poRef;
         }
+        if (payload.poEntryId) {
+          row.po_id = payload.poEntryId;
+        }
         if (payload.paymentTerms) {
           row.payment_terms = payload.paymentTerms;
         }
@@ -312,6 +315,7 @@ const createInvoice = asyncHandler(async (req, res) => {
               // Try to update with optional fields if columns exist
               const updateData = {};
               if (payload.poRef) updateData.po_ref = payload.poRef;
+              if (payload.poEntryId) updateData.po_id = payload.poEntryId;
               if (payload.paymentTerms) updateData.payment_terms = payload.paymentTerms;
               if (payload.notes) updateData.notes = payload.notes;
               
