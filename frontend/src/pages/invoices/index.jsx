@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Download, Plus, Edit, Trash2, Eye, Search, Loader2, AlertCircle, X, FileText, Calendar, DollarSign } from 'lucide-react'
+import { Download, Plus, Edit, Trash2, Eye, Search, Loader2, AlertCircle, X, FileText, Calendar, DollarSign, Upload } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
+import { useImportContext } from '../../context/ImportContext.jsx'
 import { createInvoiceService } from '../../services/invoiceService.js'
 import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import InvoiceForm from '../../components/invoices/InvoiceForm.jsx'
@@ -13,6 +14,7 @@ import toast from 'react-hot-toast'
 export default function InvoicesList() {
   const { token } = useAuthContext()
   const navigate = useNavigate()
+  const { openImportModal } = useImportContext()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('all')
@@ -233,6 +235,18 @@ export default function InvoicesList() {
             <p className="text-sm text-secondary-600 mt-1.5">Track and manage all your invoices</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={openImportModal}
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 rounded-lg 
+                         bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs sm:text-sm font-medium 
+                         hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 
+                         transition-all duration-200 shadow-sm hover:shadow-md group"
+              aria-label="Import invoices from Excel or CSV files"
+              title="Import invoices from Excel or CSV files"
+            >
+              <Upload className="w-4 h-4 group-hover:scale-110 transition-transform flex-shrink-0" />
+              <span className="text-[11px] sm:text-sm font-semibold tracking-wide">Import</span>
+            </button>
             <button
               onClick={handleExport}
               disabled={loading || filtered.length === 0}

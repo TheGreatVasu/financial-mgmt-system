@@ -173,7 +173,6 @@ async function syncMasterDataToCustomers(userId, masterData) {
         created_by: userId, // Ensure created_by is set
         updated_at: db.fn.now(),
       });
-    console.log(`Updated existing customer ${companyName} (ID: ${existingCustomer.id}) for user ${userId}`);
     return { id: existingCustomer.id, customerId: existingCustomer.id, action: 'updated' };
   } else {
     // Create new customer
@@ -181,7 +180,6 @@ async function syncMasterDataToCustomers(userId, masterData) {
     customerData.created_by = userId; // Ensure created_by is set
     customerData.metadata = metadata;
     const [id] = await db('customers').insert(customerData);
-    console.log(`Created new customer ${companyName} (ID: ${id}) for user ${userId}`);
     return { id, customerId: id, action: 'created' };
   }
 }

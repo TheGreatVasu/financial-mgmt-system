@@ -85,8 +85,6 @@ function initializeSocket(server) {
     
     // Handle disconnect
     socket.on('disconnect', () => {
-      console.log(`Socket disconnected: User ${userId}, Socket ${socket.id}`);
-      
       // Remove socket from user's set
       if (userSockets.has(userId)) {
         userSockets.get(userId).delete(socket.id);
@@ -135,11 +133,8 @@ async function broadcastDashboardUpdate(targetUserId = null) {
     : Array.from(userSockets.keys());
     
   if (connectedUserIds.length === 0) {
-    console.log('ℹ️ No connected users to broadcast to');
     return;
   }
-
-  console.log(`📡 Broadcasting dashboard update to ${connectedUserIds.length} user(s):`, connectedUserIds);
 
   await Promise.all(
     connectedUserIds.map(async (userId) => {
@@ -150,11 +145,6 @@ async function broadcastDashboardUpdate(targetUserId = null) {
 
         // Build sales invoice dashboard data
         const salesInvoiceDashboard = await buildSalesInvoiceDashboardData(userId, {});
-        console.log(`📊 Broadcasting sales invoice dashboard for user ${userId}:`, {
-          hasData: salesInvoiceDashboard?.hasData,
-          invoiceCount: salesInvoiceDashboard?.invoices?.length || 0,
-          totalAmount: salesInvoiceDashboard?.summary?.totalInvoiceAmount || 0
-        });
         
         io.to(`user:${userId}`).emit('sales-invoice-dashboard:update', {
           success: true,
@@ -162,14 +152,11 @@ async function broadcastDashboardUpdate(targetUserId = null) {
           userId,
         });
         
-        console.log(`✅ Successfully broadcasted to user ${userId}`);
       } catch (error) {
-        console.error(`❌ Error broadcasting dashboard update for user ${userId}:`, error);
+        // Error broadcasting dashboard update
       }
     })
   );
-  
-  console.log('✅ Dashboard broadcast completed');
 }
 
 module.exports = {

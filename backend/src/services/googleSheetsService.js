@@ -44,7 +44,6 @@ async function getValidAccessToken(userId) {
 		// Refresh if expires within 5 minutes
 		if (expiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
 			if (tokens.refreshToken) {
-				console.log(`Refreshing access token for user ${userId}`);
 				const newAccessToken = await refreshAccessToken(tokens.refreshToken);
 				// Update stored token (expires in 1 hour typically)
 				const { updateGoogleTokens } = require('./userRepo');

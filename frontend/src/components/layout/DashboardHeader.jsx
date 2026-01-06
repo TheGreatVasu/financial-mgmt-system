@@ -1,37 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, Search, Bell, ChevronDown, Upload, FileSpreadsheet } from 'lucide-react'
+import { Menu, Search, Bell, ChevronDown } from 'lucide-react'
 import { useDashboardTour } from '../tour/TourProvider.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { useImportContext } from '../../context/ImportContext.jsx'
 
 export default function DashboardHeader({ onToggleSidebar }) {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false)
   const { startTour } = useDashboardTour()
   const [isNotifOpen, setIsNotifOpen] = useState(false)
-  const [showImportTooltip, setShowImportTooltip] = useState(false)
   const searchRef = useRef(null)
   const notifRef = useRef(null)
-  const importButtonRef = useRef(null)
   const navigate = useNavigate()
   const { logout, user } = useAuthContext()
-  const { openImportModal } = useImportContext()
-  
-  // Debug: Log user data to help diagnose issues
-  useEffect(() => {
-    if (user) {
-      console.log('DashboardHeader - Current user data:', {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        username: user.username,
-        email: user.email,
-        fullUser: user
-      })
-    } else {
-      console.log('DashboardHeader - No user data available')
-    }
-  }, [user])
   
   // Calculate display name from actual user data
   const getDisplayName = () => {
@@ -139,58 +119,6 @@ export default function DashboardHeader({ onToggleSidebar }) {
 
         {/* Right Side - Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 lg:gap-4 flex-shrink-0">
-          {/* Import Data Button - Always visible */}
-          <div 
-            className="relative" 
-            ref={importButtonRef}
-            onMouseEnter={() => setShowImportTooltip(true)}
-            onMouseLeave={() => setShowImportTooltip(false)}
-          >
-            <button 
-              onClick={openImportModal}
-              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs sm:text-sm font-medium hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 transition-all duration-200 shadow-sm hover:shadow-md group"
-              aria-label="Import data from Excel or CSV files"
-            >
-              <Upload className="w-4 h-4 group-hover:scale-110 transition-transform flex-shrink-0" />
-              <span className="text-[11px] sm:text-sm font-semibold tracking-wide">Import Data</span>
-            </button>
-            
-            {/* Professional Tooltip */}
-            {showImportTooltip && (
-              <div className="absolute right-0 top-full mt-2 w-64 sm:w-72 bg-white dark:bg-[#1E293B] rounded-lg shadow-xl border border-gray-200 dark:border-secondary-700 p-3 sm:p-4 z-[100] animate-in fade-in-0 zoom-in-95">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                    <Upload className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1.5">
-                      Import Your Company Data
-                    </h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-3">
-                      Seamlessly migrate your financial data from Excel (.xlsx, .xls) or CSV files. Import invoices, customers, and payment records in bulk to get started quickly.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded text-[10px] font-medium border border-emerald-200 dark:border-emerald-800">
-                        Excel Support
-                      </span>
-                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded text-[10px] font-medium border border-emerald-200 dark:border-emerald-800">
-                        CSV Support
-                      </span>
-                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded text-[10px] font-medium border border-emerald-200 dark:border-emerald-800">
-                        Bulk Import
-                      </span>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-secondary-700">
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                        💡 Download our sample template to ensure proper formatting
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Start Tour - Hidden on mobile */}
           <button 
             onClick={startTour} 

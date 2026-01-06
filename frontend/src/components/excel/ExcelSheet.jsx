@@ -163,7 +163,6 @@ export default function ExcelSheet() {
           // Events (optional: show how to hook into changes)
           afterChange={(changes, source) => {
             // Example: could debounce persistence; keep lightweight to avoid perf hits
-            // console.log('Cell changes', { source, changes })
           }}
         />
       </div>

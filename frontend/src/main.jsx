@@ -17,13 +17,7 @@ if (import.meta.env.MODE === 'production') {
     console.warn('   Recommended: https://nbaurum.com/api');
   }
 } else if (import.meta.env.DEV) {
-  // Development mode - just log for info
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  if (!apiBaseUrl || apiBaseUrl.trim() === '') {
-    console.log('📡 Using Vite proxy for /api requests (VITE_API_BASE_URL not set)');
-  } else {
-    console.log('📡 API Base URL:', apiBaseUrl);
-  }
+  // Development mode - API configuration complete
 }
 
 // Simple scroll restoration on route change

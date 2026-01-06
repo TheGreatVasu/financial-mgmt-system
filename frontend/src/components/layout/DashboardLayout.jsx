@@ -143,10 +143,7 @@ export default function DashboardLayout({ children }) {
         updateQueueItemByFile(file, { status: 'uploading', progress: 10, error: null })
         
         try {
-          console.log(`📤 Starting import for file: ${file.name}`, { size: file.size, type: file.type })
           const result = await importExcelFile(token, file)
-          console.log(`📥 Import response received for ${file.name}:`, result)
-          
             if (result?.success) {
             // Support both old and new response formats
             const importedCount = result.importedCount || result.data?.importedCount || result.data?.imported || 0
@@ -154,15 +151,6 @@ export default function DashboardLayout({ children }) {
             const errorDetails = result.data?.errorDetails || []
             const columnMapping = result.data?.columnMapping || {}
             const mergeSummary = result.data?.mergeSummary || {}
-            
-            console.log(`✅ Import response for ${file.name}:`, {
-              importedCount,
-              fileErrors,
-              errorDetails: errorDetails.length,
-              matchedColumns: columnMapping.matchedCount,
-              ignoredColumns: columnMapping.ignoredCount,
-              mergeSummary
-            })
             
             totalImported += importedCount
             totalErrors += fileErrors
@@ -232,7 +220,6 @@ export default function DashboardLayout({ children }) {
                   .map(m => `${m.detected} → ${m.mapped}`)
                   .slice(0, 5)
                   .join(', ')
-                console.log(`Matched columns for ${file.name}:`, columnMapping.matched)
               }
             }
             
@@ -329,12 +316,12 @@ export default function DashboardLayout({ children }) {
               toast.error(`Details: ${errorDetails}`, { duration: 6000 })
             }
             
-            // Log detected headers if available
+            // Error details logged for debugging
             if (errorData.detectedHeaders) {
-              console.log('📊 Detected headers from error:', errorData.detectedHeaders);
+              // Detected headers available
             }
             if (errorData.expectedColumns) {
-              console.log('📊 Expected columns from error:', errorData.expectedColumns);
+              // Expected columns available
             }
           } else {
             errors.push(`${file.name}: ${err?.message || 'Failed to import'}`)
@@ -368,12 +355,6 @@ export default function DashboardLayout({ children }) {
           `Import failed: 0 records imported, ${totalErrorCount} error${totalErrorCount > 1 ? 's' : ''}. Check the upload queue for details.`,
           { duration: 8000 }
         )
-        console.error('❌ Import failed with errors:', {
-          totalImported,
-          totalErrors,
-          errors,
-          validationErrors
-        })
       } else {
         toast.warning(`No records were imported from ${filesArray.length} file(s). Please check your file format.`, { duration: 6000 })
       }
@@ -384,30 +365,14 @@ export default function DashboardLayout({ children }) {
       // Trigger dashboard refresh without page reload
       // Always trigger refresh if we imported records OR if there were errors (to show error state)
       if (totalImported > 0 || (totalErrors > 0 && totalImported === 0)) {
-        console.log('🔄 Triggering dashboard refresh after import...', { 
-          totalImported, 
-          totalErrors,
-          filesProcessed: filesArray.length,
-          willRefresh: true
-        })
         // Delay to ensure database transaction has fully committed
         // This matches the delay in SalesInvoiceDashboard component
         setTimeout(() => {
-          console.log('🔄 Calling triggerRefresh() now after import completion...')
           triggerRefresh()
         }, 2000) // Increased delay to ensure DB commit completes
       } else {
-        console.warn('⚠️ No records imported, skipping refresh', {
-          totalImported,
-          totalErrors,
-          errors: errors.length,
-          validationErrors: validationErrors.length
-        })
         if (errors.length > 0) {
-          console.error('❌ Import errors:', errors)
-        }
-        if (validationErrors.length > 0) {
-          console.error('❌ Validation errors:', validationErrors)
+          // Import failed - check errors
         }
       }
     } catch (err) {

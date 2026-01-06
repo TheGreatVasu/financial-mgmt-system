@@ -487,8 +487,6 @@ export default function AdvancedRevenueCharts({
                       />
                     ))}
                   </Pie>
-                  {/* Tooltip removed to avoid duplicate labels */}
-                  {/* Legend removed per design request */}
                 </PieChart>
               </ResponsiveContainer>
             )}

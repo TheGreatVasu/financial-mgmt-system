@@ -469,17 +469,14 @@ const CollectionDataTable = ({
 
   const onGridReady = (params) => {
     try {
-      console.log('Grid ready, columnDefs:', columnDefs?.length, 'columns')
       setGridApi(params.api)
       setColumnApi(params.columnApi)
       
       // Ensure columns are set explicitly
       if (columnDefs && columnDefs.length > 0) {
-        console.log('Setting column definitions:', columnDefs.length)
         params.api.setColumnDefs(columnDefs)
         // Verify columns were set
         const allColumns = params.api.getAllColumns()
-        console.log('Columns after set:', allColumns?.length)
       } else {
         console.warn('No column definitions found!')
       }
@@ -491,7 +488,6 @@ const CollectionDataTable = ({
           ? data 
           : [{ ...defaultRowData, id: Date.now() }]
       
-      console.log('Setting row data:', initialData.length, 'rows')
       params.api.setRowData(initialData)
       
       // Force grid to refresh and show columns
@@ -500,7 +496,6 @@ const CollectionDataTable = ({
           params.api.refreshCells()
           // Verify columns are visible
           const visibleColumns = params.api.getDisplayedColumns()
-          console.log('Visible columns:', visibleColumns?.length)
           if (visibleColumns?.length === 0) {
             console.error('No visible columns! Grid may not be rendering properly.')
           }

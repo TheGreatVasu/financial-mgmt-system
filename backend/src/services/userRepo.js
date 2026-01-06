@@ -161,8 +161,6 @@ async function createUser({ username, email, password, firstName, lastName, phon
       throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
     }
     
-    console.log(`Creating user in database: email=${email}, username=${username}, phone=${phoneNumber || 'N/A'}, role=${userRole}`);
-    
     const userData = {
       username,
       email,
@@ -181,8 +179,6 @@ async function createUser({ username, email, password, firstName, lastName, phon
     }
     
     const [id] = await db('users').insert(userData);
-    
-    console.log(`✅ User inserted with ID: ${id}`);
     
     // If company role, create company-specific database
     if (userRole === 'company') {
@@ -291,13 +287,10 @@ async function updateProfileById(id, { firstName, lastName, email, phoneNumber, 
           ALTER TABLE users 
           MODIFY COLUMN role VARCHAR(255) NOT NULL DEFAULT 'user'
         `);
-        console.log('✅ Successfully fixed role column schema automatically');
-        
         // Retry the update
         await db('users').where({ id }).update(updateData);
         return await findById(id);
       } catch (fixError) {
-        console.error('❌ Failed to auto-fix role column:', fixError);
         const dbError = new Error('Database schema error: Role column is too small. The system attempted to fix it automatically but failed. Please run the migration manually or contact your administrator.');
         dbError.originalError = error;
         dbError.fixError = fixError.message;
@@ -400,11 +393,10 @@ async function createCompanyDatabase(userId, email, username) {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.foreign('user_id').references('id').inTable('users').onDelete('CASCADE');
       });
-      console.log('✅ Created company_databases table');
     } catch (tableError) {
       // Table might already exist, which is fine
       if (!tableError.message.includes('already exists')) {
-        console.warn('Error creating company_databases table:', tableError.message);
+        // Log suppressed for production
       }
     }
     
@@ -487,7 +479,6 @@ async function initializeUserDashboard(userId) {
       .first();
     
     if (existing) {
-      console.log(`Dashboard already exists for user ${userId}`);
       return true;
     }
     
