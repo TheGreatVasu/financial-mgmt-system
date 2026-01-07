@@ -1,4 +1,4 @@
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const { getSheetValues, updateSheetValues } = require('../services/googleSheetsService');
 
 // GET /api/google-sheets/values?spreadsheetId=...&range=...

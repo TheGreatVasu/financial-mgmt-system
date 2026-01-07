@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { importExcel, downloadTemplate } = require('../controllers/importController');
 const { importSalesInvoice } = require('../controllers/salesInvoiceImportController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
 // Configure multer for file upload
 const storage = multer.memoryStorage(); // Store in memory

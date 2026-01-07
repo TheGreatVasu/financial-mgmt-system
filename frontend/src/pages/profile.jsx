@@ -5,7 +5,7 @@ import { changePasswordApi, uploadProfileImage, updatePreferences } from '../ser
 import { useToast } from '../components/ui/Toast.jsx'
 import { Camera, Eye, EyeOff, ShieldCheck, ShieldAlert, Smartphone, Mail, LogOut } from 'lucide-react'
 import { initializeSocket, disconnectSocket, getSocket } from '../services/socketService'
-import { getSessions, logoutSession, logoutAllSessions, updateSessionActivity, formatTimeAgo } from '../services/sessionService'
+import { getSessions, logoutSession, logoutAllSessions, updateSessionActivity, formatTimeAgo } from '../services/apiService'
 
 // Helper function to get role display name
 function getRoleDisplayName(role) {

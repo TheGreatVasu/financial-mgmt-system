@@ -6,11 +6,13 @@ import { getSalesInvoiceDashboard } from "../../services/salesInvoiceService.js"
 import { initializeSocket } from "../../services/socketService.js";
 import { createApiClient } from "../../services/apiClient.js";
 import SalesInvoiceMasterTable from "../tables/SalesInvoiceMasterTable.jsx";
-import PremiumGeoRevenueSection from "../charts/PremiumGeoRevenueSection.jsx";
+import { 
+  PremiumGeoRevenueSection, 
+  AdvancedRevenueCharts, 
+  MonthlyInvoiceTrendChart, 
+  DeductionComparisonChart 
+} from "../charts";
 import UploadQueueButton from "../dashboard/UploadQueueButton.jsx";
-import AdvancedRevenueCharts from "../charts/AdvancedRevenueCharts.jsx";
-import MonthlyInvoiceTrendChart from "../charts/MonthlyInvoiceTrendChart.jsx";
-import DeductionComparisonChart from "../charts/DeductionComparisonChart.jsx";
 import toast from "react-hot-toast";
 
 // Removed DASHBOARD_CLEAR_KEY - no longer using cleared state

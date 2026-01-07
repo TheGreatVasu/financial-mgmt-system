@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { createSearchService } from '../../services/searchService'
+import { createSearchService } from '../../services/apiService'
 import { getSharedFieldKey, getFieldBehavior } from '../../config/sharedFieldMapping'
 
 /**

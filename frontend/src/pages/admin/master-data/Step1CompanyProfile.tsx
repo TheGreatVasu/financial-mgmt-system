@@ -23,17 +23,39 @@ const companyProfileSchema = z.object({
   correspondenceCountry: z.string().min(1, 'Country is required'),
   correspondencePinCode: z.string().min(1, 'Pin code is required'),
 
-  otherOfficeType: z.string().min(1, 'Select an office type'),
-  otherOfficeAddress: z.string().min(1, 'Office address is required'),
-  otherOfficeGst: z.string().min(1, 'GST No. is required'),
-  otherOfficeDistrict: z.string().min(1, 'District is required'),
-  otherOfficeState: z.string().min(1, 'State is required'),
-  otherOfficeCountry: z.string().min(1, 'Country is required'),
-  otherOfficePinCode: z.string().min(1, 'Pin code is required'),
+  // Other Office fields are optional - only validate if at least one field is filled
+  otherOfficeType: z.string().optional(),
+  otherOfficeAddress: z.string().optional(),
+  otherOfficeGst: z.string().optional(),
+  otherOfficeDistrict: z.string().optional(),
+  otherOfficeState: z.string().optional(),
+  otherOfficeCountry: z.string().optional(),
+  otherOfficePinCode: z.string().optional(),
 
   primaryContactName: z.string().min(1, 'Contact person is required'),
   primaryContactNumber: z.string().min(10, 'Contact number is required'),
   primaryContactEmail: z.string().email('Valid email required'),
+}).refine((data) => {
+  // If any other office field is filled, all required fields must be filled
+  const hasOtherOffice = data.otherOfficeType || data.otherOfficeAddress || data.otherOfficeGst || 
+                         data.otherOfficeDistrict || data.otherOfficeState || data.otherOfficeCountry || 
+                         data.otherOfficePinCode;
+  
+  if (hasOtherOffice) {
+    return !!(
+      data.otherOfficeType &&
+      data.otherOfficeAddress &&
+      data.otherOfficeGst &&
+      data.otherOfficeDistrict &&
+      data.otherOfficeState &&
+      data.otherOfficeCountry &&
+      data.otherOfficePinCode
+    );
+  }
+  return true;
+}, {
+  message: 'If filling Other Office details, all fields are required',
+  path: ['otherOfficeType'],
 })
 
 type CompanyProfileFormData = z.infer<typeof companyProfileSchema>
@@ -109,23 +131,28 @@ export default function Step1CompanyProfile({
         if (firstErrorElement) {
           firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }
+        setSaving(false)
         return
       }
       
+      // Try to save to backend, but don't block form progression if it fails
       try {
         await masterDataService.updateCompanyProfile(data as any)
       } catch (err: any) {
         console.warn('Failed to save to backend (continuing anyway):', err)
         // Continue even if backend save fails - we'll save on final submit
+        // Don't show error toast here as it's not critical
       }
       
+      // Proceed to next step
       if (onNext) {
         onNext(data)
         toast.success('Company profile saved successfully!')
       }
     } catch (error: any) {
       console.error('Error submitting company profile:', error)
-      toast.error(error?.message || 'Failed to save company profile. Please try again.')
+      const errorMessage = error?.message || 'Failed to save company profile. Please try again.'
+      toast.error(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -135,11 +162,23 @@ export default function Step1CompanyProfile({
   const formValues = watch()
   const [isFormValid, setIsFormValid] = useState(false)
 
-  // Initial validation check
+  // Initial validation check - run once on mount
   useEffect(() => {
-    trigger().then(setIsFormValid).catch(() => setIsFormValid(false))
-  }, []) // Run once on mount
+    const checkInitialValidity = async () => {
+      try {
+        const valid = await trigger()
+        setIsFormValid(valid)
+      } catch {
+        setIsFormValid(false)
+      }
+    }
+    // Delay initial check to allow form to initialize
+    const timeoutId = setTimeout(checkInitialValidity, 300)
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
+  // Watch form values for real-time validation
   useEffect(() => {
     const checkValidity = async () => {
       try {
@@ -468,6 +507,7 @@ export default function Step1CompanyProfile({
                 control={control}
                 error={errors.otherOfficeType}
                 options={['Plant Address', 'Site Office', 'Marketing Office']}
+                required={false}
               />
               <FormField
                 label="GST No."
@@ -475,6 +515,7 @@ export default function Step1CompanyProfile({
                 placeholder="Enter GST number"
                 control={control}
                 error={errors.otherOfficeGst}
+                required={false}
               />
               <FormField
                 label="Pin Code"
@@ -482,6 +523,7 @@ export default function Step1CompanyProfile({
                 placeholder="e.g., 400001"
                 control={control}
                 error={errors.otherOfficePinCode}
+                required={false}
               />
             </div>
 
@@ -493,6 +535,7 @@ export default function Step1CompanyProfile({
                 control={control}
                 error={errors.otherOfficeAddress}
                 isTextarea
+                required={false}
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
@@ -501,6 +544,7 @@ export default function Step1CompanyProfile({
                   placeholder="District"
                   control={control}
                   error={errors.otherOfficeDistrict}
+                  required={false}
                 />
                 <FormField
                   label="State"
@@ -508,6 +552,7 @@ export default function Step1CompanyProfile({
                   placeholder="State"
                   control={control}
                   error={errors.otherOfficeState}
+                  required={false}
                 />
                 <FormField
                   label="Country"
@@ -515,6 +560,7 @@ export default function Step1CompanyProfile({
                   placeholder="Country"
                   control={control}
                   error={errors.otherOfficeCountry}
+                  required={false}
                 />
               </div>
             </div>

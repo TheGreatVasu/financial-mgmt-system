@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
 import { fetchDashboard } from '../services/dashboardService.js'
-import MonthlySalesChart from '../components/MonthlySalesChart.jsx'
+import { MonthlySalesChart } from '../components/charts'
 import PieChart from '../components/ui/PieChart.jsx'
 import { 
   CalendarRange, Download, ChevronDown, TrendingUp, DollarSign, Clock, 

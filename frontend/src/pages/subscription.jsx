@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, X, CreditCard, Loader2, AlertCircle, CheckCircle2, Wifi, WifiOff } from 'lucide-react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
-import { cancelSubscription, changePlan, resumeSubscription, updatePaymentMethod } from '../services/subscriptionService'
+import { cancelSubscription, changePlan, resumeSubscription, updatePaymentMethod } from '../services/apiService'
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription'
 import Modal from '../components/ui/Modal.jsx'
 

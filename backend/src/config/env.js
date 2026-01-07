@@ -49,7 +49,16 @@ const config = {
   MYSQL_PORT: parseInt(requireEnv('MYSQL_PORT', '3306'), 10),
   MYSQL_USER: requireEnv('MYSQL_USER', isProduction ? undefined : 'root'),
   MYSQL_PASSWORD: requireEnv('MYSQL_PASSWORD', isProduction ? undefined : ''),
-  MYSQL_DATABASE: requireEnv('MYSQL_DATABASE', isProduction ? undefined : 'financial_mgmt_db')
+  MYSQL_DATABASE: requireEnv('MYSQL_DATABASE', isProduction ? undefined : 'financial_mgmt_db'),
+
+  // Cloudinary (optional - for file uploads)
+  CLOUDINARY_CLOUD_NAME: requireEnv('CLOUDINARY_CLOUD_NAME', '', true),
+  CLOUDINARY_API_KEY: requireEnv('CLOUDINARY_API_KEY', '', true),
+  CLOUDINARY_API_SECRET: requireEnv('CLOUDINARY_API_SECRET', '', true),
+
+  // File upload limits
+  UPLOAD_MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+  UPLOAD_ALLOWED_TYPES: ['image/jpeg', 'image/png', 'application/pdf']
 };
 
 // Validate production configuration

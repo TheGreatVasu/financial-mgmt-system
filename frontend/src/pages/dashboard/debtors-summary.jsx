@@ -3,7 +3,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { fetchDashboard } from '../../services/dashboardService.js'
 import PieChart from '../../components/ui/PieChart.jsx'
-import AgingAnalysisChart from '../../components/charts/AgingAnalysisChart.jsx'
+import { AgingAnalysisChart } from '../../components/charts'
 import { Users, DollarSign, AlertTriangle, TrendingUp, Download, RefreshCw, FileText } from 'lucide-react'
 
 export default function DebtorsSummaryPage() {

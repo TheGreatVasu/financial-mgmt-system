@@ -8,7 +8,7 @@ const {
   getTableStructure,
   exportAllData
 } = require('../controllers/databaseController');
-const { authMiddleware, adminMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware, adminMiddleware } = require('../middleware/authMiddleware');
 
 // All routes require authentication and admin role
 router.use(authMiddleware);

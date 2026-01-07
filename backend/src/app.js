@@ -4,8 +4,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const config = require('./config/env');
-const { requestLogger, devLogger } = require('./middlewares/requestLogger');
-const { errorHandler, notFound } = require('./middlewares/errorHandler');
+const { requestLogger, devLogger } = require('./middleware/requestLogger');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
 const { getDashboard, streamDashboard } = require('../controllers/dashboardController');
 const { getSalesInvoiceDashboard, deleteAllSalesInvoiceData } = require('../controllers/salesInvoiceDashboardController');
 

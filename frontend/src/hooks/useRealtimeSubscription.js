@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { initializeSocket, disconnectSocket, getSocket } from '../services/socketService';
-import { fetchSubscription } from '../services/subscriptionService';
+import { fetchSubscription } from '../services/apiService';
 
 /**
  * Custom hook for real-time subscription updates using Socket.IO with fallback polling

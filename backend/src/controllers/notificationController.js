@@ -1,4 +1,4 @@
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const repo = require('../services/repositories');
 const { getDb } = require('../config/db');
 

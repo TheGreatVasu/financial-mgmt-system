@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const config = require('../config/cloudConfig');
+const config = require('../config/env');
 
 // Email service placeholder
 class EmailService {

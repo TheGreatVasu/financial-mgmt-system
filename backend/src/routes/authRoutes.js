@@ -20,7 +20,7 @@ const {
   logoutAllSessions,
   updateActivity
 } = require('../controllers/sessionController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 

@@ -5,7 +5,7 @@ import DashboardHeader from './DashboardHeader.jsx'
 import ImportModal from '../ui/ImportModal.jsx'
 import { useImportContext } from '../../context/ImportContext.jsx'
 import { importExcelFile } from '../../services/importService.js'
-import { fetchUsageStats } from '../../services/subscriptionService.js'
+import { fetchUsageStats } from '../../services/apiService.js'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 

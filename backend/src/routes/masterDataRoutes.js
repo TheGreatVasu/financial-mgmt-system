@@ -1,5 +1,5 @@
 const express = require('express');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
 const {
   fetchMasterData,
   submitMasterData,

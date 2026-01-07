@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Plus } from 'lucide-react'
+import StepIndex from './StepIndex'
 import Step1CompanyProfile from './Step1CompanyProfile'
 import Step2CustomerProfile from './Step2CustomerProfile'
 import Step3ConsigneeProfile from './Step3ConsigneeProfile'
@@ -9,8 +10,6 @@ import Step4PayerProfile from './Step4PayerProfile'
 import Step5EmployeeProfile from './Step5EmployeeProfile'
 import Step6PaymentTerms from './Step6PaymentTerms'
 import Step7ReviewSubmit from './Step7ReviewSubmit'
-// @ts-expect-error - Module exists but TypeScript has resolution issues
-import masterDataService from '../../services/masterDataService'
 
 interface MasterDataState {
   companyProfile?: any
@@ -26,15 +25,19 @@ const STORAGE_KEY = 'master_data_wizard_state'
 export default function MasterDataWizard() {
   const navigate = useNavigate()
   
+  // Load saved state from localStorage on mount
   const loadSavedState = (): { step: number; data: MasterDataState } => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        return { step: parsed.step || 1, data: parsed.data || {} }
+        return {
+          step: parsed.step || 1,
+          data: parsed.data || {}
+        }
       }
     } catch (err) {
-      // Ignore parse errors
+      console.warn('Failed to load saved wizard state:', err)
     }
     return { step: 1, data: {} }
   }
@@ -43,7 +46,23 @@ export default function MasterDataWizard() {
   const [currentStep, setCurrentStep] = useState(savedState.step)
   const [masterData, setMasterData] = useState<MasterDataState>(savedState.data)
   const [error, setError] = useState<string | null>(null)
+  const [showIndex, setShowIndex] = useState(true) // Show index first
 
+  // Track which steps are completed
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set(
+    Object.keys(savedState.data).length > 0
+      ? [
+          savedState.data.companyProfile ? 1 : null,
+          savedState.data.customerProfile ? 2 : null,
+          savedState.data.consigneeProfile ? 3 : null,
+          savedState.data.payerProfile ? 4 : null,
+          savedState.data.employeeProfile ? 5 : null,
+          savedState.data.paymentTerms ? 6 : null,
+        ].filter(Boolean) as number[]
+      : []
+  ))
+
+  // Save state to localStorage whenever it changes
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -52,7 +71,7 @@ export default function MasterDataWizard() {
         timestamp: Date.now()
       }))
     } catch (err) {
-      // Ignore localStorage errors
+      console.warn('Failed to save wizard state:', err)
     }
   }, [currentStep, masterData])
 
@@ -69,21 +88,30 @@ export default function MasterDataWizard() {
       ...prev,
       [stepKeys[stepNumber - 1]]: data,
     }))
+    // Mark step as completed
+    setCompletedSteps((prev) => new Set([...prev, stepNumber]))
     setError(null)
+  }
+
+  // Handle direct step selection from index
+  const handleSelectStep = (stepNumber: number) => {
+    setCurrentStep(stepNumber)
+    setShowIndex(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleNext = (data: any) => {
     try {
-      setError(null)
+      setError(null) // Clear any previous errors
       handleStepComplete(currentStep, data)
       if (currentStep < 7) {
         setCurrentStep(currentStep + 1)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err: any) {
-      const errorMsg = err.message || 'An error occurred. Please try again.'
-      setError(errorMsg)
-      toast.error(errorMsg)
+      setError(err.message || 'An error occurred. Please try again.')
+      console.error('Error:', err)
+      toast.error(err.message || 'An error occurred. Please try again.')
     }
   }
 
@@ -92,18 +120,32 @@ export default function MasterDataWizard() {
       setCurrentStep(currentStep - 1)
       setError(null)
       window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      // Go back to index view
+      setShowIndex(true)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
+  }
+
+  // Handle back to index
+  const handleBackToIndex = () => {
+    setShowIndex(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleFinalSubmit = async (data: any) => {
     try {
-      setError(null)
+      setError(null) // Clear any previous errors
       
-      const finalData = { ...masterData }
+      const finalData = {
+        ...masterData,
+      }
+      
+      console.log('Submitting master data with sections:', Object.keys(finalData))
       
       // Validate that we have at least the required sections
       if (!finalData.companyProfile || !finalData.customerProfile || !finalData.paymentTerms) {
-        const missing: string[] = []
+        const missing = []
         if (!finalData.companyProfile) missing.push('Company Profile')
         if (!finalData.customerProfile) missing.push('Customer Profile')
         if (!finalData.paymentTerms) missing.push('Payment Terms')
@@ -113,8 +155,13 @@ export default function MasterDataWizard() {
         return
       }
       
+      // Import master data service
+      const masterDataService = (await import('../../../services/masterDataService')).default
+      
       // Submit to backend
-      await masterDataService.submitMasterData(finalData as any)
+      console.log('Calling masterDataService.submitMasterData...')
+      const response = await masterDataService.submitMasterData(finalData)
+      console.log('Master data submission response:', response)
       
       // Show success message
       toast.success('Master Data Wizard Completed! Customer data has been synced to the system.')
@@ -123,7 +170,7 @@ export default function MasterDataWizard() {
       try {
         localStorage.removeItem(STORAGE_KEY)
       } catch (err) {
-        // Ignore localStorage errors
+        console.warn('Failed to clear saved state:', err)
       }
       
       // Reset wizard after successful submission
@@ -131,10 +178,18 @@ export default function MasterDataWizard() {
         setCurrentStep(1)
         setMasterData({})
         setError(null)
+        // Redirect to customers page
         navigate('/customers')
       }, 2000)
       
     } catch (err: any) {
+      console.error('Error submitting master data:', err)
+      console.error('Error details:', {
+        message: err?.message,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      })
+      
       let errorMessage = 'Failed to complete wizard. Please try again.'
       
       if (err?.response?.data?.message) {
@@ -145,18 +200,26 @@ export default function MasterDataWizard() {
         errorMessage = 'API endpoint not found. Please check server configuration.'
       } else if (err?.response?.status === 401) {
         errorMessage = 'Authentication expired. Please log in again and try submitting.'
+        // Don't clear data on auth error - user can log in and retry
       } else if (err?.response?.status === 500) {
         errorMessage = 'Server error. Please try again later. Your data has been saved locally.'
       }
       
       setError(errorMessage)
       toast.error(errorMessage)
+      
+      // Data is preserved in localStorage, so user can retry without losing their work
     }
   }
 
+  // Clear errors when reaching review step (step 7)
   useEffect(() => {
-    if (currentStep === 7) setError(null)
+    if (currentStep === 7) {
+      setError(null) // Clear any stale errors when reaching review step
+    }
   }, [currentStep])
+
+  // Warn user before leaving if they have unsaved data
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const hasData = Object.keys(masterData).length > 0
@@ -173,97 +236,93 @@ export default function MasterDataWizard() {
     }
   }, [masterData])
 
+  // Function to load sample data for testing
   const loadSampleData = () => {
     const sampleData: MasterDataState = {
       companyProfile: {
-        companyName: 'Rastogi Coders Pvt. Ltd.',
-        legalEntityName: 'Rastogi Coders Private Limited',
-        corporateAddress: '2nd Floor, Sector 62, Noida',
-        corporateDistrict: 'Gautam Buddh Nagar',
-        corporateState: 'Uttar Pradesh',
+        companyName: 'Tech Solutions Pvt. Ltd.',
+        legalEntityName: 'Tech Solutions Private Limited',
+        corporateAddress: '123 Business Park, Sector 18',
+        corporateDistrict: 'Gurgaon',
+        corporateState: 'Haryana',
         corporateCountry: 'India',
-        corporatePinCode: '201309',
-        correspondenceAddress: '2nd Floor, Sector 62, Noida',
-        correspondenceDistrict: 'Gautam Buddh Nagar',
-        correspondenceState: 'Uttar Pradesh',
+        corporatePinCode: '122015',
+        correspondenceAddress: '123 Business Park, Sector 18',
+        correspondenceDistrict: 'Gurgaon',
+        correspondenceState: 'Haryana',
         correspondenceCountry: 'India',
-        correspondencePinCode: '201309',
+        correspondencePinCode: '122015',
         otherOfficeType: 'Branch Office',
-        otherOfficeAddress: '3rd Floor, IT Park, Gomti Nagar',
-        otherOfficeGst: '09AACCR1234F1Z9',
-        otherOfficeDistrict: 'Lucknow',
-        otherOfficeState: 'Uttar Pradesh',
+        otherOfficeAddress: '456 Industrial Area, Phase 2',
+        otherOfficeGst: '06AATCS1234F1Z5',
+        otherOfficeDistrict: 'Gurgaon',
+        otherOfficeState: 'Haryana',
         otherOfficeCountry: 'India',
-        otherOfficePinCode: '226010',
-        primaryContactName: 'Saurabh Mishra',
-        primaryContactNumber: '+919876540001',
-        primaryContactEmail: 'saurabh.mishra@gmail.com'
+        otherOfficePinCode: '122016',
+        primaryContactName: 'Rajesh Kumar',
+        primaryContactNumber: '+919876543210',
+        primaryContactEmail: 'rajesh.kumar@techsolutions.com'
       },
-      
       customerProfile: {
-        customerName: 'Aashway Technologies',
-        legalEntityName: 'Aashway Technologies Private Limited',
-        corporateOfficeAddress: '3rd Floor, Sector 62, Noida',
-        correspondenceAddress: '3rd Floor, Sector 62, Noida',
-        district: 'Gautam Buddh Nagar',
-        state: 'Uttar Pradesh',
+        customerName: 'ABC Manufacturing Ltd.',
+        legalEntityName: 'ABC Manufacturing Private Limited',
+        corporateOfficeAddress: '789 Factory Road, Industrial Estate',
+        correspondenceAddress: '789 Factory Road, Industrial Estate',
+        district: 'Gurgaon',
+        state: 'Haryana',
         country: 'India',
-        pinCode: '201309',
+        pinCode: '122001',
         segment: 'Domestic',
-        gstNumber: '09ABCDE1234F1Z5',
-        poIssuingAuthority: 'Kunal Verma',
-        designation: 'Procurement Manager',
-        contactNumber: '+919876540002',
-        emailId: 'kunal.verma@gmail.com'
+        gstNumber: '06AABCU1234F1Z5',
+        poIssuingAuthority: 'John Doe',
+        designation: 'Purchase Manager',
+        contactNumber: '+919876543211',
+        emailId: 'john.doe@abcmanufacturing.com'
       },
-      
       consigneeProfile: {
         consignees: [{
-          consigneeName: 'Aashway Technologies – Noida Warehouse',
-          consigneeAddress: 'Industrial Area, Phase 2, Noida',
-          customerName: 'Aashway Technologies',
-          legalEntityName: 'Aashway Technologies Private Limited',
-          city: 'Noida',
-          state: 'Uttar Pradesh',
-          gstNumber: '09ABCDE1234F1Z5',
-          contactPersonName: 'Ritika Sharma',
-          designation: 'Warehouse Supervisor',
-          contactNumber: '+919876540003',
-          emailId: 'ritika.sharma@gmail.com'
+          consigneeName: 'ABC Manufacturing - Warehouse',
+          consigneeAddress: '789 Factory Road, Warehouse Block A',
+          customerName: 'ABC Manufacturing Ltd.',
+          legalEntityName: 'ABC Manufacturing Private Limited',
+          city: 'Gurgaon',
+          state: 'Haryana',
+          gstNumber: '06AABCU1234F1Z5',
+          contactPersonName: 'Jane Smith',
+          designation: 'Warehouse Manager',
+          contactNumber: '+919876543212',
+          emailId: 'jane.smith@abcmanufacturing.com'
         }]
       },
-      
       payerProfile: {
         payers: [{
-          payerName: 'Aashway Technologies',
-          payerAddress: 'Accounts Department, Sector 62, Noida',
-          customerName: 'Aashway Technologies',
-          legalEntityName: 'Aashway Technologies Private Limited',
-          city: 'Noida',
-          state: 'Uttar Pradesh',
-          gstNumber: '09ABCDE1234F1Z5',
-          contactPersonName: 'Neeraj Gupta',
+          payerName: 'ABC Manufacturing Ltd.',
+          payerAddress: '789 Factory Road, Accounts Department',
+          customerName: 'ABC Manufacturing Ltd.',
+          legalEntityName: 'ABC Manufacturing Private Limited',
+          city: 'Gurgaon',
+          state: 'Haryana',
+          gstNumber: '06AABCU1234F1Z5',
+          contactPersonName: 'Robert Wilson',
           designation: 'Accounts Manager',
-          contactNumber: '+919876540004',
-          emailId: 'neeraj.gupta@gmail.com'
+          contactNumber: '+919876543213',
+          emailId: 'robert.wilson@abcmanufacturing.com'
         }]
       },
-      
       employeeProfile: {
-        teamMemberName: 'Aditya Singh',
-        employeeId: 'RCPL-EMP-002',
-        role: 'Business Development Manager',
-        department: 'Sales & Marketing',
-        contactNumber: '+919876540005',
-        emailId: 'aditya.singh@gmail.com',
-        reportingManager: 'Saurabh Mishra',
-        location: 'Noida',
+        teamMemberName: 'Amit Sharma',
+        employeeId: 'EMP001',
+        role: 'Sales Manager',
+        department: 'Sales',
+        contactNumber: '+919876543214',
+        emailId: 'amit.sharma@techsolutions.com',
+        reportingManager: 'Rajesh Kumar',
+        location: 'Gurgaon',
         accessLevel: 'Manager',
-        remarks: 'Handles enterprise clients and key partnerships'
+        remarks: 'Handles key accounts in North Zone'
       },
-      
       paymentTerms: {
-        paymentTermName: 'Net 30',
+        paymentTermName: 'Net 30 Days',
         creditPeriod: '30',
         advanceRequired: 'No',
         advancePercentage: '',
@@ -271,13 +330,13 @@ export default function MasterDataWizard() {
         latePaymentInterest: '1.5% per month',
         billingCycle: 'Monthly',
         paymentMethod: 'Bank Transfer',
-        bankName: 'HDFC Bank',
-        bankAccountNumber: '50200012345678',
-        ifscCode: 'HDFC0000123',
-        upiId: 'rastogicoders@hdfcbank',
-        notes: 'Payment due within 30 days from invoice date'
+        bankName: 'State Bank of India',
+        bankAccountNumber: '1234567890123456',
+        ifscCode: 'SBIN0001234',
+        upiId: 'techsolutions@paytm',
+        notes: 'Payment to be made within 30 days of invoice date'
       }
-    }      
+    }
     
     setMasterData(sampleData)
     setCurrentStep(1)
@@ -295,6 +354,60 @@ export default function MasterDataWizard() {
     { number: 7, title: 'Review & Submit', short: 'Review' },
   ]
 
+  // If showing index, display it
+  if (showIndex) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 sm:p-6 md:p-8">
+        <div className="max-w-5xl mx-auto">
+          {/* Back button */}
+          <button
+            onClick={() => navigate('/customers')}
+            className="mb-6 inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Customers
+          </button>
+
+          {/* Step Index Component */}
+          <StepIndex
+            currentStep={currentStep}
+            completedSteps={completedSteps}
+            onSelectStep={handleSelectStep}
+          />
+
+          {/* Quick Actions */}
+          <div className="mt-12 flex gap-4 justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                loadSampleData()
+                setShowIndex(false)
+                setCurrentStep(1)
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-500 px-6 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-600 hover:border-blue-600 hover:shadow-xl transition-all duration-200 active:scale-95"
+            >
+              <Plus className="h-5 w-5" />
+              Load Sample Data
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIndex(false)
+                setCurrentStep(1)
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-700 shadow hover:border-gray-400 hover:bg-gray-50 hover:shadow-md transition-all duration-200"
+            >
+              <Plus className="h-5 w-5" />
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 sm:p-6 md:p-8">
       <div className="max-w-5xl mx-auto">
@@ -302,10 +415,21 @@ export default function MasterDataWizard() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                Creation of Master Data
-              </h1>
-              <p className="text-gray-600">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={handleBackToIndex}
+                  className="text-gray-600 hover:text-gray-900 transition-colors p-1 hover:bg-gray-100 rounded"
+                  title="Back to step index"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  Creation of Master Data
+                </h1>
+              </div>
+              <p className="text-gray-600 ml-11">
                 Stepwise onboarding for company, customer, payment, and team details
               </p>
             </div>
@@ -317,22 +441,6 @@ export default function MasterDataWizard() {
                 <span>Auto-saved</span>
               </div>
             )}
-          </div>
-          
-          {/* Load Sample Data Button - Prominent Placement */}
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={loadSampleData}
-              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-500 px-6 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-600 hover:border-blue-600 hover:shadow-xl transition-all duration-200 active:scale-95"
-              title="Load sample data for testing all form fields"
-            >
-              <Plus className="h-5 w-5" />
-              Load Sample Data
-            </button>
-            <p className="text-xs text-gray-500 mt-2 ml-1">
-              Click to automatically fill all form fields with sample data for testing
-            </p>
           </div>
         </div>
 
@@ -390,6 +498,7 @@ export default function MasterDataWizard() {
               {steps.map((step) => {
                 const isCompleted = step.number < currentStep
                 const isActive = step.number === currentStep
+                const isUpcoming = step.number > currentStep
                 
                 return (
                   <button

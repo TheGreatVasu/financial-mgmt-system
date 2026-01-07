@@ -1,4 +1,4 @@
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const pdfService = require('../services/pdfService');
 const { _buildDashboardPayload: buildDashboardPayload } = require('./dashboardController');
 

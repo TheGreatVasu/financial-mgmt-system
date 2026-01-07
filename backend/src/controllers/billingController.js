@@ -1,4 +1,4 @@
-const { asyncHandler } = require('../middlewares/errorHandler')
+const { asyncHandler } = require('../middleware/errorHandler')
 const { getDb } = require('../config/db')
 const { findById } = require('../services/userRepo')
 const { getUserUsageStats, updateUserStorageUsage } = require('../services/storageUsageService')

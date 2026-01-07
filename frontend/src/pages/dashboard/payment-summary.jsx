@@ -2,7 +2,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout'
 import React from 'react'
 import Modal from '../../components/ui/Modal.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
-import { createMOMService } from '../../services/momService'
+import { createMOMService } from '../../services/apiService'
 
 export default function PaymentSummary() {
   const { token } = useAuthContext()

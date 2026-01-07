@@ -18,6 +18,7 @@ import MOMPage from './pages/mom'
 import LoadingScreen from './pages/loading'
 import CustomersList from './pages/customers/index'
 import CustomerNew from './pages/customers/new'
+import MasterDataStepSelection from './pages/customers/new-select'
 import CustomerDetail from './pages/customers/[id]'
 import POEntryListPage from './pages/po-entry/list.jsx'
 import POEntry from './pages/po-entry/index'
@@ -178,6 +179,14 @@ export default function App() {
         />
         <Route
           path="/customers/new"
+          element={
+            <ProtectedRoute>
+              <MasterDataStepSelection />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customers/new/form"
           element={
             <ProtectedRoute>
               <CustomerNew />

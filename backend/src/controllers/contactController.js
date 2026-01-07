@@ -1,5 +1,5 @@
 const emailService = require('../services/emailService')
-const { asyncHandler } = require('../middlewares/errorHandler')
+const { asyncHandler } = require('../middleware/errorHandler')
 
 exports.submitContact = asyncHandler(async (req, res) => {
   const { name, email, phone, subject, message } = req.body

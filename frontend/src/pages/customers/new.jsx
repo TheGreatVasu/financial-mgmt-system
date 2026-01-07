@@ -1,1266 +1,247 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import React, { useMemo, useState, useEffect, useCallback, useRef, useReducer } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createCustomerService } from '../../services/customerService'
 import masterDataService from '../../services/masterDataService'
-import MasterDataForm from './MasterDataForm'
-import SmartDropdown from '../../components/ui/SmartDropdown.jsx'
 import SelectWithOther from '../../components/ui/SelectWithOther.jsx'
-import { Loader2, Plus, Save, Trash2, CheckCircle2, XCircle, Building2, Users, FileText, CreditCard, UserCheck } from 'lucide-react'
+import { Loader2, Plus, Save, Trash2, CheckCircle2, XCircle, Building2, Users, FileText, CreditCard, UserCheck, ArrowLeft } from 'lucide-react'
 import ErrorBoundary from '../../components/ui/ErrorBoundary.jsx'
 import Modal from '../../components/ui/Modal.jsx'
 import toast from 'react-hot-toast'
 
+// --- CONSTANTS & HELPERS ---
+
 const DEV_BYPASS_VALIDATION = false
-const STORAGE_KEY = 'masterDataFormDraft'
 
 const MASTER_ROLES = [
-  'Sales Manager',
-  'Sales Head',
-  'Business Head',
-  'Collection Incharge',
-  'Sales Agent',
-  'Collection Agent',
-  'Project Manager',
-  'Project Head'
+  'Sales Manager', 'Sales Head', 'Business Head', 'Collection Incharge',
+  'Sales Agent', 'Collection Agent', 'Project Manager', 'Project Head'
 ]
 
-const emptyContact = () => ({
-  photo: '',
-  name: '',
-  contactNumber: '',
-  email: '',
-  department: '',
-  designation: '',
-  jobRole: '',
-  segment: ''
-})
-
-const emptyAddress = (label) => ({
-  label,
-  addressLine: '',
-  city: '',
-  state: '',
-  pinCode: '',
-  gstNumber: ''
-})
-
-const emptyConsignee = () => ({
-  logo: '',
-  consigneeName: '',
-  consigneeAddress: '',
-  customerName: '',
-  legalEntityName: '',
-  city: '',
-  state: '',
-  gstNumber: '',
-  contactPersonName: '',
-  designation: '',
-  contactNumber: '',
-  emailId: ''
-})
-
-const emptyPayer = () => ({
-  logo: '',
-  payerName: '',
-  payerAddress: '',
-  customerName: '',
-  legalEntityName: '',
-  city: '',
-  state: '',
-  gstNumber: '',
-  contactPersonName: '',
-  designation: '',
-  contactNumber: '',
-  emailId: ''
-})
-
-const defaultPaymentTerm = () => ({
-  basic: '',
-  freight: '',
-  taxes: '',
-  due1: '',
-  due2: '',
-  due3: '',
-  finalDue: '',
-  description: ''
-})
+const INDIA_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
+  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", 
+  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", 
+  "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", 
+  "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh", 
+  "Lakshadweep", "Puducherry"
+];
 
 const STEPS = [
-  { label: 'Company Profile', required: true },
-  { label: 'Customer Profile', required: true },
-  { label: 'Consignee Profile', required: true },
-  { label: 'Payer Profile', required: true },
-  { label: 'Employee Profile', required: false },
-  { label: 'Payment Terms', required: true },
-  { label: 'Review & Submit', required: false }
+  { id: 1, label: 'Company Profile', icon: Building2 },
+  { id: 2, label: 'Customer Profile', icon: Users },
+  { id: 3, label: 'Consignee Profile', icon: FileText },
+  { id: 4, label: 'Payer Profile', icon: CreditCard },
+  { id: 5, label: 'Payment Terms', icon: FileText },
+  { id: 6, label: 'Team Profiles', icon: UserCheck }
 ]
 
-export default function CustomerNew() {
-  const { token } = useAuthContext()
-  const svc = useMemo(() => createCustomerService(token), [token])
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const editId = searchParams.get('id')
+// Data Factory Functions
+function defaultPaymentTerm() {
+  return { title: '', type: '', creditDays: '', applicableFor: '', description: '', basic: '', freight: '', taxes: '', due1: '', due2: '', due3: '', finalDue: '' }
+}
+function emptyContact() {
+  return { name: '', email: '', contactNumber: '', department: '', designation: '', jobRole: '', segment: '', photo: null }
+}
+function emptyAddress(label = 'Address') {
+  return { label: label, addressLine: '', contactNumber: '', gstNumber: '' }
+}
+function emptyConsignee() {
+  return { logo: null, consigneeName: '', consigneeAddress: '', customerName: '', legalEntityName: '', city: '', state: '', gstNumber: '', contactPersonName: '', designation: '', contactNumber: '', emailId: '' }
+}
+function emptyPayer() {
+  return { logo: null, payerName: '', payerAddress: '', customerName: '', legalEntityName: '', city: '', state: '', gstNumber: '', contactPersonName: '', designation: '', contactNumber: '', emailId: '' }
+}
+const createDefaultCompanyProfile = () => ({
+  logo: null, companyName: '', legalEntityName: '', corporateAddress: '', corporateDistrict: '', corporateState: '', corporateCountry: 'India', corporatePinCode: '',
+  correspondenceAddress: '', correspondenceDistrict: '', correspondenceState: '', correspondenceCountry: 'India', correspondencePinCode: '',
+  otherOfficeType: '', otherOfficeAddress: '', otherOfficeGst: '', otherOfficeDistrict: '', otherOfficeState: '', otherOfficeCountry: 'India', otherOfficePinCode: '',
+  otherOfficeContactName: '', otherOfficeContactNumber: '', otherOfficeEmail: '',
+  siteOffices: [emptyAddress('Site Office 1')],
+  primaryContact: emptyContact()
+})
+const createDefaultCustomerProfile = () => ({
+  logo: null, customerName: '', legalEntityName: '', corporateOfficeAddress: '', correspondenceAddress: '', district: '', state: '', country: 'India', pinCode: '',
+  segment: '', gstNumber: '', poIssuingAuthority: '', designation: '', contactNumber: '', emailId: ''
+})
 
-  const [currentStep, setCurrentStep] = useState(0)
-  const [loadingData, setLoadingData] = useState(!!editId)
+// --- REDUCER STATE MANAGEMENT ---
 
-  const [logoPreview, setLogoPreview] = useState(null)
-  const [customerLogoPreview, setCustomerLogoPreview] = useState(null)
-  const [consigneeLogoPreviews, setConsigneeLogoPreviews] = useState({})
-  const [payerLogoPreviews, setPayerLogoPreviews] = useState({})
-  const [employeePhotoPreviews, setEmployeePhotoPreviews] = useState({})
-  const fileInputRef = useRef(null)
-
-  const [companyProfile, setCompanyProfile] = useState({
-    logo: null,
-    companyName: '',
-    legalEntityName: '',
-    corporateAddress: '',
-    corporateDistrict: '',
-    corporateState: '',
-    corporateCountry: '',
-    corporatePinCode: '',
-    correspondenceAddress: '',
-    correspondenceDistrict: '',
-    correspondenceState: '',
-    correspondenceCountry: '',
-    correspondencePinCode: '',
-    otherOfficeType: 'Plant Address',
-    otherOfficeAddress: '',
-    otherOfficeGst: '',
-    otherOfficeDistrict: '',
-    otherOfficeState: '',
-    otherOfficeCountry: '',
-    otherOfficePinCode: '',
-    otherOfficeContactName: '',
-    otherOfficeContactNumber: '',
-    otherOfficeEmail: '',
-    primaryContact: emptyContact()
-  })
-
-  const [customerProfile, setCustomerProfile] = useState({
-    logo: '',
-    customerName: '',
-    legalEntityName: '',
-    corporateOfficeAddress: '',
-    correspondenceAddress: '',
-    district: '',
-    state: '',
-    country: '',
-    pinCode: '',
-    segment: '',
-    gstNumber: '',
-    poIssuingAuthority: '',
-    designation: '',
-    contactNumber: '',
-    emailId: ''
-  })
-
-  const [consigneeProfiles, setConsigneeProfiles] = useState([emptyConsignee()])
-  const [payerProfiles, setPayerProfiles] = useState([emptyPayer()])
-
-  const [masterData, setMasterData] = useState({
-    companyProfile: {},
-    customerProfile: {},
-    paymentTerms: [defaultPaymentTerm()],
-    teamProfiles: [{ role: MASTER_ROLES[0], ...emptyContact() }],
-    additionalData: {}
-  })
-
-  const [paymentTerms, setPaymentTerms] = useState([defaultPaymentTerm()])
-  const [teamProfiles, setTeamProfiles] = useState([{ role: MASTER_ROLES[0], ...emptyContact() }])
-
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
-  const [createdRecordId, setCreatedRecordId] = useState(null)
-  const [submittedData, setSubmittedData] = useState(null)
-
-  const progressPercent = Math.round(
-    (currentStep / Math.max(1, STEPS.length - 1)) * 100
-  )
-
-  // Helper function to get field error
-  const getFieldError = (fieldPath) => {
-    return fieldErrors[fieldPath] || ''
-  }
-
-  function validateEmail(email) {
-    if (!email || typeof email !== 'string') return false
-    // Trim whitespace
-    const trimmedEmail = email.trim()
-    if (!trimmedEmail) return false
-    // Accept only company domain or gmail.com
-    // Match @financialmgmt.com or @gmail.com (with optional subdomain)
-    return /^[^\s@]+@([a-zA-Z0-9-]+\.)?(financialmgmt\.com|gmail\.com)$/i.test(trimmedEmail)
-  }
-
-  function validatePhone(phone) {
-    // Allow only digits, optional + at start
-    return /^\+?\d{7,15}$/.test(phone || '')
-  }
-
-  function validateAllSteps() {
-    const errors = {}
-    let isValid = true
-
-    try {
-      // Step 1: Company Profile
-      const requiredCompany = [
-        'companyName', 'legalEntityName', 'corporateAddress', 'corporateDistrict',
-        'corporateState', 'corporateCountry', 'corporatePinCode', 'correspondenceAddress',
-        'correspondenceDistrict', 'correspondenceState', 'correspondenceCountry', 'correspondencePinCode'
-      ]
-      
-      requiredCompany.forEach(field => {
-        if (!companyProfile?.[field]?.trim()) {
-          errors[`company.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
-          isValid = false
-        }
-      })
-
-      if (companyProfile?.primaryContact?.email && !validateEmail(companyProfile.primaryContact.email)) {
-        errors['company.primaryContact.email'] = 'Primary contact email must be a valid @financialmgmt.com or @gmail.com address'
-        isValid = false
-      }
-      if (companyProfile?.primaryContact?.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
-        errors['company.primaryContact.contactNumber'] = 'Primary contact number must contain only digits and be 7-15 digits long'
-        isValid = false
-      }
-
-      // Step 2: Customer Profile
-      const requiredCustomer = [
-        'customerName', 'legalEntityName', 'corporateOfficeAddress', 'correspondenceAddress',
-        'district', 'state', 'country', 'pinCode', 'segment', 'gstNumber',
-        'poIssuingAuthority', 'designation', 'contactNumber', 'emailId'
-      ]
-      
-      requiredCustomer.forEach(field => {
-        if (!customerProfile?.[field]?.trim()) {
-          errors[`customer.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
-          isValid = false
-        }
-      })
-
-      if (customerProfile?.emailId && !validateEmail(customerProfile.emailId)) {
-        errors['customer.emailId'] = 'Customer email must be a valid @financialmgmt.com or @gmail.com address'
-        isValid = false
-      }
-      if (customerProfile?.contactNumber && !validatePhone(customerProfile.contactNumber)) {
-        errors['customer.contactNumber'] = 'Customer contact number must contain only digits and be 7-15 digits long'
-        isValid = false
-      }
-
-      // Step 3: Consignee Profile
-      consigneeProfiles.forEach((consignee, index) => {
-        const requiredFields = [
-          'consigneeName', 'consigneeAddress', 'customerName', 'legalEntityName',
-          'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId'
-        ]
-        requiredFields.forEach(field => {
-          if (!consignee?.[field]?.trim()) {
-            errors[`consignee.${index}.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
-            isValid = false
-          }
-        })
-        if (consignee?.emailId && !validateEmail(consignee.emailId)) {
-          errors[`consignee.${index}.emailId`] = 'Consignee email must be a valid @financialmgmt.com or @gmail.com address'
-          isValid = false
-        }
-        if (consignee?.contactNumber && !validatePhone(consignee.contactNumber)) {
-          errors[`consignee.${index}.contactNumber`] = 'Consignee contact number must contain only digits and be 7-15 digits long'
-          isValid = false
-        }
-      })
-
-      // Step 4: Payer Profile
-      payerProfiles.forEach((payer, index) => {
-        const requiredFields = [
-          'payerName', 'payerAddress', 'customerName', 'legalEntityName',
-          'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId'
-        ]
-        requiredFields.forEach(field => {
-          if (!payer?.[field]?.trim()) {
-            errors[`payer.${index}.${field}`] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`
-            isValid = false
-          }
-        })
-        if (payer?.emailId && !validateEmail(payer.emailId)) {
-          errors[`payer.${index}.emailId`] = 'Payer email must be a valid @financialmgmt.com or @gmail.com address'
-          isValid = false
-        }
-        if (payer?.contactNumber && !validatePhone(payer.contactNumber)) {
-          errors[`payer.${index}.contactNumber`] = 'Payer contact number must contain only digits and be 7-15 digits long'
-          isValid = false
-        }
-      })
-
-      // Step 5: Employee Profile
-      teamProfiles.forEach((member, index) => {
-        if (member?.email && !validateEmail(member.email)) {
-          errors[`team.${index}.email`] = 'Team member email must be a valid @financialmgmt.com or @gmail.com address'
-          isValid = false
-        }
-        if (member?.contactNumber && !validatePhone(member.contactNumber)) {
-          errors[`team.${index}.contactNumber`] = 'Team member contact number must contain only digits and be 7-15 digits long'
-          isValid = false
-        }
-      })
-
-      setFieldErrors(errors)
-      if (isValid) {
-        setError('')
-        setFieldErrors({})
-      } else {
-        // Don't show team member errors in top banner - they'll show on the field
-        const nonTeamErrors = Object.values(errors).filter(err => 
-          !err.includes('Team member') && !err.includes('team member')
-        )
-        if (nonTeamErrors.length > 0) {
-          setError(nonTeamErrors[0] || 'Please fix the errors below')
-        } else {
-          setError('') // Clear top error, field errors will show inline
-        }
-      }
-      return isValid
-    } catch (err) {
-      console.error('Validation error:', err)
-      setError('Validation error occurred. Please check your input.')
-      return false
-    }
-  }
-
-  const canGoNext = useMemo(() => {
-    if (DEV_BYPASS_VALIDATION) return true
-
-    // Payment Terms step validation can be added here if needed
-
-    try {
-      if (currentStep === 0) {
-        // Company Profile required fields - basic gating
-        const requiredFields = [
-          'companyName',
-          'legalEntityName',
-          'corporateAddress',
-          'corporateDistrict',
-          'corporateState',
-          'corporateCountry',
-          'corporatePinCode',
-          'correspondenceAddress',
-          'correspondenceDistrict',
-          'correspondenceState',
-          'correspondenceCountry',
-          'correspondencePinCode'
-        ]
-        const missing = requiredFields.some((key) => {
-          const value = companyProfile?.[key]
-          // Check if value is missing or empty string
-          if (value === undefined || value === null) return true
-          if (typeof value === 'string' && value.trim() === '') return true
-          return false
-        })
-        if (missing) return false
-        
-        // Validate primary contact email and phone if provided
-        const errors = {}
-        if (companyProfile?.primaryContact?.email && !validateEmail(companyProfile.primaryContact.email)) {
-          errors['company.primaryContact.email'] = 'Primary contact email must be a valid @financialmgmt.com or @gmail.com address'
-        }
-        if (companyProfile?.primaryContact?.contactNumber && !validatePhone(companyProfile.primaryContact.contactNumber)) {
-          errors['company.primaryContact.contactNumber'] = 'Primary contact number must contain only digits and be 7-15 digits long'
-        }
-        if (Object.keys(errors).length > 0) {
-          setFieldErrors(prev => ({ ...prev, ...errors }))
-          // Don't show primary contact errors in top banner - they'll show on the field
-          setError('') // Clear top error, field errors will show inline
-          return false
-        }
-        return true
-      }
-      if (currentStep === 1) {
-        // Customer Profile required fields
-        const requiredFields = [
-          'customerName',
-          'legalEntityName',
-          'corporateOfficeAddress',
-          'correspondenceAddress',
-          'district',
-          'state',
-          'country',
-          'pinCode',
-          'segment',
-          'gstNumber',
-          'poIssuingAuthority',
-          'designation',
-          'contactNumber',
-          'emailId'
-        ]
-        const missing = requiredFields.some((key) => {
-          const value = customerProfile?.[key]
-          if (value === undefined || value === null) return true
-          if (typeof value === 'string' && value.trim() === '') return true
-          return false
-        })
-        if (missing) return false
-        
-        // Validate email and phone format
-        const errors = {}
-        if (customerProfile?.emailId && !validateEmail(customerProfile.emailId)) {
-          errors['customer.emailId'] = 'Customer email must be a valid @financialmgmt.com or @gmail.com address'
-        }
-        if (customerProfile?.contactNumber && !validatePhone(customerProfile.contactNumber)) {
-          errors['customer.contactNumber'] = 'Customer contact number must contain only digits and be 7-15 digits long'
-        }
-        if (Object.keys(errors).length > 0) {
-          setFieldErrors(prev => ({ ...prev, ...errors }))
-          setError(Object.values(errors)[0])
-          return false
-        }
-        return true
-      }
-      if (currentStep === 2) {
-        // Consignee Profile required fields (check first entry)
-        const target = consigneeProfiles?.[0] || emptyConsignee()
-        const requiredFields = [
-          'consigneeName',
-          'consigneeAddress',
-          'customerName',
-          'legalEntityName',
-          'city',
-          'state',
-          'gstNumber',
-          'contactPersonName',
-          'designation',
-          'contactNumber',
-          'emailId'
-        ]
-        const missing = requiredFields.some((key) => {
-          const value = target?.[key]
-          if (value === undefined || value === null) return true
-          if (typeof value === 'string' && value.trim() === '') return true
-          return false
-        })
-        if (missing) return false
-        
-        // Validate email and phone format
-        const errors = {}
-        if (target?.emailId && !validateEmail(target.emailId)) {
-          errors['consignee.0.emailId'] = 'Consignee email must be a valid @financialmgmt.com or @gmail.com address'
-        }
-        if (target?.contactNumber && !validatePhone(target.contactNumber)) {
-          errors['consignee.0.contactNumber'] = 'Consignee contact number must contain only digits and be 7-15 digits long'
-        }
-        if (Object.keys(errors).length > 0) {
-          setFieldErrors(prev => ({ ...prev, ...errors }))
-          setError(Object.values(errors)[0])
-          return false
-        }
-        return true
-      }
-      if (currentStep === 3) {
-        // Payer Profile required fields (check first entry)
-        const target = payerProfiles?.[0] || emptyPayer()
-        const requiredFields = [
-          'payerName',
-          'payerAddress',
-          'customerName',
-          'legalEntityName',
-          'city',
-          'state',
-          'gstNumber',
-          'contactPersonName',
-          'designation',
-          'contactNumber',
-          'emailId'
-        ]
-        const missing = requiredFields.some((key) => {
-          const value = target?.[key]
-          if (value === undefined || value === null) return true
-          if (typeof value === 'string' && value.trim() === '') return true
-          return false
-        })
-        if (missing) return false
-        
-        // Validate email and phone format
-        const errors = {}
-        if (target?.emailId && !validateEmail(target.emailId)) {
-          errors['payer.0.emailId'] = 'Payer email must be a valid @financialmgmt.com or @gmail.com address'
-        }
-        if (target?.contactNumber && !validatePhone(target.contactNumber)) {
-          errors['payer.0.contactNumber'] = 'Payer contact number must contain only digits and be 7-15 digits long'
-        }
-        if (Object.keys(errors).length > 0) {
-          setFieldErrors(prev => ({ ...prev, ...errors }))
-          setError(Object.values(errors)[0])
-          return false
-        }
-        return true
-      }
-      if (currentStep === 4) {
-        // Employee Profile step - validate email and phone if provided
-        const errors = {}
-        teamProfiles.forEach((member, index) => {
-          if (member?.email && !validateEmail(member.email)) {
-            errors[`team.${index}.email`] = 'Team member email must be a valid @financialmgmt.com or @gmail.com address'
-          }
-          if (member?.contactNumber && !validatePhone(member.contactNumber)) {
-            errors[`team.${index}.contactNumber`] = 'Team member contact number must contain only digits and be 7-15 digits long'
-          }
-        })
-        if (Object.keys(errors).length > 0) {
-          setFieldErrors(prev => ({ ...prev, ...errors }))
-          // Don't show team member errors in top banner - they'll show on the field
-          setError('') // Clear top error, field errors will show inline
-          return false
-        }
-        return true
-      }
-      if (currentStep === 5) {
-        // Payment Terms step - basic validation
-        const target = paymentTerms?.[0] || defaultPaymentTerm()
-        // Add validation if needed
-        return true
-      }
-      return true
-    } catch (err) {
-      console.error('Error in canGoNext:', err)
-      return false
-    }
-  }, [currentStep, companyProfile, customerProfile, consigneeProfiles, payerProfiles, paymentTerms])
-
-  function goToStep(idx) {
-    if (idx < currentStep) {
-      setCurrentStep(idx)
-    } else {
-      // Only allow forward if current step is valid
-      if (DEV_BYPASS_VALIDATION || canGoNext) {
-        setCurrentStep(idx)
-      }
-    }
-  }
-
-const updateCompany = useCallback((field, value) => {
-  try {
-    setCompanyProfile((prev) => {
-      if (!prev) {
-        console.warn('Company profile state is null, initializing...')
-        return {
-          logo: null,
-          companyName: '',
-          legalEntityName: '',
-          corporateOffice: emptyAddress('Corporate Office'),
-          marketingOffice: emptyAddress('Marketing Office'),
-          correspondenceAddress: '',
-          gstNumbers: [''],
-          siteOffices: [emptyAddress('Site Office 1')],
-          plantAddresses: [emptyAddress('Plant Address 1')],
-          primaryContact: emptyContact(),
-          [field]: value
-        }
-      }
-      return { ...prev, [field]: value }
-    })
-
-    // Handle logo preview
-    if (field === 'logo' && value instanceof File) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setLogoPreview(reader.result)
-      }
-      reader.readAsDataURL(value)
-    } else if (field === 'logo' && !value) {
-      setLogoPreview(null)
-    }
-  } catch (err) {
-    console.error('Error updating company profile:', err)
-  }
-}, [])
-
-function updatePaymentTerm(index, field, value) {
-  setPaymentTerms((prev) =>
-    prev.map((item, i) =>
-      i === index
-        ? {
-            ...item,
-            [field]: value,
-            primaryContact: emptyContact()
-          }
-        : item
-    )
-  )
+const initialState = {
+  companyProfile: createDefaultCompanyProfile(),
+  customerProfile: createDefaultCustomerProfile(),
+  consigneeProfiles: [emptyConsignee()],
+  payerProfiles: [emptyPayer()],
+  paymentTerms: [defaultPaymentTerm()],
+  teamProfiles: [{ role: MASTER_ROLES[0], ...emptyContact() }],
+  previews: { logo: null, customerLogo: null, consignee: {}, payer: {}, employee: {} }
 }
 
-  function addPaymentTerm() {
-    setPaymentTerms((prev) => [...prev, defaultPaymentTerm()])
-  }
-
-  function removePaymentTerm(index) {
-    setPaymentTerms((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  function updateConsignee(index, field, value) {
-    setConsigneeProfiles((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    )
-  }
-
-  function addConsignee() {
-    setConsigneeProfiles((prev) => [...prev, emptyConsignee()])
-  }
-
-  function updatePayer(index, field, value) {
-    setPayerProfiles((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    )
-  }
-
-  function addPayer() {
-    setPayerProfiles((prev) => [...prev, emptyPayer()])
-  }
-
-  function updateTeamProfile(index, field, value) {
-    setTeamProfiles((prev) => prev.map((member, i) => (i === index ? { ...member, [field]: value } : member)))
-  }
-
-  function addTeamProfile() {
-    setTeamProfiles((prev) => [...prev, { role: MASTER_ROLES[0], ...emptyContact() }])
-  }
-
-  function removeTeamProfile(index) {
-    setTeamProfiles((prev) => prev.filter((_, i) => i !== index))
-    // Clean up photo preview for removed employee
-    setEmployeePhotoPreviews((prev) => {
-      const newPreviews = { ...prev }
-      delete newPreviews[index]
-      // Shift previews for indices after the removed one
-      const shiftedPreviews = {}
-      Object.keys(newPreviews).forEach((key) => {
-        const keyNum = parseInt(key)
-        if (keyNum > index) {
-          shiftedPreviews[keyNum - 1] = newPreviews[key]
-        } else if (keyNum < index) {
-          shiftedPreviews[keyNum] = newPreviews[key]
-        }
-      })
-      return shiftedPreviews
-    })
-  }
-
-  function onNext(e) {
-    e?.preventDefault()
-    // Clear previous errors when trying to move forward
-    setError('')
+function formReducer(state, action) {
+  switch (action.type) {
+    case 'LOAD_DATA':
+      return { ...state, ...action.payload }
     
-    // Validate current step before moving forward
-    if (DEV_BYPASS_VALIDATION) {
-      setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
-      return
+    // Generic Field Updates
+    case 'UPDATE_COMPANY':
+      return { ...state, companyProfile: { ...state.companyProfile, [action.field]: action.value } }
+    case 'UPDATE_COMPANY_CONTACT':
+      return { ...state, companyProfile: { ...state.companyProfile, primaryContact: { ...state.companyProfile.primaryContact, [action.field]: action.value } } }
+    case 'UPDATE_CUSTOMER':
+      return { ...state, customerProfile: { ...state.customerProfile, [action.field]: action.value } }
+    
+    // Array Item Updates
+    case 'UPDATE_ARRAY_ITEM': {
+      const { section, index, field, value } = action
+      const list = [...state[section]]
+      list[index] = { ...list[index], [field]: value }
+      return { ...state, [section]: list }
     }
-    
-    if (canGoNext) {
-      // Clear field errors for current step when moving forward successfully
-      const stepErrorKeys = Object.keys(fieldErrors).filter(key => {
-        if (currentStep === 0) return key.startsWith('company.')
-        if (currentStep === 1) return key.startsWith('customer.')
-        if (currentStep === 2) return key.startsWith('consignee.')
-        if (currentStep === 3) return key.startsWith('payer.')
-        if (currentStep === 4) return key.startsWith('team.')
-        return false
-      })
-      if (stepErrorKeys.length > 0) {
-        setFieldErrors(prev => {
-          const newErrors = { ...prev }
-          stepErrorKeys.forEach(key => delete newErrors[key])
-          return newErrors
-        })
-      }
-      setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
-    } else {
-      // Validation failed - errors are already set in canGoNext
-      // Scroll to first error field if possible
-      const firstErrorKey = Object.keys(fieldErrors)[0]
-      if (firstErrorKey) {
-        const element = document.querySelector(`[data-field="${firstErrorKey}"]`)
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }
+    case 'ADD_ARRAY_ITEM':
+      return { ...state, [action.section]: [...state[action.section], action.item] }
+    case 'REMOVE_ARRAY_ITEM':
+      return { ...state, [action.section]: state[action.section].filter((_, i) => i !== action.index) }
+
+    // Specific logic for Site Offices
+    case 'UPDATE_SITE_OFFICE': {
+      const { index, field, value } = action
+      const newOffices = [...(state.companyProfile.siteOffices || [])]
+      newOffices[index] = { ...newOffices[index], [field]: value }
+      return { ...state, companyProfile: { ...state.companyProfile, siteOffices: newOffices } }
     }
-  }
-
-  function onPrev(e) {
-    e?.preventDefault()
-    setCurrentStep((s) => Math.max(s - 1, 0))
-  }
-
-  function handleDone() {
-    setShowSuccessPopup(false)
-    // Navigate to customers list page with refresh state
-    navigate('/customers', { replace: true, state: { refresh: true } })
-  }
-
-  // Function to load sample data for testing
-  function loadSampleData() {
-    setCompanyProfile({
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo_TCS.svg',
-      companyName: 'Rastogi Coders Pvt. Ltd.',
-      legalEntityName: 'Rastogi Coders Private Limited',
-      corporateAddress: '2nd Floor, Sector 62, Noida',
-      corporateDistrict: 'Gautam Buddh Nagar',
-      corporateState: 'Uttar Pradesh',
-      corporateCountry: 'India',
-      corporatePinCode: '201309',
-      correspondenceAddress: '2nd Floor, Sector 62, Noida',
-      correspondenceDistrict: 'Gautam Buddh Nagar',
-      correspondenceState: 'Uttar Pradesh',
-      correspondenceCountry: 'India',
-      correspondencePinCode: '201309',
-      otherOfficeType: 'Branch Office',
-      otherOfficeAddress: '3rd Floor, IT Park, Gomti Nagar',
-      otherOfficeGst: '09AACCR1234F1Z9',
-      otherOfficeDistrict: 'Lucknow',
-      otherOfficeState: 'Uttar Pradesh',
-      otherOfficeCountry: 'India',
-      otherOfficePinCode: '226010',
-      otherOfficeContactName: 'Saurabh Mishra',
-      otherOfficeContactNumber: '+919876540001',
-      otherOfficeEmail: 'saurabh.mishra@gmail.com',
-      primaryContact: {
-        name: 'Saurabh Mishra',
-        contactNumber: '+919876540001',
-        email: 'saurabh.mishra@gmail.com',
-        department: 'Management',
-        designation: 'Director',
-        jobRole: 'Executive',
-        segment: 'Domestic'
-      }
-    })
-    
-    setCustomerProfile({
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/9/95/Infosys_logo.svg',
-      customerName: 'Aashway Technologies',
-      legalEntityName: 'Aashway Technologies Private Limited',
-      corporateOfficeAddress: '3rd Floor, Sector 62, Noida',
-      correspondenceAddress: '3rd Floor, Sector 62, Noida',
-      district: 'Gautam Buddh Nagar',
-      state: 'Uttar Pradesh',
-      country: 'India',
-      pinCode: '201309',
-      segment: 'Domestic',
-      gstNumber: '09ABCDE1234F1Z5',
-      poIssuingAuthority: 'Kunal Verma',
-      designation: 'Procurement Manager',
-      contactNumber: '+919876540002',
-      emailId: 'kunal.verma@gmail.com'
-    })
-    
-    setConsigneeProfiles([{
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Wipro_Logo.svg',
-      consigneeName: 'Aashway Technologies – Noida Warehouse',
-      consigneeAddress: 'Industrial Area, Phase 2, Noida',
-      customerName: 'Aashway Technologies',
-      legalEntityName: 'Aashway Technologies Private Limited',
-      city: 'Noida',
-      state: 'Uttar Pradesh',
-      gstNumber: '09ABCDE1234F1Z5',
-      contactPersonName: 'Ritika Sharma',
-      designation: 'Warehouse Supervisor',
-      contactNumber: '+919876540003',
-      emailId: 'ritika.sharma@gmail.com'
-    }])
-    
-    setPayerProfiles([{
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/HCL_Technologies_logo.svg',
-      payerName: 'Aashway Technologies',
-      payerAddress: 'Accounts Department, Sector 62, Noida',
-      customerName: 'Aashway Technologies',
-      legalEntityName: 'Aashway Technologies Private Limited',
-      city: 'Noida',
-      state: 'Uttar Pradesh',
-      gstNumber: '09ABCDE1234F1Z5',
-      contactPersonName: 'Neeraj Gupta',
-      designation: 'Accounts Manager',
-      contactNumber: '+919876540004',
-      emailId: 'neeraj.gupta@gmail.com'
-    }])
-    
-    setTeamProfiles([{
-      role: 'Sales Manager',
-      name: 'Aditya Singh',
-      designation: 'Business Development Manager',
-      contactNumber: '+919876540005',
-      email: 'aditya.singh@gmail.com',
-      department: 'Sales & Marketing',
-      jobRole: 'Manager',
-      segment: 'Domestic',
-      photo: 'https://upload.wikimedia.org/wikipedia/commons/9/99/Sample_User_Icon.png'
-    }])
-    
-    setPaymentTerms([{
-      basic: '70%',
-      freight: '10%',
-      taxes: '18%',
-      due1: '30',
-      due2: '60',
-      due3: '90',
-      finalDue: '120',
-      description: '70% advance, 10% on delivery, balance payable within 30 days'
-    }])
-    
-    setCurrentStep(0)
-    toast.success('Sample data loaded! You can now navigate through the steps to review it.')
-  }
-
-  // Load customer data for editing
-  useEffect(() => {
-    async function loadCustomerData() {
-      if (!editId || !token) {
-        // Load saved data from localStorage if not editing
-    try {
-      const savedData = localStorage.getItem(STORAGE_KEY)
-      if (savedData) {
-        const parsed = JSON.parse(savedData)
-        if (parsed.companyProfile) setCompanyProfile(parsed.companyProfile)
-        if (parsed.customerProfile) setCustomerProfile(parsed.customerProfile)
-        if (parsed.consigneeProfiles) setConsigneeProfiles(parsed.consigneeProfiles)
-        if (parsed.payerProfiles) setPayerProfiles(parsed.payerProfiles)
-        if (parsed.paymentTerms) setPaymentTerms(parsed.paymentTerms)
-        if (parsed.teamProfiles) setTeamProfiles(parsed.teamProfiles)
-        if (parsed.currentStep !== undefined) setCurrentStep(parsed.currentStep)
-      }
-    } catch (error) {
-      console.error('Error loading saved data:', error)
-      localStorage.removeItem(STORAGE_KEY)
+    case 'ADD_SITE_OFFICE': {
+      const current = state.companyProfile.siteOffices || []
+      return { ...state, companyProfile: { ...state.companyProfile, siteOffices: [...current, emptyAddress(`Site Office ${current.length + 1}`)] } }
     }
-        setLoadingData(false)
-        return
-      }
-
-      try {
-        setLoadingData(true)
-        const customer = await svc.get(editId)
-        const metadata = customer?.metadata || {}
-        
-        // Load company profile
-        if (metadata.companyProfile) {
-          setCompanyProfile({
-            ...metadata.companyProfile,
-            primaryContact: {
-              name: metadata.companyProfile.primaryContactName || '',
-              contactNumber: metadata.companyProfile.primaryContactNumber || '',
-              email: metadata.companyProfile.primaryContactEmail || '',
-              department: '',
-              designation: '',
-              jobRole: '',
-              segment: ''
-            }
-          })
-        }
-        
-        // Load customer profile
-        if (metadata.customerProfile) {
-          setCustomerProfile(metadata.customerProfile)
-        }
-        
-        // Load consignee profiles
-        if (metadata.consigneeProfiles && Array.isArray(metadata.consigneeProfiles)) {
-          setConsigneeProfiles(metadata.consigneeProfiles)
-        }
-        
-        // Load payer profiles
-        if (metadata.payerProfiles && Array.isArray(metadata.payerProfiles)) {
-          setPayerProfiles(metadata.payerProfiles)
-        }
-        
-        // Load payment terms
-        if (metadata.paymentTerms && Array.isArray(metadata.paymentTerms)) {
-          setPaymentTerms(metadata.paymentTerms.map(term => ({
-            basic: term.advanceRequired || '',
-            freight: '',
-            taxes: term.latePaymentInterest || '',
-            due1: term.creditPeriod || '',
-            due2: '',
-            due3: '',
-            finalDue: term.balancePaymentDueDays || '',
-            description: term.paymentTermName || term.notes || ''
-          })))
-        }
-        
-        // Load team profiles
-        if (metadata.teamProfiles && Array.isArray(metadata.teamProfiles)) {
-          setTeamProfiles(metadata.teamProfiles.map(member => ({
-            role: member.role || '',
-            name: member.teamMemberName || '',
-            designation: '',
-            contactNumber: member.contactNumber || '',
-            email: member.emailId || '',
-            department: member.department || '',
-            jobRole: member.remarks || '',
-            segment: '',
-            photo: ''
-          })))
-        }
-      } catch (error) {
-        console.error('Error loading customer data:', error)
-        toast.error('Failed to load customer data for editing')
-      } finally {
-        setLoadingData(false)
-      }
-    }
-    
-    loadCustomerData()
-  }, [editId, token, svc])
-
-  // Auto-save to localStorage whenever data changes
-  useEffect(() => {
-    try {
-      const dataToSave = {
-        companyProfile,
-        customerProfile,
-        consigneeProfiles,
-        payerProfiles,
-        paymentTerms,
-        teamProfiles,
-        currentStep
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave))
-    } catch (error) {
-      console.error('Error saving data:', error)
-    }
-  }, [companyProfile, customerProfile, consigneeProfiles, payerProfiles, paymentTerms, teamProfiles, currentStep])
-
-async function onSubmit(e) {
-  if (e) {
-  e.preventDefault();
-    e.stopPropagation();
-  }
-  setError("");
-  setFieldErrors({});
-  setConfirmOpen(false); // Close confirmation modal
-
-  try {
-    // Comprehensive validation
-    if (!validateAllSteps()) {
-      // Scroll to first error
-      const firstErrorField = Object.keys(fieldErrors)[0]
-      if (firstErrorField) {
-        const element = document.querySelector(`[data-field="${firstErrorField}"]`)
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }
-      return
+    case 'REMOVE_SITE_OFFICE': {
+      const filtered = (state.companyProfile.siteOffices || []).filter((_, i) => i !== action.index)
+      return { ...state, companyProfile: { ...state.companyProfile, siteOffices: filtered.length ? filtered : [emptyAddress('Site Office 1')] } }
     }
 
-    // ---- SUBMIT PAYLOAD ----
-    setSaving(true);
-
-    // Normalize payload once to reuse across API calls
-    const payload = {
-      companyProfile: {
-        ...companyProfile,
-        primaryContactName: companyProfile.primaryContact?.name || '',
-        primaryContactNumber: companyProfile.primaryContact?.contactNumber || '',
-        primaryContactEmail: companyProfile.primaryContact?.email || ''
-      },
-      customerProfile,
-      consigneeProfiles,
-      payerProfiles,
-      paymentTerms: paymentTerms.map(term => ({
-        paymentTermName: term.description || 'Default',
-        creditPeriod: term.due1 || '',
-        advanceRequired: term.basic || '',
-        balancePaymentDueDays: term.finalDue || '',
-        latePaymentInterest: term.taxes || '',
-        billingCycle: 'Monthly',
-        paymentMethod: 'Bank Transfer',
-        bankName: '',
-        bankAccountNumber: '',
-        ifscCode: '',
-        notes: term.description || ''
-      })),
-      teamProfiles: teamProfiles.map(member => ({
-        teamMemberName: member.name || '',
-        employeeId: '',
-        role: member.role || '',
-        department: member.department || '',
-        contactNumber: member.contactNumber || '',
-        emailId: member.email || '',
-        reportingManager: '',
-        location: '',
-        accessLevel: 'Standard',
-        remarks: member.jobRole || ''
-      })),
-      additionalStep: {
-        defaultCurrency: 'INR',
-        defaultTax: '18',
-        invoicePrefix: 'INV',
-        quotationPrefix: 'QUO',
-        enableBOQ: 'Yes',
-        enableAutoInvoice: 'No',
-        notificationEmail: customerProfile.emailId || '',
-        smsNotification: 'No',
-        allowPartialDelivery: 'Yes',
-        serviceCharge: '0',
-        remarks: ''
+    // Preview Logic
+    case 'SET_PREVIEW': {
+      const { category, index, url } = action
+      if (index !== undefined) {
+        return { ...state, previews: { ...state.previews, [category]: { ...state.previews[category], [index]: url } } }
       }
-    };
-
-    // Build request body expected by customers API
-    const customerRequest = {
-      companyName: payload.companyProfile.companyName || payload.customerProfile.customerName,
-      legalEntityName: payload.companyProfile.legalEntityName || payload.customerProfile.legalEntityName,
-      name: payload.customerProfile.contactPersonName || payload.companyProfile.primaryContactName || '',
-      email: payload.customerProfile.emailId || payload.companyProfile.primaryContactEmail || '',
-      phone: payload.customerProfile.contactNumber || payload.companyProfile.primaryContactNumber || '',
-      segment: payload.customerProfile.segment || '',
-      gstNumber: payload.customerProfile.gstNumber || '',
-      metadata: payload
-    };
-
-    let response;
-
-    // Persist master data (keeps wizard storage + sync) then upsert customer record used by listing
-    await masterDataService.submitMasterData(payload);
-
-    if (editId) {
-      response = await svc.update(editId, customerRequest);
-      toast.success('Master Data updated successfully!');
-    } else {
-      response = await svc.create(customerRequest);
-      toast.success('Master Data created successfully!');
+      return { ...state, previews: { ...state.previews, [category]: url } }
     }
 
-    // Clear localStorage after successful submission
-    localStorage.removeItem(STORAGE_KEY)
-
-    setSubmittedData(payload)
-    // Get customer ID from API response
-    const recordId =
-      response?.data?.id ||
-      response?.data?.customerId ||
-      response?.data?._id ||
-      editId ||
-      Date.now().toString()
-    setCreatedRecordId(recordId)
-    setShowSuccessPopup(true)
-    
-    // Don't auto-navigate - let user click "Done" or "Create Another" button
-
-  } catch (err) {
-    console.error("Submit error:", err);
-    setError(err?.message || "Something went wrong while saving data. Please try again.");
-  } finally {
-    setSaving(false);
+    default:
+      return state
   }
 }
 
-if (loadingData) {
+// --- VALIDATION LOGIC ---
+
+function validateEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  
+  const trimmedEmail = email.trim();
+  if (!trimmedEmail) return false;
+
+  // This regex allows any standard email format: localpart@domain.extension
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+  return emailRegex.test(trimmedEmail);
+}
+
+function validatePhone(phone) {
+  return /^\+?\d{10,12}$/.test(phone || '')
+}
+
+function getStepValidation(step, state) {
+  const errors = {}
+  let isValid = true
+  const setError = (key, msg) => { errors[key] = msg; isValid = false; }
+
+  try {
+    if (step === 0) {
+      const req = ['companyName', 'legalEntityName', 'corporateAddress', 'corporateDistrict', 'corporateState', 'corporateCountry', 'corporatePinCode', 'correspondenceAddress', 'correspondenceDistrict', 'correspondenceState', 'correspondenceCountry', 'correspondencePinCode']
+      req.forEach(f => { if (!state.companyProfile?.[f]?.trim()) setError(`company.${f}`, `${f} is required`) })
+      
+      const contact = state.companyProfile.primaryContact
+      if (contact?.email && !validateEmail(contact.email)) setError('company.primaryContact.email', 'Invalid Email (use @financialmgmt.com)')
+      if (contact?.contactNumber && !validatePhone(contact.contactNumber)) setError('company.primaryContact.contactNumber', 'Invalid Phone (digits only)')
+    }
+
+    if (step === 1) {
+      const req = ['customerName', 'legalEntityName', 'corporateOfficeAddress', 'correspondenceAddress', 'district', 'state', 'country', 'pinCode', 'segment', 'gstNumber', 'poIssuingAuthority', 'designation', 'contactNumber', 'emailId']
+      req.forEach(f => { if (!state.customerProfile?.[f]?.trim()) setError(`customer.${f}`, `${f} is required`) })
+      
+      if (state.customerProfile.emailId && !validateEmail(state.customerProfile.emailId)) setError('customer.emailId', 'Invalid Email')
+      if (state.customerProfile.contactNumber && !validatePhone(state.customerProfile.contactNumber)) setError('customer.contactNumber', 'Invalid Phone')
+    }
+
+    if (step === 2) {
+      state.consigneeProfiles.forEach((item, idx) => {
+        const req = ['consigneeName', 'consigneeAddress', 'customerName', 'legalEntityName', 'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId']
+        req.forEach(f => { if (!item?.[f]?.trim()) setError(`consignee.${idx}.${f}`, `${f} is required`) })
+        if (item.emailId && !validateEmail(item.emailId)) setError(`consignee.${idx}.emailId`, 'Invalid Email')
+        if (item.contactNumber && !validatePhone(item.contactNumber)) setError(`consignee.${idx}.contactNumber`, 'Invalid Phone')
+      })
+    }
+
+    if (step === 3) {
+      state.payerProfiles.forEach((item, idx) => {
+        const req = ['payerName', 'payerAddress', 'customerName', 'legalEntityName', 'city', 'state', 'gstNumber', 'contactPersonName', 'designation', 'contactNumber', 'emailId']
+        req.forEach(f => { if (!item?.[f]?.trim()) setError(`payer.${idx}.${f}`, `${f} is required`) })
+        if (item.emailId && !validateEmail(item.emailId)) setError(`payer.${idx}.emailId`, 'Invalid Email')
+        if (item.contactNumber && !validatePhone(item.contactNumber)) setError(`payer.${idx}.contactNumber`, 'Invalid Phone')
+      })
+    }
+
+    if (step === 4) {
+      state.teamProfiles.forEach((item, idx) => {
+        if (item.email && !validateEmail(item.email)) setError(`team.${idx}.email`, 'Invalid Email')
+        if (item.contactNumber && !validatePhone(item.contactNumber)) setError(`team.${idx}.contactNumber`, 'Invalid Phone')
+      })
+    }
+  } catch (err) { console.error(err); isValid = false; }
+
+  return { isValid, errors }
+}
+
+// --- MEMOIZED STEP COMPONENTS ---
+
+const Step1Company = React.memo(({ data, dispatch, errors, preview }) => {
+  const getErr = (f) => errors[`company.${f}`]
+  const handleLogo = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      dispatch({ type: 'UPDATE_COMPANY', field: 'logo', value: file })
+      const reader = new FileReader(); reader.onloadend = () => dispatch({ type: 'SET_PREVIEW', category: 'logo', url: reader.result }); reader.readAsDataURL(file);
+    }
+  }
+
   return (
-    <DashboardLayout>
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-      </div>
-    </DashboardLayout>
-  )
-}
-
-return (
-// ...
-    <ErrorBoundary>
-      <DashboardLayout>
-      <div className="mb-8 rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm">
-        <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-secondary-900">Creation of Master Data</h1>
-            <p className="text-sm text-secondary-600">Stepwise onboarding for company, customer, payment, and team details.</p>
-          </div>
-          <div className="text-sm font-medium text-primary-700 bg-white/70 border border-primary-100 rounded-full px-4 py-2 shadow-xs">
-            {progressPercent}% complete
-            </div>
-          </div>
-          
-          {/* Load Sample Data Button */}
-          <div>
-            <button
-              type="button"
-              onClick={loadSampleData}
-              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-500 px-6 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-600 hover:border-blue-600 hover:shadow-xl transition-all duration-200 active:scale-95"
-              title="Load sample data for testing all form fields"
-            >
-              <Plus className="h-5 w-5" />
-              Load Sample Data
-            </button>
-            <p className="text-xs text-gray-500 mt-2 ml-1">
-              Click to automatically fill all form fields with sample data for testing
-            </p>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="mt-5">
-          <div className="h-2 w-full rounded-full bg-secondary-100 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-300 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-7">
-            {STEPS.map((step, idx) => {
-              const isCurrentStep = idx === currentStep
-              const isPastStep = idx < currentStep
-              const canNavigate = isPastStep || (isCurrentStep && canGoNext)
-              return (
-                <button
-                  key={step.label}
-                  type="button"
-                  onClick={() => goToStep(idx)}
-                  disabled={idx > currentStep && !DEV_BYPASS_VALIDATION && !canGoNext}
-                  className={`group relative flex flex-col rounded-xl border px-3 py-3 text-left shadow-sm transition-all focus:outline-none ${
-                    isCurrentStep
-                      ? 'border-primary-200 bg-white shadow-primary-100'
-                      : isPastStep
-                      ? 'border-success-200 bg-success-50 text-secondary-800'
-                      : 'border-secondary-200 bg-white text-secondary-500'
-                  } ${canNavigate ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-semibold ${
-                        isCurrentStep
-                          ? 'border-primary-500 text-primary-700 bg-primary-50'
-                          : isPastStep
-                          ? 'border-success-500 text-success-700 bg-success-50'
-                          : 'border-secondary-200 text-secondary-500 bg-secondary-50'
-                      }`}
-                    >
-                      {idx + 1}
-                    </span>
-                    <div className="flex-1">
-                      <div className={`text-sm font-semibold ${isCurrentStep ? 'text-primary-800' : ''}`}>
-                        {step.label}
-                      </div>
-                      <div className="text-xs text-secondary-500">
-                        {isCurrentStep ? 'In progress' : isPastStep ? 'Completed' : 'Pending'}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-      <form onSubmit={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        // Only allow submission through the button click, not form submit
-        return false
-      }} className="space-y-6">
-        {error && !error.includes('Primary contact') && !error.includes('primary contact') && !error.includes('Team member') && !error.includes('team member') && (
-          <div className="rounded-md border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700 flex items-center gap-2">
-            <XCircle className="h-4 w-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-        {/* Step 1: Company Profile */}
-        {currentStep === 0 && (
-  <section className="card">
-    <div className="card-header">
-      <h2 className="text-lg font-semibold text-secondary-900">Creation of Company Profile</h2>
-    </div>
-    <div className="card-content space-y-5">
+    <section className="card">
+      <div className="card-header"><h2 className="text-lg font-semibold text-secondary-900">Creation of Company Profile</h2></div>
+      <div className="card-content space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-1">
             <label className="form-label">Company Logo</label>
             <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
               <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
-                {logoPreview ? (
-                  <img 
-                    src={logoPreview} 
-                    alt="Logo preview" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-primary-700 text-lg font-semibold">
-                    {companyProfile.logo instanceof File 
-                      ? companyProfile.logo.name.substring(0, 2).toUpperCase()
-                      : 'Logo'}
-                  </span>
-                )}
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-secondary-800">
-                  {logoPreview ? 'Logo uploaded' : 'Upload company logo'}
-                </p>
-                <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
+                {preview ? <img src={preview} alt="Logo" className="w-full h-full object-cover" /> : <span className="text-primary-700 text-lg font-semibold">{data.logo?.name?.substring(0,2).toUpperCase() || 'Logo'}</span>}
               </div>
               <label className="btn btn-primary btn-sm cursor-pointer">
-                {logoPreview ? 'Change Logo' : 'Choose File'}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null
-                    updateCompany('logo', file)
-                  }}
-                />
+                {preview ? 'Change Logo' : 'Choose File'}
+                <input type="file" accept="image/*" className="hidden" onChange={handleLogo} />
               </label>
-              {companyProfile.logo && (
-                <div className="text-xs text-secondary-600 truncate max-w-full">
-                  {companyProfile.logo instanceof File ? companyProfile.logo.name : companyProfile.logo}
-                </div>
-              )}
             </div>
           </div>
-
           <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="form-label">Company Name *</label>
-              <input
-                data-field="company.companyName"
-                className={`input ${getFieldError('company.companyName') ? 'border-red-500' : ''}`}
-                type="text"
-                value={companyProfile?.companyName || ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateCompany('companyName', value)
-                  if (getFieldError('company.companyName')) {
-                    setFieldErrors(prev => {
-                      const newErrors = { ...prev }
-                      delete newErrors['company.companyName']
-                      return newErrors
-                    })
-                  }
-                  if (value?.trim() || companyProfile?.legalEntityName?.trim()) setError('')
-                }}
-                placeholder="Company trading name"
-              />
-              {getFieldError('company.companyName') && (
-                <p className="text-xs text-red-500 mt-1">{getFieldError('company.companyName')}</p>
-              )}
+              <input className={`input ${getErr('companyName') ? 'border-red-500' : ''}`} value={data.companyName || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'companyName', value: e.target.value })} placeholder="Company trading name" />
+              {getErr('companyName') && <p className="text-xs text-red-500 mt-1">{getErr('companyName')}</p>}
             </div>
             <div>
               <label className="form-label">Legal Entity Name *</label>
-              <input
-                className="input"
-                type="text"
-                value={companyProfile?.legalEntityName || ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateCompany('legalEntityName', value)
-                  if (value?.trim() || companyProfile?.companyName?.trim()) setError('')
-                }}
-                placeholder="Registered legal entity"
-              />
+              <input className="input" value={data.legalEntityName || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'legalEntityName', value: e.target.value })} placeholder="Registered legal entity" />
             </div>
           </div>
         </div>
@@ -1268,1548 +249,545 @@ return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <label className="form-label">Corporate Office Address *</label>
-            <textarea
-              className="input min-h-[90px]"
-              value={companyProfile.corporateAddress}
-              onChange={(e) => updateCompany('corporateAddress', e.target.value)}
-              placeholder="Full address"
-            />
+            <textarea className="input min-h-[90px]" value={data.corporateAddress || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'corporateAddress', value: e.target.value })} placeholder="Full address" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                className="input"
-                placeholder="District *"
-                value={companyProfile.corporateDistrict}
-                onChange={(e) => updateCompany('corporateDistrict', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="State *"
-                value={companyProfile.corporateState}
-                onChange={(e) => updateCompany('corporateState', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="Country *"
-                value={companyProfile.corporateCountry}
-                onChange={(e) => updateCompany('corporateCountry', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="Pin Code *"
-                value={companyProfile.corporatePinCode}
-                onChange={(e) => updateCompany('corporatePinCode', e.target.value)}
-              />
+              <select className="input" value={data.corporateCountry || 'India'} disabled>
+                <option value="India">India</option>
+              </select>
+              <select className="input" value={data.corporateState || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'corporateState', value: e.target.value })}>
+                <option value="">Select State</option>
+                {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input className="input" placeholder="District/City *" value={data.corporateDistrict || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'corporateDistrict', value: e.target.value })} />
+              <input className="input" placeholder="Pin Code *" value={data.corporatePinCode || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'corporatePinCode', value: e.target.value })} />
             </div>
           </div>
           <div className="space-y-3">
             <label className="form-label">Correspondence Address *</label>
-            <textarea
-              className="input min-h-[90px]"
-              value={companyProfile.correspondenceAddress}
-              onChange={(e) => updateCompany('correspondenceAddress', e.target.value)}
-              placeholder="Postal address"
-            />
+            <textarea className="input min-h-[90px]" value={data.correspondenceAddress || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'correspondenceAddress', value: e.target.value })} placeholder="Postal address" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                className="input"
-                placeholder="District *"
-                value={companyProfile.correspondenceDistrict}
-                onChange={(e) => updateCompany('correspondenceDistrict', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="State *"
-                value={companyProfile.correspondenceState}
-                onChange={(e) => updateCompany('correspondenceState', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="Country *"
-                value={companyProfile.correspondenceCountry}
-                onChange={(e) => updateCompany('correspondenceCountry', e.target.value)}
-              />
-              <input
-                className="input"
-                placeholder="Pin Code *"
-                value={companyProfile.correspondencePinCode}
-                onChange={(e) => updateCompany('correspondencePinCode', e.target.value)}
-              />
+              <select className="input" value={data.correspondenceCountry || 'India'} disabled>
+                <option value="India">India</option>
+              </select>
+              <select className="input" value={data.correspondenceState || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'correspondenceState', value: e.target.value })}>
+                <option value="">Select State</option>
+                {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input className="input" placeholder="District/City *" value={data.correspondenceDistrict || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'correspondenceDistrict', value: e.target.value })} />
+              <input className="input" placeholder="Pin Code *" value={data.correspondencePinCode || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY', field: 'correspondencePinCode', value: e.target.value })} />
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <label className="form-label">Other Office / Plant Details</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <SelectWithOther
-              className="input"
-              value={companyProfile.otherOfficeType || ''}
-              onChange={(val) => updateCompany('otherOfficeType', val)}
-              options={[
-                { value: 'Plant Address', label: 'Plant Address' },
-                { value: 'Site Office', label: 'Site Office' },
-                { value: 'Marketing Office', label: 'Marketing Office' }
-              ]}
-              placeholder="Select office type"
-              otherLabel="Other"
-              otherInputPlaceholder="Enter office type"
-            />
-            <input
-              className="input"
-              placeholder="GST No"
-              value={companyProfile.otherOfficeGst}
-              onChange={(e) => updateCompany('otherOfficeGst', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Pin Code"
-              value={companyProfile.otherOfficePinCode}
-              onChange={(e) => updateCompany('otherOfficePinCode', e.target.value)}
-            />
-          </div>
-          <textarea
-            className="input min-h-[80px]"
-            placeholder="Address"
-            value={companyProfile.otherOfficeAddress}
-            onChange={(e) => updateCompany('otherOfficeAddress', e.target.value)}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
-              className="input"
-              placeholder="District"
-              value={companyProfile.otherOfficeDistrict}
-              onChange={(e) => updateCompany('otherOfficeDistrict', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="State"
-              value={companyProfile.otherOfficeState}
-              onChange={(e) => updateCompany('otherOfficeState', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Country"
-              value={companyProfile.otherOfficeCountry}
-              onChange={(e) => updateCompany('otherOfficeCountry', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input
-              className="input"
-              placeholder="Contact Person Name"
-              value={companyProfile.otherOfficeContactName}
-              onChange={(e) => updateCompany('otherOfficeContactName', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Contact Number"
-              value={companyProfile.otherOfficeContactNumber}
-              onChange={(e) => updateCompany('otherOfficeContactNumber', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Email ID"
-              value={companyProfile.otherOfficeEmail}
-              onChange={(e) => updateCompany('otherOfficeEmail', e.target.value)}
-            />
-          </div>
+           <label className="form-label">Other Office / Plant Details</label>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <SelectWithOther className="input" value={data.otherOfficeType || ''} onChange={(val) => dispatch({ type: 'UPDATE_COMPANY', field: 'otherOfficeType', value: val })} options={[{ value: 'Plant Address', label: 'Plant Address' }, { value: 'Site Office', label: 'Site Office' }]} placeholder="Select type" otherLabel="Other" otherInputPlaceholder="Enter type" />
+              <div className="col-span-3">
+                {(data.siteOffices || []).map((addr, idx) => (
+                  <div key={idx} className="rounded-lg border border-secondary-200 p-3 mb-3">
+                    <div className="flex justify-between mb-2">
+                      <div className="text-sm font-medium">{addr.label}</div>
+                      <button type="button" className="text-xs text-danger-600" onClick={() => dispatch({ type: 'REMOVE_SITE_OFFICE', index: idx })}>Remove</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input className="input" placeholder="Address" value={addr.addressLine || ''} onChange={(e) => dispatch({ type: 'UPDATE_SITE_OFFICE', index: idx, field: 'addressLine', value: e.target.value })} />
+                      <input className="input" placeholder="Contact No" value={addr.contactNumber || ''} onChange={(e) => dispatch({ type: 'UPDATE_SITE_OFFICE', index: idx, field: 'contactNumber', value: e.target.value })} />
+                      <input className="input" placeholder="GST No" value={addr.gstNumber || ''} onChange={(e) => dispatch({ type: 'UPDATE_SITE_OFFICE', index: idx, field: 'gstNumber', value: e.target.value })} />
+                      <input className="input" placeholder="Label" value={addr.label || ''} onChange={(e) => dispatch({ type: 'UPDATE_SITE_OFFICE', index: idx, field: 'label', value: e.target.value })} />
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => dispatch({ type: 'ADD_SITE_OFFICE' })}>Add</button>
+              </div>
+           </div>
         </div>
 
-        {/* Primary Contact Section */}
         <div className="space-y-3 mt-6 pt-6 border-t border-secondary-200">
           <h3 className="text-base font-semibold text-secondary-900">Primary Contact</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="form-label">Contact Name</label>
-              <input
-                className="input"
-                placeholder="Contact person name"
-                value={companyProfile.primaryContact?.name || ''}
-                onChange={(e) => updateCompany('primaryContact', { ...companyProfile.primaryContact, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="form-label">Contact Number</label>
-              <input
-                data-field="company.primaryContact.contactNumber"
-                className={`input ${getFieldError('company.primaryContact.contactNumber') ? 'border-red-500' : ''}`}
-                placeholder="Contact number"
-                value={companyProfile.primaryContact?.contactNumber || ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateCompany('primaryContact', { ...companyProfile.primaryContact, contactNumber: value })
-                  if (getFieldError('company.primaryContact.contactNumber')) {
-                    setFieldErrors(prev => {
-                      const newErrors = { ...prev }
-                      delete newErrors['company.primaryContact.contactNumber']
-                      return newErrors
-                    })
-                  }
-                }}
-              />
-              {getFieldError('company.primaryContact.contactNumber') && (
-                <p className="text-xs text-red-500 mt-1">{getFieldError('company.primaryContact.contactNumber')}</p>
-              )}
-            </div>
-            <div>
-              <label className="form-label">Email ID</label>
-              <input
-                data-field="company.primaryContact.email"
-                type="email"
-                className={`input ${getFieldError('company.primaryContact.email') ? 'border-red-500' : ''}`}
-                placeholder="Email address"
-                value={companyProfile.primaryContact?.email || ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateCompany('primaryContact', { ...companyProfile.primaryContact, email: value })
-                  if (getFieldError('company.primaryContact.email')) {
-                    setFieldErrors(prev => {
-                      const newErrors = { ...prev }
-                      delete newErrors['company.primaryContact.email']
-                      return newErrors
-                    })
-                  }
-                }}
-              />
-              {getFieldError('company.primaryContact.email') && (
-                <p className="text-xs text-red-500 mt-1">{getFieldError('company.primaryContact.email')}</p>
-              )}
-            </div>
+             <div>
+                <label className="form-label">Contact Name</label>
+                <input className="input" placeholder="Contact person name" value={data.primaryContact?.name || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY_CONTACT', field: 'name', value: e.target.value })} />
+             </div>
+             <div>
+                <label className="form-label">Contact Number</label>
+                <input className={`input ${getErr('primaryContact.contactNumber') ? 'border-red-500' : ''}`} placeholder="Contact number" value={data.primaryContact?.contactNumber || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY_CONTACT', field: 'contactNumber', value: e.target.value })} />
+             </div>
+             <div>
+                <label className="form-label">Email ID</label>
+                <input className={`input ${getErr('primaryContact.email') ? 'border-red-500' : ''}`} placeholder="Email address" value={data.primaryContact?.email || ''} onChange={(e) => dispatch({ type: 'UPDATE_COMPANY_CONTACT', field: 'email', value: e.target.value })} />
+             </div>
           </div>
         </div>
-    </div>
-  </section>
-)}
-        {/* Step 2: Customer Profile */}
-        {currentStep === 1 && (
-          <section className="card">
-            <div className="card-header">
-              <h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2>
-            </div>
-            <div className="card-content space-y-5">
+      </div>
+    </section>
+  )
+})
+
+const Step2Customer = React.memo(({ data, dispatch, errors, preview }) => {
+  const getErr = (f) => errors[`customer.${f}`]
+  const handleLogo = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      dispatch({ type: 'UPDATE_CUSTOMER', field: 'logo', value: file })
+      const reader = new FileReader(); reader.onloadend = () => dispatch({ type: 'SET_PREVIEW', category: 'customerLogo', url: reader.result }); reader.readAsDataURL(file);
+    }
+  }
+
+  return (
+    <section className="card">
+      <div className="card-header"><h2 className="text-lg font-semibold text-secondary-900">Creation of Customer Profile</h2></div>
+      <div className="card-content space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div>
+             <label className="form-label">Logo</label>
+             <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
+                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
+                  {preview ? <img src={preview} alt="Logo" className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold">{data.logo?.name?.substring(0,2) || 'Logo'}</span>}
+                </div>
+                <label className="btn btn-outline btn-sm cursor-pointer">
+                  {preview ? 'Change Logo' : 'Choose File'}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleLogo} />
+                </label>
+             </div>
+           </div>
+           <div><label className="form-label">Customer Name *</label><input className={`input ${getErr('customerName')?'border-red-500':''}`} value={data.customerName||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'customerName',value:e.target.value})} placeholder="Enter customer name"/>{getErr('customerName')&&<p className="text-xs text-red-500">{getErr('customerName')}</p>}</div>
+           <div><label className="form-label">Legal Entity Name *</label><input className="input" value={data.legalEntityName||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'legalEntityName',value:e.target.value})} placeholder="Enter legal entity name"/></div>
+           <div><label className="form-label">Corporate Office Address *</label><textarea className="input min-h-[80px]" value={data.corporateOfficeAddress||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'corporateOfficeAddress',value:e.target.value})} placeholder="Enter address"/></div>
+           <div><label className="form-label">Correspondence Address *</label><textarea className="input min-h-[80px]" value={data.correspondenceAddress||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'correspondenceAddress',value:e.target.value})} placeholder="Enter address"/></div>
+           
+           <div>
+             <label className="form-label">Country *</label>
+             <select className="input" value={data.country || 'India'} disabled>
+               <option value="India">India</option>
+             </select>
+           </div>
+           
+           <div>
+             <label className="form-label">State *</label>
+             <select className="input" value={data.state || ''} onChange={(e) => dispatch({ type: 'UPDATE_CUSTOMER', field: 'state', value: e.target.value })}>
+               <option value="">Select State</option>
+               {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+             </select>
+           </div>
+
+           <div><label className="form-label">District/City *</label><input className="input" value={data.district||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'district',value:e.target.value})}/></div>
+           <div><label className="form-label">Pin Code *</label><input className="input" value={data.pinCode||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'pinCode',value:e.target.value})}/></div>
+           <div><label className="form-label">Segment *</label><SelectWithOther className="input" value={data.segment||''} onChange={(v)=>dispatch({type:'UPDATE_CUSTOMER',field:'segment',value:v})} options={[{value:'Domestic',label:'Domestic'},{value:'Export',label:'Export'}]} placeholder="Select segment"/></div>
+           <div><label className="form-label">GST No *</label><input className="input" value={data.gstNumber||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'gstNumber',value:e.target.value})}/></div>
+           <div><label className="form-label">PO Authority *</label><input className="input" value={data.poIssuingAuthority||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'poIssuingAuthority',value:e.target.value})}/></div>
+           <div><label className="form-label">Designation *</label><input className="input" value={data.designation||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'designation',value:e.target.value})}/></div>
+           <div><label className="form-label">Contact No *</label><input className={`input ${getErr('contactNumber')?'border-red-500':''}`} value={data.contactNumber||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'contactNumber',value:e.target.value})}/></div>
+           <div><label className="form-label">Email ID *</label><input className={`input ${getErr('emailId')?'border-red-500':''}`} value={data.emailId||''} onChange={(e)=>dispatch({type:'UPDATE_CUSTOMER',field:'emailId',value:e.target.value})}/></div>
+        </div>
+      </div>
+    </section>
+  )
+})
+
+const Step3Consignee = React.memo(({ list, dispatch, errors, previews }) => {
+  return (
+    <section className="card">
+      <div className="card-header flex justify-between"><h2 className="text-lg font-semibold">Creation of Consignee Profile</h2><button type="button" className="btn btn-outline btn-sm" onClick={() => dispatch({ type: 'ADD_ARRAY_ITEM', section: 'consigneeProfiles', item: emptyConsignee() })}><Plus className="h-4 w-4"/> Add +</button></div>
+      <div className="card-content space-y-4">
+        {list.map((item, idx) => {
+          const update = (field, val) => dispatch({ type: 'UPDATE_ARRAY_ITEM', section: 'consigneeProfiles', index: idx, field, value: val })
+          const getErr = (f) => errors[`consignee.${idx}.${f}`]
+          return (
+            <div key={idx} className="rounded-lg border border-secondary-200 p-4 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Logo</label>
-                  <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
-                      {customerLogoPreview ? (
-                        <img 
-                          src={customerLogoPreview} 
-                          alt="Logo preview" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-primary-700 text-lg font-semibold">
-                          {customerProfile.logo instanceof File 
-                            ? customerProfile.logo.name.substring(0, 2).toUpperCase()
-                            : 'Logo'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-secondary-800">
-                        {customerLogoPreview ? 'Logo uploaded' : 'Upload customer logo'}
-                      </p>
-                      <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
-                    </div>
-                    <label className="btn btn-outline btn-sm cursor-pointer">
-                      {customerLogoPreview ? 'Change Logo' : 'Choose File'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            const reader = new FileReader()
-                            reader.onloadend = () => {
-                              setCustomerLogoPreview(reader.result)
-                            }
-                            reader.readAsDataURL(file)
-                            setCustomerProfile({ ...customerProfile, logo: file })
-                          } else {
-                            setCustomerLogoPreview(null)
-                            setCustomerProfile({ ...customerProfile, logo: '' })
-                          }
-                        }}
-                      />
-                    </label>
-                    {customerProfile.logo && (
-                      <div className="text-xs text-secondary-600 truncate max-w-full">
-                        {customerProfile.logo instanceof File ? customerProfile.logo.name : customerProfile.logo}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Customer Name *</label>
-                  <input
-                    data-field="customer.customerName"
-                    className={`input ${getFieldError('customer.customerName') ? 'border-red-500' : ''}`}
-                    value={customerProfile.customerName}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setCustomerProfile({ ...customerProfile, customerName: value })
-                      if (getFieldError('customer.customerName')) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev }
-                          delete newErrors['customer.customerName']
-                          return newErrors
-                        })
-                      }
-                    }}
-                    placeholder="Enter customer name"
-                  />
-                  {getFieldError('customer.customerName') && (
-                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.customerName')}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="form-label">Legal Entity Name *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.legalEntityName}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, legalEntityName: e.target.value })}
-                    placeholder="Enter legal entity name"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Corporate Office Address *</label>
-                  <textarea
-                    className="input min-h-[80px]"
-                    value={customerProfile.corporateOfficeAddress}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, corporateOfficeAddress: e.target.value })}
-                    placeholder="Enter corporate office address"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Correspondence Address *</label>
-                  <textarea
-                    className="input min-h-[80px]"
-                    value={customerProfile.correspondenceAddress}
-                    onChange={(e) =>
-                      setCustomerProfile({ ...customerProfile, correspondenceAddress: e.target.value })
-                    }
-                    placeholder="Enter correspondence address"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">District *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.district}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, district: e.target.value })}
-                    placeholder="Enter district"
-                  />
-                </div>
+                <div><label className="form-label">Consignee Name *</label><input className={`input ${getErr('consigneeName')?'border-red-500':''}`} value={item.consigneeName||''} onChange={(e)=>update('consigneeName',e.target.value)}/></div>
+                <div className="md:col-span-2"><label className="form-label">Consignee Address *</label><textarea className="input min-h-[80px]" value={item.consigneeAddress||''} onChange={(e)=>update('consigneeAddress',e.target.value)}/></div>
+                <div><label className="form-label">Customer Name *</label><input className="input" value={item.customerName||''} onChange={(e)=>update('customerName',e.target.value)}/></div>
+                <div><label className="form-label">Legal Entity Name *</label><input className="input" value={item.legalEntityName||''} onChange={(e)=>update('legalEntityName',e.target.value)}/></div>
+                
                 <div>
                   <label className="form-label">State *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.state}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, state: e.target.value })}
-                    placeholder="Enter state"
-                  />
+                  <select className={`input ${getErr('state')?'border-red-500':''}`} value={item.state || ''} onChange={(e) => update('state', e.target.value)}>
+                    <option value="">Select State</option>
+                    {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
-                <div>
-                  <label className="form-label">Country *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.country}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, country: e.target.value })}
-                    placeholder="Enter country"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Pin Code *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.pinCode}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, pinCode: e.target.value })}
-                    placeholder="Enter pin code"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Segment *</label>
-                  <SelectWithOther
-                    className="input"
-                    value={customerProfile.segment || ''}
-                    onChange={(val) => setCustomerProfile({ ...customerProfile, segment: val })}
-                    options={[
-                      { value: 'Domestic', label: 'Domestic' },
-                      { value: 'Export', label: 'Export' }
-                    ]}
-                    placeholder="Select segment"
-                    otherLabel="Other"
-                    otherInputPlaceholder="Enter segment"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">GST No *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.gstNumber}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, gstNumber: e.target.value })}
-                    placeholder="Enter GST number"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">PO Issuing Authority / Contact Person Name *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.poIssuingAuthority}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, poIssuingAuthority: e.target.value })}
-                    placeholder="Enter PO issuing authority / contact name"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Designation *</label>
-                  <input
-                    className="input"
-                    value={customerProfile.designation}
-                    onChange={(e) => setCustomerProfile({ ...customerProfile, designation: e.target.value })}
-                    placeholder="Enter designation"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Contact Person Contact No *</label>
-                  <input
-                    data-field="customer.contactNumber"
-                    className={`input ${getFieldError('customer.contactNumber') ? 'border-red-500' : ''}`}
-                    value={customerProfile.contactNumber}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setCustomerProfile({ ...customerProfile, contactNumber: value })
-                      if (getFieldError('customer.contactNumber')) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev }
-                          delete newErrors['customer.contactNumber']
-                          return newErrors
-                        })
-                      }
-                    }}
-                    placeholder="Enter contact number"
-                  />
-                  {getFieldError('customer.contactNumber') && (
-                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.contactNumber')}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="form-label">Email ID *</label>
-                  <input
-                    data-field="customer.emailId"
-                    type="email"
-                    className={`input ${getFieldError('customer.emailId') ? 'border-red-500' : ''}`}
-                    value={customerProfile.emailId}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setCustomerProfile({ ...customerProfile, emailId: value })
-                      if (getFieldError('customer.emailId')) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev }
-                          delete newErrors['customer.emailId']
-                          return newErrors
-                        })
-                      }
-                    }}
-                    placeholder="Enter email address"
-                  />
-                  {getFieldError('customer.emailId') && (
-                    <p className="text-xs text-red-500 mt-1">{getFieldError('customer.emailId')}</p>
-                  )}
-                </div>
+                <div><label className="form-label">City *</label><input className={`input ${getErr('city')?'border-red-500':''}`} value={item.city||''} onChange={(e)=>update('city',e.target.value)}/></div>
+                
+                <div><label className="form-label">GST No *</label><input className={`input ${getErr('gstNumber')?'border-red-500':''}`} value={item.gstNumber||''} onChange={(e)=>update('gstNumber',e.target.value)}/></div>
+                <div><label className="form-label">Contact Person *</label><input className="input" value={item.contactPersonName||''} onChange={(e)=>update('contactPersonName',e.target.value)}/></div>
+                <div><label className="form-label">Designation *</label><input className="input" value={item.designation||''} onChange={(e)=>update('designation',e.target.value)}/></div>
+                <div><label className="form-label">Contact No *</label><input className={`input ${getErr('contactNumber')?'border-red-500':''}`} value={item.contactNumber||''} onChange={(e)=>update('contactNumber',e.target.value)}/></div>
+                <div><label className="form-label">Email ID *</label><input className={`input ${getErr('emailId')?'border-red-500':''}`} value={item.emailId||''} onChange={(e)=>update('emailId',e.target.value)}/></div>
               </div>
+              {list.length > 1 && <button type="button" className="text-danger-600 text-xs" onClick={()=>dispatch({type:'REMOVE_ARRAY_ITEM',section:'consigneeProfiles',index:idx})}>Remove</button>}
             </div>
-          </section>
-        )}
-        {/* Step 3: Consignee Profile */}
-        {currentStep === 2 && (
-          <section className="card">
-            <div className="card-header flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-secondary-900">Creation of Consignee Profile</h2>
-              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addConsignee}>
-                <Plus className="h-4 w-4" /> Add +
-              </button>
-            </div>
-            <div className="card-content space-y-4">
-              {consigneeProfiles.map((consignee, index) => (
-                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Logo</label>
-                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
-                          {consigneeLogoPreviews[index] ? (
-                            <img 
-                              src={consigneeLogoPreviews[index]} 
-                              alt="Logo preview" 
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-primary-700 text-lg font-semibold">
-                              {consignee.logo instanceof File 
-                                ? consignee.logo.name.substring(0, 2).toUpperCase()
-                                : 'Logo'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-secondary-800">
-                            {consigneeLogoPreviews[index] ? 'Logo uploaded' : 'Upload consignee logo'}
-                          </p>
-                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
-                        </div>
-                        <label className="btn btn-outline btn-sm cursor-pointer">
-                          {consigneeLogoPreviews[index] ? 'Change Logo' : 'Choose File'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                const reader = new FileReader()
-                                reader.onloadend = () => {
-                                  setConsigneeLogoPreviews(prev => ({ ...prev, [index]: reader.result }))
-                                }
-                                reader.readAsDataURL(file)
-                                updateConsignee(index, 'logo', file)
-                              } else {
-                                setConsigneeLogoPreviews(prev => {
-                                  const newPreviews = { ...prev }
-                                  delete newPreviews[index]
-                                  return newPreviews
-                                })
-                                updateConsignee(index, 'logo', '')
-                              }
-                            }}
-                          />
-                        </label>
-                        {consignee.logo && (
-                          <div className="text-xs text-secondary-600 truncate max-w-full">
-                            {consignee.logo instanceof File ? consignee.logo.name : consignee.logo}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="form-label">Consignee Name *</label>
-                      <input
-                        className="input"
-                        value={consignee.consigneeName}
-                        onChange={(e) => updateConsignee(index, 'consigneeName', e.target.value)}
-                        placeholder="Enter consignee name"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="form-label">Consignee Address *</label>
-                      <textarea
-                        className="input min-h-[80px]"
-                        value={consignee.consigneeAddress}
-                        onChange={(e) => updateConsignee(index, 'consigneeAddress', e.target.value)}
-                        placeholder="Enter consignee address"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Customer Name *</label>
-                      <input
-                        className="input"
-                        value={consignee.customerName}
-                        onChange={(e) => updateConsignee(index, 'customerName', e.target.value)}
-                        placeholder="Enter customer name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Legal Entity Name *</label>
-                      <input
-                        className="input"
-                        value={consignee.legalEntityName}
-                        onChange={(e) => updateConsignee(index, 'legalEntityName', e.target.value)}
-                        placeholder="Enter legal entity name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">City *</label>
-                      <input
-                        className="input"
-                        value={consignee.city}
-                        onChange={(e) => updateConsignee(index, 'city', e.target.value)}
-                        placeholder="Enter city"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">State *</label>
-                      <input
-                        className="input"
-                        value={consignee.state}
-                        onChange={(e) => updateConsignee(index, 'state', e.target.value)}
-                        placeholder="Enter state"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Consignee GST No *</label>
-                      <input
-                        className="input"
-                        value={consignee.gstNumber}
-                        onChange={(e) => updateConsignee(index, 'gstNumber', e.target.value)}
-                        placeholder="Enter GST number"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact Person Name *</label>
-                      <input
-                        className="input"
-                        value={consignee.contactPersonName}
-                        onChange={(e) => updateConsignee(index, 'contactPersonName', e.target.value)}
-                        placeholder="Enter contact person name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Designation *</label>
-                      <input
-                        className="input"
-                        value={consignee.designation}
-                        onChange={(e) => updateConsignee(index, 'designation', e.target.value)}
-                        placeholder="Enter designation"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact Person Contact No *</label>
-                      <input
-                        className="input"
-                        value={consignee.contactNumber}
-                        onChange={(e) => updateConsignee(index, 'contactNumber', e.target.value)}
-                        placeholder="Enter contact number"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Email ID *</label>
-                      <input
-                        className="input"
-                        value={consignee.emailId}
-                        onChange={(e) => updateConsignee(index, 'emailId', e.target.value)}
-                        placeholder="Enter email address"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {/* Step 4: Payer Profile */}
-        {currentStep === 3 && (
-          <section className="card">
-            <div className="card-header flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-secondary-900">Creation of Payer Profile</h2>
-              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addPayer}>
-                <Plus className="h-4 w-4" /> Add +
-              </button>
-            </div>
-            <div className="card-content space-y-4">
-              {payerProfiles.map((payer, index) => (
-                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Logo</label>
-                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
-                          {payerLogoPreviews[index] ? (
-                            <img 
-                              src={payerLogoPreviews[index]} 
-                              alt="Logo preview" 
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-primary-700 text-lg font-semibold">
-                              {payer.logo instanceof File 
-                                ? payer.logo.name.substring(0, 2).toUpperCase()
-                                : 'Logo'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-secondary-800">
-                            {payerLogoPreviews[index] ? 'Logo uploaded' : 'Upload payer logo'}
-                          </p>
-                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
-                        </div>
-                        <label className="btn btn-outline btn-sm cursor-pointer">
-                          {payerLogoPreviews[index] ? 'Change Logo' : 'Choose File'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                const reader = new FileReader()
-                                reader.onloadend = () => {
-                                  setPayerLogoPreviews(prev => ({ ...prev, [index]: reader.result }))
-                                }
-                                reader.readAsDataURL(file)
-                                updatePayer(index, 'logo', file)
-                              } else {
-                                setPayerLogoPreviews(prev => {
-                                  const newPreviews = { ...prev }
-                                  delete newPreviews[index]
-                                  return newPreviews
-                                })
-                                updatePayer(index, 'logo', '')
-                              }
-                            }}
-                          />
-                        </label>
-                        {payer.logo && (
-                          <div className="text-xs text-secondary-600 truncate max-w-full">
-                            {payer.logo instanceof File ? payer.logo.name : payer.logo}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="form-label">Payer Name *</label>
-                      <input
-                        className="input"
-                        value={payer.payerName}
-                        onChange={(e) => updatePayer(index, 'payerName', e.target.value)}
-                        placeholder="Enter payer name"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="form-label">Payer Address *</label>
-                      <textarea
-                        className="input min-h-[80px]"
-                        value={payer.payerAddress}
-                        onChange={(e) => updatePayer(index, 'payerAddress', e.target.value)}
-                        placeholder="Enter payer address"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Customer Name *</label>
-                      <input
-                        className="input"
-                        value={payer.customerName}
-                        onChange={(e) => updatePayer(index, 'customerName', e.target.value)}
-                        placeholder="Enter customer name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Legal Entity Name *</label>
-                      <input
-                        className="input"
-                        value={payer.legalEntityName}
-                        onChange={(e) => updatePayer(index, 'legalEntityName', e.target.value)}
-                        placeholder="Enter legal entity name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">City *</label>
-                      <input
-                        className="input"
-                        value={payer.city}
-                        onChange={(e) => updatePayer(index, 'city', e.target.value)}
-                        placeholder="Enter city"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">State *</label>
-                      <input
-                        className="input"
-                        value={payer.state}
-                        onChange={(e) => updatePayer(index, 'state', e.target.value)}
-                        placeholder="Enter state"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Payer GST No *</label>
-                      <input
-                        className="input"
-                        value={payer.gstNumber}
-                        onChange={(e) => updatePayer(index, 'gstNumber', e.target.value)}
-                        placeholder="Enter GST number"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact Person Name *</label>
-                      <input
-                        className="input"
-                        value={payer.contactPersonName}
-                        onChange={(e) => updatePayer(index, 'contactPersonName', e.target.value)}
-                        placeholder="Enter contact person name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Designation *</label>
-                      <input
-                        className="input"
-                        value={payer.designation}
-                        onChange={(e) => updatePayer(index, 'designation', e.target.value)}
-                        placeholder="Enter designation"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact Person Contact No *</label>
-                      <input
-                        className="input"
-                        value={payer.contactNumber}
-                        onChange={(e) => updatePayer(index, 'contactNumber', e.target.value)}
-                        placeholder="Enter contact number"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Email ID *</label>
-                      <input
-                        className="input"
-                        value={payer.emailId}
-                        onChange={(e) => updatePayer(index, 'emailId', e.target.value)}
-                        placeholder="Enter email address"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {/* Step 5: Employee Profile */}
-        {currentStep === 4 && (
-          <section className="card">
-            <div className="card-header flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-secondary-900">Creation of Employee Profile</h2>
-              <button type="button" className="btn btn-outline btn-sm inline-flex items-center gap-2" onClick={addTeamProfile}>
-                <Plus className="h-4 w-4" /> Add Employee
-              </button>
-            </div>
-            <div className="card-content space-y-4">
-              {teamProfiles.map((member, index) => (
-                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-secondary-800">Employee {index + 1}</span>
-                    {teamProfiles.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-danger-600 hover:text-danger-700 text-xs"
-                        onClick={() => removeTeamProfile(index)}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Role</label>
-                      <SelectWithOther
-                        className="input"
-                        value={member.role || ''}
-                        onChange={(val) => updateTeamProfile(index, 'role', val)}
-                        options={MASTER_ROLES.map(role => ({ value: role, label: role }))}
-                        placeholder="Select role"
-                        otherLabel="Other"
-                        otherInputPlaceholder="Enter role"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Photo</label>
-                      <div className="rounded-lg border border-dashed border-secondary-300 bg-white p-4 text-center space-y-3">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary-50 overflow-hidden">
-                          {employeePhotoPreviews[index] ? (
-                            <img 
-                              src={employeePhotoPreviews[index]} 
-                              alt="Photo preview" 
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-primary-700 text-lg font-semibold">
-                              {member.photo instanceof File 
-                                ? member.photo.name.substring(0, 2).toUpperCase()
-                                : member.name 
-                                  ? member.name.substring(0, 2).toUpperCase()
-                                  : 'Photo'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-secondary-800">
-                            {employeePhotoPreviews[index] ? 'Photo uploaded' : 'Upload employee photo'}
-                          </p>
-                          <p className="text-xs text-secondary-500">PNG/JPG, max 2MB</p>
-                        </div>
-                        <label className="btn btn-outline btn-sm cursor-pointer">
-                          {employeePhotoPreviews[index] ? 'Change Photo' : 'Choose File'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                const reader = new FileReader()
-                                reader.onloadend = () => {
-                                  setEmployeePhotoPreviews(prev => ({ ...prev, [index]: reader.result }))
-                                }
-                                reader.readAsDataURL(file)
-                                updateTeamProfile(index, 'photo', file)
-                              } else {
-                                setEmployeePhotoPreviews(prev => {
-                                  const newPreviews = { ...prev }
-                                  delete newPreviews[index]
-                                  return newPreviews
-                                })
-                                updateTeamProfile(index, 'photo', '')
-                              }
-                            }}
-                          />
-                        </label>
-                        {member.photo && (
-                          <div className="text-xs text-secondary-600 truncate max-w-full">
-                            {member.photo instanceof File ? member.photo.name : member.photo}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="form-label">Name of Employee</label>
-                      <input
-                        className="input"
-                        value={member.name}
-                        onChange={(e) => updateTeamProfile(index, 'name', e.target.value)}
-                        placeholder="Full name"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Designation</label>
-                      <input
-                        className="input"
-                        value={member.designation}
-                        onChange={(e) => updateTeamProfile(index, 'designation', e.target.value)}
-                        placeholder="Designation"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Contact No</label>
-                      <input
-                        data-field={`team.${index}.contactNumber`}
-                        className={`input ${getFieldError(`team.${index}.contactNumber`) ? 'border-red-500' : ''}`}
-                        value={member.contactNumber}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          updateTeamProfile(index, 'contactNumber', value)
-                          if (getFieldError(`team.${index}.contactNumber`)) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev }
-                              delete newErrors[`team.${index}.contactNumber`]
-                              return newErrors
-                            })
-                          }
-                        }}
-                        placeholder="Contact number"
-                      />
-                      {getFieldError(`team.${index}.contactNumber`) && (
-                        <p className="text-xs text-red-500 mt-1">{getFieldError(`team.${index}.contactNumber`)}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="form-label">Email ID</label>
-                      <input
-                        data-field={`team.${index}.email`}
-                        type="email"
-                        className={`input ${getFieldError(`team.${index}.email`) ? 'border-red-500' : ''}`}
-                        value={member.email}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          updateTeamProfile(index, 'email', value)
-                          if (getFieldError(`team.${index}.email`)) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev }
-                              delete newErrors[`team.${index}.email`]
-                              return newErrors
-                            })
-                          }
-                        }}
-                        placeholder="Email address"
-                      />
-                      {getFieldError(`team.${index}.email`) && (
-                        <p className="text-xs text-red-500 mt-1">{getFieldError(`team.${index}.email`)}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="form-label">Department</label>
-                      <input
-                        className="input"
-                        value={member.department}
-                        onChange={(e) => updateTeamProfile(index, 'department', e.target.value)}
-                        placeholder="Department"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Job Role</label>
-                      <input
-                        className="input"
-                        value={member.jobRole}
-                        onChange={(e) => updateTeamProfile(index, 'jobRole', e.target.value)}
-                        placeholder="Job role"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {/* Step 6: Payment Terms */}
-        {currentStep === 5 && (
-          <section className="card">
-            <div className="card-header flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-secondary-900">Creation of Payment Terms</h2>
-            </div>
-            <div className="card-content space-y-4">
-              {paymentTerms.map((term, index) => (
-                <div key={index} className="rounded-lg border border-secondary-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-secondary-800">Payment Term {index + 1}</span>
-                    {paymentTerms.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-danger-600 hover:text-danger-700 text-xs"
-                        onClick={() => removePaymentTerm(index)}
-                      >Remove</button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="form-label">Basic</label>
-                      <input
-                        className="input"
-                        value={term.basic}
-                        onChange={e => updatePaymentTerm(index, 'basic', e.target.value)}
-                        placeholder="Enter basic"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Freight</label>
-                      <input
-                        className="input"
-                        value={term.freight}
-                        onChange={e => updatePaymentTerm(index, 'freight', e.target.value)}
-                        placeholder="Enter freight"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Taxes</label>
-                      <input
-                        className="input"
-                        value={term.taxes}
-                        onChange={e => updatePaymentTerm(index, 'taxes', e.target.value)}
-                        placeholder="Enter taxes"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className="form-label">1st Due</label>
-                      <input
-                        className="input"
-                        value={term.due1}
-                        onChange={e => updatePaymentTerm(index, 'due1', e.target.value)}
-                        placeholder="Enter 1st due"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">2nd Due</label>
-                      <input
-                        className="input"
-                        value={term.due2}
-                        onChange={e => updatePaymentTerm(index, 'due2', e.target.value)}
-                        placeholder="Enter 2nd due"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">3rd Due</label>
-                      <input
-                        className="input"
-                        value={term.due3}
-                        onChange={e => updatePaymentTerm(index, 'due3', e.target.value)}
-                        placeholder="Enter 3rd due"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Final Due</label>
-                      <input
-                        className="input"
-                        value={term.finalDue}
-                        onChange={e => updatePaymentTerm(index, 'finalDue', e.target.value)}
-                        placeholder="Enter final due"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="form-label">Payment Terms Description</label>
-                    <textarea
-                      className="input min-h-[80px]"
-                      value={term.description}
-                      onChange={e => updatePaymentTerm(index, 'description', e.target.value)}
-                      placeholder="Describe the payment terms"
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn-outline btn-sm inline-flex items-center gap-2"
-                onClick={addPaymentTerm}
-              >
-                <Plus className="h-4 w-4" /> Add Payment Term
-              </button>
-            </div>
-          </section>
-        )}
-        {/* Step 7: Review & Submit */}
-        {currentStep === 6 && (
-          <section className="card">
-            <div className="card-header">
-              <h2 className="text-lg font-semibold text-secondary-900">Review & Submit</h2>
-            </div>
-            <div className="card-content space-y-4">
-              <div className="rounded-lg border border-secondary-200 p-6 bg-secondary-50">
-                <p className="text-sm text-secondary-600 mb-4">
-                  Review and confirm all master data entries above. Once submitted, this configuration will be saved to your system.
-                </p>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Company Profile configured</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Customer Profile configured</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Consignee Profile configured</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Payer Profile configured</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Employee Profile configured</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
-                    <span className="text-secondary-700">Payment Terms configured</span>
-                  </div>
-                </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+})
+
+const Step4Payer = React.memo(({ list, dispatch, errors, previews }) => {
+  return (
+    <section className="card">
+      <div className="card-header flex justify-between"><h2 className="text-lg font-semibold">Creation of Payer Profile</h2><button type="button" className="btn btn-outline btn-sm" onClick={() => dispatch({ type: 'ADD_ARRAY_ITEM', section: 'payerProfiles', item: emptyPayer() })}><Plus className="h-4 w-4"/> Add +</button></div>
+      <div className="card-content space-y-4">
+        {list.map((item, idx) => {
+          const update = (field, val) => dispatch({ type: 'UPDATE_ARRAY_ITEM', section: 'payerProfiles', index: idx, field, value: val })
+          const getErr = (f) => errors[`payer.${idx}.${f}`]
+          return (
+            <div key={idx} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div><label className="form-label">Payer Name *</label><input className={`input ${getErr('payerName')?'border-red-500':''}`} value={item.payerName||''} onChange={(e)=>update('payerName',e.target.value)}/></div>
+                 <div className="md:col-span-2"><label className="form-label">Address *</label><textarea className="input min-h-[80px]" value={item.payerAddress||''} onChange={(e)=>update('payerAddress',e.target.value)}/></div>
+                 <div><label className="form-label">Customer Name *</label><input className="input" value={item.customerName||''} onChange={(e)=>update('customerName',e.target.value)}/></div>
+                 <div><label className="form-label">Legal Entity *</label><input className="input" value={item.legalEntityName||''} onChange={(e)=>update('legalEntityName',e.target.value)}/></div>
+                 
+                 <div>
+                   <label className="form-label">State *</label>
+                   <select className="input" value={item.state || ''} onChange={(e) => update('state', e.target.value)}>
+                     <option value="">Select State</option>
+                     {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                   </select>
+                 </div>
+                 <div><label className="form-label">City *</label><input className="input" value={item.city||''} onChange={(e)=>update('city',e.target.value)}/></div>
+                 
+                 <div><label className="form-label">GST No *</label><input className="input" value={item.gstNumber||''} onChange={(e)=>update('gstNumber',e.target.value)}/></div>
+                 <div><label className="form-label">Contact Person *</label><input className="input" value={item.contactPersonName||''} onChange={(e)=>update('contactPersonName',e.target.value)}/></div>
+                 <div><label className="form-label">Designation *</label><input className="input" value={item.designation||''} onChange={(e)=>update('designation',e.target.value)}/></div>
+                 <div><label className="form-label">Contact No *</label><input className={`input ${getErr('contactNumber')?'border-red-500':''}`} value={item.contactNumber||''} onChange={(e)=>update('contactNumber',e.target.value)}/></div>
+                 <div><label className="form-label">Email ID *</label><input className={`input ${getErr('emailId')?'border-red-500':''}`} value={item.emailId||''} onChange={(e)=>update('emailId',e.target.value)}/></div>
               </div>
+              {list.length > 1 && <button type="button" className="text-danger-600 text-xs" onClick={()=>dispatch({type:'REMOVE_ARRAY_ITEM',section:'payerProfiles',index:idx})}>Remove</button>}
             </div>
-          </section>
-        )}
-        {/* Navigation Buttons */}
-        <div className="flex items-center justify-between pt-8 border-t border-secondary-200 mt-8">
-  <button
-    type="button"
-    className="btn btn-outline px-8 py-3 text-base font-semibold rounded-full shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-    onClick={onPrev}
-    disabled={currentStep === 0}
-    style={{ minWidth: 120 }}
-  >
-    Previous
-  </button>
-  {currentStep < STEPS.length - 1 ? (
-    <button
-      type="button"
-      className="btn btn-primary px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-      onClick={onNext}
-      disabled={!DEV_BYPASS_VALIDATION && !canGoNext}
-      style={{ minWidth: 120 }}
-      title={!DEV_BYPASS_VALIDATION && !canGoNext ? 'Please fill all required fields' : ''}
-    >
-      Next
-    </button>
-  ) : (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        if (validateAllSteps()) {
-          setConfirmOpen(true)
+          )
+        })}
+      </div>
+    </section>
+  )
+})
+
+const Step5Team = React.memo(({ list, dispatch, errors, previews }) => {
+  return (
+    <section className="card">
+      <div className="card-header flex justify-between"><h2 className="text-lg font-semibold">Creation of Employee Profile</h2><button type="button" className="btn btn-outline btn-sm" onClick={() => dispatch({ type: 'ADD_ARRAY_ITEM', section: 'teamProfiles', item: { role: MASTER_ROLES[0], ...emptyContact() } })}><Plus className="h-4 w-4"/> Add</button></div>
+      <div className="card-content space-y-4">
+        {list.map((item, idx) => {
+          const update = (field, val) => dispatch({ type: 'UPDATE_ARRAY_ITEM', section: 'teamProfiles', index: idx, field, value: val })
+          const getErr = (f) => errors[`team.${idx}.${f}`]
+          return (
+            <div key={idx} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div><label className="form-label">Role</label><SelectWithOther className="input" value={item.role||''} onChange={(v)=>update('role',v)} options={MASTER_ROLES.map(r=>({value:r,label:r}))} placeholder="Select Role"/></div>
+                  <div><label className="form-label">Name</label><input className="input" value={item.name||''} onChange={(e)=>update('name',e.target.value)}/></div>
+                  <div><label className="form-label">Designation</label><input className="input" value={item.designation||''} onChange={(e)=>update('designation',e.target.value)}/></div>
+                  <div><label className="form-label">Contact No</label><input className={`input ${getErr('contactNumber')?'border-red-500':''}`} value={item.contactNumber||''} onChange={(e)=>update('contactNumber',e.target.value)}/></div>
+                  <div><label className="form-label">Email ID</label><input className={`input ${getErr('email')?'border-red-500':''}`} value={item.email||''} onChange={(e)=>update('email',e.target.value)}/></div>
+                  <div><label className="form-label">Department</label><input className="input" value={item.department||''} onChange={(e)=>update('department',e.target.value)}/></div>
+               </div>
+               {list.length > 1 && <button type="button" className="text-danger-600 text-xs" onClick={()=>dispatch({type:'REMOVE_ARRAY_ITEM',section:'teamProfiles',index:idx})}>Remove</button>}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+})
+
+const Step6Payment = React.memo(({ list, dispatch }) => {
+  return (
+    <section className="card">
+       <div className="card-header flex justify-between"><h2 className="text-lg font-semibold">Creation of Payment Terms</h2><button type="button" className="btn btn-outline btn-sm" onClick={() => dispatch({ type: 'ADD_ARRAY_ITEM', section: 'paymentTerms', item: defaultPaymentTerm() })}><Plus className="h-4 w-4"/> Add</button></div>
+       <div className="card-content space-y-4">
+         {list.map((item, idx) => {
+           const update = (field, val) => dispatch({ type: 'UPDATE_ARRAY_ITEM', section: 'paymentTerms', index: idx, field, value: val })
+           return (
+             <div key={idx} className="rounded-lg border border-secondary-200 p-4 space-y-3">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div><label className="form-label">Basic</label><input className="input" value={item.basic||''} onChange={(e)=>update('basic',e.target.value)}/></div>
+                 <div><label className="form-label">Freight</label><input className="input" value={item.freight||''} onChange={(e)=>update('freight',e.target.value)}/></div>
+                 <div><label className="form-label">Taxes</label><input className="input" value={item.taxes||''} onChange={(e)=>update('taxes',e.target.value)}/></div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                 <div><label className="form-label">1st Due</label><input className="input" value={item.due1||''} onChange={(e)=>update('due1',e.target.value)}/></div>
+                 <div><label className="form-label">2nd Due</label><input className="input" value={item.due2||''} onChange={(e)=>update('due2',e.target.value)}/></div>
+                 <div><label className="form-label">3rd Due</label><input className="input" value={item.due3||''} onChange={(e)=>update('due3',e.target.value)}/></div>
+                 <div><label className="form-label">Final Due</label><input className="input" value={item.finalDue||''} onChange={(e)=>update('finalDue',e.target.value)}/></div>
+               </div>
+               <div><label className="form-label">Description</label><textarea className="input min-h-[80px]" value={item.description||''} onChange={(e)=>update('description',e.target.value)}/></div>
+               {list.length > 1 && <button type="button" className="text-danger-600 text-xs" onClick={()=>dispatch({type:'REMOVE_ARRAY_ITEM',section:'paymentTerms',index:idx})}>Remove</button>}
+             </div>
+           )
+         })}
+       </div>
+    </section>
+  )
+})
+
+const Step7Review = React.memo(({ data, onSubmit, saving }) => (
+  <section className="card">
+    <div className="card-header"><h2 className="text-lg font-semibold text-secondary-900">Review & Submit</h2></div>
+    <div className="card-content space-y-4">
+      <div className="rounded-lg border border-secondary-200 p-6 bg-secondary-50">
+        <p className="text-sm text-secondary-600 mb-4">Review and confirm all master data entries above.</p>
+        <div className="space-y-3">
+          {STEPS.slice(0, 6).map(s => (
+            <div key={s.id} className="flex items-center gap-3 text-sm">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">✓</span>
+              <span className="text-secondary-700">{s.label} configured</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center justify-center pt-8 border-t border-secondary-200 mt-8">
+        <button type="button" onClick={onSubmit} className="btn btn-secondary px-8 py-3 text-base font-semibold rounded-full shadow-sm flex items-center gap-2" disabled={saving}>
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin"/> Saving...</> : <><Save className="h-4 w-4"/> Save</>}
+        </button>
+      </div>
+    </div>
+  </section>
+))
+
+// --- MAIN COMPONENT ---
+
+export default function CustomerNew() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
+  const { token } = useAuthContext()
+  const svc = useMemo(() => createCustomerService(token), [token])
+
+  const [state, dispatch] = useReducer(formReducer, initialState)
+  const [currentStep, setCurrentStep] = useState(0)
+  
+  const [loadingData, setLoadingData] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [successData, setSuccessData] = useState(null)
+  const [createdRecordId, setCreatedRecordId] = useState(null)
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
+
+  // Initialization Logic
+  useEffect(() => {
+    const step = Number(searchParams.get('step'))
+    if (step > 0 && step <= STEPS.length) setCurrentStep(step - 1)
+    
+    async function load() {
+      if (!token) return
+      setLoadingData(true)
+      try {
+        let loadedData = {}
+        // 1. Try Load Master Data
+        try {
+          const res = await masterDataService.getMasterData()
+          const d = res?.data || res || {}
+          if (d.companyProfile) loadedData = d
+        } catch (e) { console.log('No master data found') }
+
+        // 2. If Edit, overlay specific customer data
+        if (editId) {
+          const res = await svc.get(editId)
+          if (res?.metadata) loadedData = { ...loadedData, ...res.metadata }
         }
-      }}
-      className="btn btn-success px-10 py-3 text-base font-bold rounded-full shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-      disabled={saving || !canGoNext}
-      style={{ minWidth: 120 }}
-    >
-      {saving ? 'Saving...' : 'Submit'}
-    </button>
-  )}
-</div>
-      </form>
-      
-      {/* Confirmation Modal */}
-      <Modal
-        open={confirmOpen}
-        onClose={() => !saving && setConfirmOpen(false)}
-        title="Confirm Submission"
-        variant="dialog"
-        size="sm"
-        footer={(
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button
-              className="btn btn-outline btn-md"
-              onClick={() => setConfirmOpen(false)}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn btn-success btn-md"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setConfirmOpen(false)
-                onSubmit(e)
-              }}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Saving...
-                </>
-              ) : (
-                'Confirm & Submit'
-              )}
-            </button>
-          </div>
+
+        // 3. Dispatch strict update (Merging with defaults to avoid undefined)
+        const fullData = {
+          companyProfile: { ...createDefaultCompanyProfile(), ...(loadedData.companyProfile || {}) },
+          customerProfile: { ...createDefaultCustomerProfile(), ...(loadedData.customerProfile || {}) },
+          consigneeProfiles: loadedData.consigneeProfiles?.length ? loadedData.consigneeProfiles : [emptyConsignee()],
+          payerProfiles: loadedData.payerProfiles?.length ? loadedData.payerProfiles : [emptyPayer()],
+          paymentTerms: loadedData.paymentTerms?.length ? loadedData.paymentTerms : [defaultPaymentTerm()],
+          teamProfiles: loadedData.teamProfiles?.length ? loadedData.teamProfiles : [{ role: MASTER_ROLES[0], ...emptyContact() }],
+          previews: { ...initialState.previews }
+        }
+        dispatch({ type: 'LOAD_DATA', payload: fullData })
+
+      } catch (err) {
+        console.error(err)
+        setError('Failed to load data')
+      } finally {
+        setLoadingData(false)
+      }
+    }
+    load()
+  }, [editId, token, svc]) // REMOVED stepParam dependency to fix infinite loop
+
+  const canGoNext = useMemo(() => {
+    if (DEV_BYPASS_VALIDATION) return true
+    const { isValid, errors } = getStepValidation(currentStep, state)
+    if (!isValid) setFieldErrors(errors)
+    else setFieldErrors({})
+    return isValid
+  }, [currentStep, state])
+
+  const onNext = () => {
+    setError('')
+    if (canGoNext) {
+      const next = Math.min(currentStep + 1, STEPS.length - 1)
+      setCurrentStep(next)
+      navigate(`/customers/new/form?step=${next + 1}${editId ? `&edit=${editId}` : ''}`, { replace: true })
+      window.scrollTo(0, 0)
+    } else {
+      setError('Please fix the errors below')
+      const firstError = document.querySelector('.border-red-500')
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
+  const onPrev = () => {
+    const prev = Math.max(0, currentStep - 1)
+    setCurrentStep(prev)
+    navigate(`/customers/new/form?step=${prev + 1}${editId ? `&edit=${editId}` : ''}`, { replace: true })
+    window.scrollTo(0, 0)
+  }
+
+  const handleSaveToDatabase = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      const payload = {
+        companyProfile: state.companyProfile,
+        customerProfile: state.customerProfile,
+        consigneeProfiles: state.consigneeProfiles,
+        payerProfiles: state.payerProfiles,
+        paymentTerms: state.paymentTerms,
+        teamProfiles: state.teamProfiles,
+        additionalStep: { defaultCurrency: 'INR', defaultTax: '18', invoicePrefix: 'INV' }
+      }
+
+      await masterDataService.submitMasterData(payload)
+      setSuccessData(payload) // For confirmation modal preview
+
+      if (currentStep === 6) {
+        // Final Submit Logic
+        const customerRequest = {
+            companyName: payload.companyProfile.companyName || payload.customerProfile.customerName,
+            legalEntityName: payload.companyProfile.legalEntityName || payload.customerProfile.legalEntityName,
+            name: payload.customerProfile.contactPersonName || payload.companyProfile.primaryContact?.name,
+            email: payload.customerProfile.emailId || payload.companyProfile.primaryContact?.email,
+            phone: payload.customerProfile.contactNumber || payload.companyProfile.primaryContact?.contactNumber,
+            segment: payload.customerProfile.segment,
+            gstNumber: payload.customerProfile.gstNumber,
+            metadata: payload
+        }
+        let res
+        if (editId) res = await svc.update(editId, customerRequest)
+        else res = await svc.create(customerRequest)
+        
+        setCreatedRecordId(res?.data?.id || res?.data?._id || 'NEW')
+        setShowSuccessPopup(true)
+      } else {
+        toast.success('Draft Saved Successfully')
+      }
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Failed to save')
+      toast.error('Failed to save')
+    } finally {
+      setSaving(false)
+      setConfirmOpen(false)
+    }
+  }
+
+  if (loadingData) return <DashboardLayout><div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-blue-600"/></div></DashboardLayout>
+
+  return (
+    <ErrorBoundary>
+      <DashboardLayout>
+        <div className="mb-8 rounded-2xl border border-secondary-200 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-sm">
+           <div className="flex flex-col gap-4">
+             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+               <div className="flex items-center gap-3">
+                 <button onClick={() => navigate('/customers/new')} className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 px-3 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50 transition-colors">
+                    <ArrowLeft className="h-4 w-4" />
+                 </button>
+                 <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-secondary-900">Creation of Master Data</h1>
+                    <p className="text-sm text-secondary-600">Stepwise onboarding for company, customer, payment, and team details.</p>
+                    <p className="text-sm font-medium text-primary-700 mt-1">{STEPS[currentStep]?.label || 'Unknown'} - Step {currentStep + 1} of {STEPS.length}</p>
+                 </div>
+               </div>
+             </div>
+           </div>
+        </div>
+
+        {error && <div className="mb-4 rounded-md border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700 flex items-center gap-2"><XCircle className="h-4 w-4"/>{error}</div>}
+
+        <form onSubmit={(e) => { e.preventDefault(); return false; }} className="space-y-6 mb-20">
+          {currentStep === 0 && <Step1Company data={state.companyProfile} dispatch={dispatch} errors={fieldErrors} preview={state.previews.logo} />}
+          {currentStep === 1 && <Step2Customer data={state.customerProfile} dispatch={dispatch} errors={fieldErrors} preview={state.previews.customerLogo} />}
+          {currentStep === 2 && <Step3Consignee list={state.consigneeProfiles} dispatch={dispatch} errors={fieldErrors} previews={state.previews.consignee} />}
+          {currentStep === 3 && <Step4Payer list={state.payerProfiles} dispatch={dispatch} errors={fieldErrors} previews={state.previews.payer} />}
+          {currentStep === 4 && <Step5Team list={state.teamProfiles} dispatch={dispatch} errors={fieldErrors} previews={state.previews.employee} />}
+          {currentStep === 5 && <Step6Payment list={state.paymentTerms} dispatch={dispatch} />}
+          {currentStep === 6 && <Step7Review data={state} onSubmit={() => setConfirmOpen(true)} saving={saving} />}
+          
+          {/* Navigation - UPDATED FOOTER */}
+          {currentStep < 6 && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-200 flex items-center justify-center z-10 md:pl-72 shadow-lg relative">
+               {/* Previous Button - Absolute Left */}
+              
+
+               {/* Center Save Draft Button - Redesigned */}
+               <button 
+                 type="button" 
+                 onClick={handleSaveToDatabase} 
+                 disabled={saving} 
+                 className="group relative inline-flex items-center justify-center gap-2 px-8 py-2.5 text-sm font-semibold text-secondary-700 bg-white border border-secondary-300 rounded-full shadow-sm hover:bg-secondary-50 hover:border-secondary-400 hover:shadow-md transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 {saving ? (
+                   <Loader2 className="h-4 w-4 animate-spin text-secondary-500" />
+                 ) : (
+                   <Save className="h-4 w-4 text-secondary-500 group-hover:text-secondary-700" />
+                 )}
+                 {saving ? 'Saving...' : 'Save Draft'}
+               </button>
+            </div>
+          )}
+        </form>
+
+        {/* Confirmation Modal */}
+        <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirm Submission" footer={(
+            <div className="flex gap-2 justify-end w-full">
+               <button className="btn btn-outline" onClick={() => setConfirmOpen(false)}>Cancel</button>
+               <button className="btn btn-success" onClick={handleSaveToDatabase} disabled={saving}>{saving ? <Loader2 className="animate-spin"/> : 'Confirm & Submit'}</button>
+            </div>
+        )}>
+           <div className="flex gap-3">
+              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center"><FileText className="h-5 w-5 text-blue-600"/></div>
+              <div><h3 className="font-semibold text-gray-900">Submit Master Data?</h3><p className="text-sm text-gray-700">Are you sure you want to submit?</p></div>
+           </div>
+        </Modal>
+
+        {/* Success Popup */}
+        {showSuccessPopup && successData && (
+           <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={(e) => e.target === e.currentTarget && setShowSuccessPopup(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+                 <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                       <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center"><CheckCircle2 className="h-5 w-5 text-green-600"/></div>
+                       <div><h3 className="text-lg font-semibold">Submitted Successfully</h3><p className="text-xs text-gray-500">ID: {createdRecordId}</p></div>
+                    </div>
+                    <button onClick={() => setShowSuccessPopup(false)}><XCircle className="h-5 w-5 text-gray-400"/></button>
+                 </div>
+                 <div className="p-6 overflow-y-auto flex-1">
+                    <div className="space-y-4">
+                       <div className="bg-gray-50 p-4 rounded-lg border"><h4 className="font-semibold mb-2">Company</h4>{successData.companyProfile.companyName}</div>
+                       <div className="bg-gray-50 p-4 rounded-lg border"><h4 className="font-semibold mb-2">Customer</h4>{successData.customerProfile.customerName}</div>
+                       <div className="bg-gray-50 p-4 rounded-lg border"><h4 className="font-semibold mb-2">Consignees</h4>{successData.consigneeProfiles.length} Entries</div>
+                    </div>
+                 </div>
+                 <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
+                    <button onClick={() => {
+                        window.location.reload()
+                    }} className="btn btn-outline">Create Another</button>
+                    <button onClick={() => navigate('/customers')} className="btn btn-primary">Done</button>
+                 </div>
+              </div>
+           </div>
         )}
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-100">
-                <FileText className="h-5 w-5 text-blue-600" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                Submit Master Data?
-              </h3>
-              <p className="text-sm text-gray-700 mb-2">
-                Are you sure you want to submit this master data? Once submitted, it will be saved to your system and you can view it on the Master Data page.
-              </p>
-              <p className="text-xs text-gray-500">
-                You can edit or preview this entry after submission.
-              </p>
-            </div>
-          </div>
-        </div>
-      </Modal>
-      
-      {/* Success Popup Modal - Professional Design */}
-      {showSuccessPopup && submittedData && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-[12000] overflow-y-auto p-4 sm:p-6"
-          style={{
-            backgroundColor: 'rgba(15, 23, 42, 0.55)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-          }}
-          onClick={(e) => e.target === e.currentTarget && setShowSuccessPopup(false)}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-auto my-8 relative flex flex-col max-h-[85vh]">
-            {/* Success Header */}
-            <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Master Data Submitted Successfully
-                  </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Record ID: <span className="font-mono text-gray-700">{createdRecordId}</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSuccessPopup(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-              >
-                  <XCircle className="h-5 w-5" />
-              </button>
-              </div>
-            </div>
-
-            {/* Structured Data Display */}
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-6">
-                {/* Company Profile */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-gray-600" />
-                    Company Profile
-                  </h4>
-                  <div className="bg-gray-50 rounded-lg border border-gray-200">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-200">
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Company Name</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.companyName || submittedData.companyProfile.legalEntityName || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">Legal Entity</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.legalEntityName || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.corporateState || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">Country</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.companyProfile.corporateCountry || 'N/A'}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                </div>
-              </div>
-
-                {/* Customer Profile */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-gray-600" />
-                    Customer Profile
-                  </h4>
-                  <div className="bg-gray-50 rounded-lg border border-gray-200">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-200">
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Customer Name</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.customerName || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">Segment</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.segment || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">Contact Number</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.contactNumber || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2.5 font-medium text-gray-600">Email</td>
-                          <td className="px-4 py-2.5 text-gray-900">{submittedData.customerProfile.emailId || 'N/A'}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                </div>
-              </div>
-
-                {/* Consignee Profile */}
-              {submittedData.consigneeProfiles?.[0] && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-gray-600" />
-                      Consignee Profile
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200">
-                      <table className="w-full text-sm">
-                        <tbody className="divide-y divide-gray-200">
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Consignee Name</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].consigneeName || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">City</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].city || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].state || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">GST Number</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.consigneeProfiles[0].gstNumber || 'N/A'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                  </div>
-                </div>
-              )}
-
-                {/* Payer Profile */}
-              {submittedData.payerProfiles?.[0] && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-gray-600" />
-                      Payer Profile
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200">
-                      <table className="w-full text-sm">
-                        <tbody className="divide-y divide-gray-200">
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Payer Name</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].payerName || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">City</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].city || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">State</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].state || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">GST Number</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.payerProfiles[0].gstNumber || 'N/A'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                  </div>
-                </div>
-              )}
-
-                {/* Payment Terms */}
-              {submittedData.paymentTerms?.[0] && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-gray-600" />
-                      Payment Terms
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200">
-                      <table className="w-full text-sm">
-                        <tbody className="divide-y divide-gray-200">
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600 w-1/3">Term Name</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].paymentTermName || 'N/A'}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">Credit Period</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].creditPeriod || 'N/A'} days</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2.5 font-medium text-gray-600">Billing Cycle</td>
-                            <td className="px-4 py-2.5 text-gray-900">{submittedData.paymentTerms[0].billingCycle || 'N/A'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                  </div>
-                </div>
-              )}
-
-                {/* Team Profiles */}
-              {submittedData.teamProfiles?.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-gray-600" />
-                      Team Members ({submittedData.teamProfiles.length})
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {submittedData.teamProfiles.map((member, idx) => (
-                            <tr key={idx}>
-                              <td className="px-4 py-2.5 text-gray-900">{member.teamMemberName || 'N/A'}</td>
-                              <td className="px-4 py-2.5 text-gray-900">{member.role || 'N/A'}</td>
-                              <td className="px-4 py-2.5 text-gray-900">{member.department || 'N/A'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                  </div>
-                </div>
-              )}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowSuccessPopup(false)
-                  setCurrentStep(0)
-                  setLogoPreview(null)
-                  setCustomerLogoPreview(null)
-                  setConsigneeLogoPreviews({})
-                  setPayerLogoPreviews({})
-                  setEmployeePhotoPreviews({})
-                  setCompanyProfile({
-                    logo: null,
-                    companyName: '',
-                    legalEntityName: '',
-                    corporateAddress: '',
-                    corporateDistrict: '',
-                    corporateState: '',
-                    corporateCountry: '',
-                    corporatePinCode: '',
-                    correspondenceAddress: '',
-                    correspondenceDistrict: '',
-                    correspondenceState: '',
-                    correspondenceCountry: '',
-                    correspondencePinCode: '',
-                    otherOfficeType: 'Plant Address',
-                    otherOfficeAddress: '',
-                    otherOfficeGst: '',
-                    otherOfficeDistrict: '',
-                    otherOfficeState: '',
-                    otherOfficeCountry: '',
-                    otherOfficePinCode: '',
-                    otherOfficeContactName: '',
-                    otherOfficeContactNumber: '',
-                    otherOfficeEmail: '',
-                    primaryContact: emptyContact()
-                  })
-                  setCustomerProfile({
-                    logo: '',
-                    customerName: '',
-                    legalEntityName: '',
-                    corporateOfficeAddress: '',
-                    correspondenceAddress: '',
-                    district: '',
-                    state: '',
-                    country: '',
-                    pinCode: '',
-                    segment: '',
-                    gstNumber: '',
-                    poIssuingAuthority: '',
-                    designation: '',
-                    contactNumber: '',
-                    emailId: ''
-                  })
-                  setConsigneeProfiles([emptyConsignee()])
-                  setPayerProfiles([emptyPayer()])
-                  setPaymentTerms([defaultPaymentTerm()])
-                  setTeamProfiles([{ role: MASTER_ROLES[0], ...emptyContact() }])
-                  setSubmittedData(null)
-                  setCreatedRecordId(null)
-                  localStorage.removeItem(STORAGE_KEY)
-                  // Stay on the same page to create another entry
-                }}
-                className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Create Another
-              </button>
-              <button
-                onClick={handleDone}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       </DashboardLayout>
     </ErrorBoundary>
   )
 }
-

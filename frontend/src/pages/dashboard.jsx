@@ -1,10 +1,10 @@
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
-import TailAdminDashboard from '../components/tailadmin/TailAdminDashboard.jsx'
+import SalesInvoiceDashboard from '../components/tailadmin/SalesInvoiceDashboard.jsx'
 
 export default function Dashboard() {
   return (
     <DashboardLayout>
-      <TailAdminDashboard />
+      <SalesInvoiceDashboard />
     </DashboardLayout>
   )
 }

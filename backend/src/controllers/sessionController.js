@@ -1,4 +1,4 @@
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const { getUserSessions, deleteSession, deleteAllUserSessions, updateSessionActivity } = require('../services/sessionRepo');
 const { getIOInstance } = require('../services/socketService');
 const { audit } = require('../services/userRepo');

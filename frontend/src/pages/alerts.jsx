@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
-import { listAlerts, markRead, snoozeAlerts, dismissAlerts } from '../services/alertsService'
+import { listAlerts, markRead, snoozeAlerts, dismissAlerts } from '../services/apiService'
 import { useToast } from '../components/ui/Toast.jsx'
 
 const typeToColors = {

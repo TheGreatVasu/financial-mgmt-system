@@ -2,13 +2,15 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { useAuthContext } from '../../context/AuthContext.jsx'
 import { createApiClient } from '../../services/apiClient'
-import Step1Header from './steps/Step1Header'
-import Step2ItemTax from './steps/Step2ItemTax'
-import Step3Logistics from './steps/Step3Logistics'
-import Step4FirstDue from './steps/Step4FirstDue'
-import Step5SecondDue from './steps/Step5SecondDue'
-import Step6ThirdDueSummary from './steps/Step6ThirdDueSummary'
-import Step7Summary from './steps/Step7Summary'
+import {
+  Step1Header,
+  Step2ItemTax,
+  Step3Logistics,
+  Step4FirstDue,
+  Step5SecondDue,
+  Step6ThirdDueSummary,
+  Step7Summary
+} from './InvoiceSteps'
 
 const SAMPLE_INVOICE_DATA = {
   // ================= BASIC INVOICE DETAILS =================

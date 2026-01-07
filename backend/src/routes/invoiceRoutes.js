@@ -1,6 +1,6 @@
 const express = require('express');
-const { authMiddleware } = require('../middlewares/authMiddleware');
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { asyncHandler } = require('../middleware/errorHandler');
 const ctrl = require('../controllers/invoiceController');
 const pdfService = require('../services/pdfService');
 

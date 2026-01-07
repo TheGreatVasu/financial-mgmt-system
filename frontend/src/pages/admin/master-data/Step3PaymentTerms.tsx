@@ -56,6 +56,7 @@ export default function Step6PaymentTerms({
     else console.log('Payment Terms Data:', data)
   }
 
+  // FIXED FORM FIELD COMPONENT
   const FormField = ({
     label,
     name,
@@ -81,6 +82,7 @@ export default function Step6PaymentTerms({
             error ? 'border-red-500' : 'border-gray-300'
           }`
 
+          // FILE INPUT
           if (type === 'file') {
             return (
               <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center gap-3 text-center">
@@ -109,12 +111,15 @@ export default function Step6PaymentTerms({
                       const file = e.target.files?.[0]
                       if (file) {
                         const reader = new FileReader()
+
                         reader.onloadend = () => setDocumentPreview(reader.result as string)
+
                         if (file.type.startsWith('image/')) {
                           reader.readAsDataURL(file)
                         } else if (file.name.endsWith('.pdf')) {
                           setDocumentPreview(null)
                         }
+
                         field.onChange(file)
                       } else {
                         field.onChange(null)
@@ -133,12 +138,14 @@ export default function Step6PaymentTerms({
             )
           }
 
+          // TEXTAREA
           if (isTextarea) {
             return (
               <textarea {...field} placeholder={placeholder} className={baseClasses} rows={3} />
             )
           }
 
+          // SELECT DROPDOWN
           if (options) {
             return (
               <select {...field} className={baseClasses}>
@@ -152,6 +159,7 @@ export default function Step6PaymentTerms({
             )
           }
 
+          // INPUT FIELD
           return (
             <input
               {...field}
@@ -231,7 +239,7 @@ export default function Step6PaymentTerms({
             />
 
             <FormField
-              label="Late Payment Interest %"
+              label="Late Payment Interest %"   
               name="latePaymentInterest"
               type="number"
               placeholder="Enter interest percentage"

@@ -28,23 +28,44 @@ const submitMasterData = asyncHandler(async (req, res) => {
   const userId = requireUser(req);
   const payload = req.body || {};
   
-  // Validate required sections
-  if (!payload.companyProfile || !payload.customerProfile) {
-    return res.status(400).json({
-      success: false,
-      message: 'Company Profile and Customer Profile are required'
-    });
-  }
-  
+  // Allow partial saves - merge with existing data if present
   try {
-    // Save master data
-    const saved = await saveMasterData(userId, payload);
+    // Get existing master data to merge with
+    const existing = await getMasterData(userId) || {};
+    const mergedData = {
+      ...existing,
+      // Merge nested objects instead of replacing
+      companyProfile: payload.companyProfile 
+        ? { ...(existing.companyProfile || {}), ...payload.companyProfile }
+        : existing.companyProfile,
+      customerProfile: payload.customerProfile 
+        ? { ...(existing.customerProfile || {}), ...payload.customerProfile }
+        : existing.customerProfile,
+      consigneeProfiles: payload.consigneeProfiles !== undefined 
+        ? payload.consigneeProfiles 
+        : (existing.consigneeProfiles || []),
+      payerProfiles: payload.payerProfiles !== undefined 
+        ? payload.payerProfiles 
+        : (existing.payerProfiles || []),
+      paymentTerms: payload.paymentTerms !== undefined 
+        ? payload.paymentTerms 
+        : (existing.paymentTerms || []),
+      teamProfiles: payload.teamProfiles !== undefined 
+        ? payload.teamProfiles 
+        : (existing.teamProfiles || []),
+      additionalStep: payload.additionalStep 
+        ? { ...(existing.additionalStep || {}), ...payload.additionalStep }
+        : existing.additionalStep,
+    };
     
-    // Sync customer profile from master data to customers table
+    // Save merged master data
+    const saved = await saveMasterData(userId, mergedData);
+    
+    // Sync customer profile from master data to customers table (only if customerProfile exists and has customerName)
     let syncResult = null;
-    if (payload.customerProfile) {
+    if (mergedData.customerProfile && (mergedData.customerProfile.customerName || mergedData.customerProfile.legalEntityName)) {
       try {
-        syncResult = await syncMasterDataToCustomers(userId, payload);
+        syncResult = await syncMasterDataToCustomers(userId, mergedData);
       } catch (syncError) {
         console.error('Error syncing master data to customers:', syncError);
         // Don't fail the request if sync fails, just log it
@@ -55,7 +76,7 @@ const submitMasterData = asyncHandler(async (req, res) => {
       success: true, 
       data: saved, 
       syncResult,
-      message: 'Master data saved and synced successfully' 
+      message: 'Master data saved successfully' 
     });
   } catch (error) {
     console.error('Error saving master data:', error);

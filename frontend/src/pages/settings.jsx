@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { useAuthContext } from '../context/AuthContext.jsx'
-import { fetchSettings, updateSettings } from '../services/settingsService'
+import { fetchSettings, updateSettings } from '../services/apiService'
 import { useToast } from '../components/ui/Toast.jsx'
 import Button from '../components/ui/Button.jsx'
 import { 

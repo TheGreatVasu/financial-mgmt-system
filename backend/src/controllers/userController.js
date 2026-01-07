@@ -1,6 +1,6 @@
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const { getAllUsers } = require('../services/userRepo');
-const { adminMiddleware } = require('../middlewares/authMiddleware');
+const { adminMiddleware } = require('../middleware/authMiddleware');
 
 // @desc    Get all users (Admin only)
 // @route   GET /api/admin/users

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import DashboardLayout from '../components/layout/DashboardLayout.jsx'
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
-import { createContactService } from '../services/contactService'
+import { createContactService } from '../services/apiService'
 import { useAuthContext } from '../context/AuthContext.jsx'
 
 export default function ContactPage() {

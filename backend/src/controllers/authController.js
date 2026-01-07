@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const config = require('../config/env');
-const { asyncHandler } = require('../middlewares/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const { OAuth2Client } = require('google-auth-library');
 const multer = require('multer');
 const path = require('path');
