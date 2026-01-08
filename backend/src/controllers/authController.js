@@ -885,45 +885,6 @@ const completeGoogleProfile = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Store Google OAuth tokens for Sheets access
-// @route   POST /api/auth/store-google-tokens
-// @access  Private
-const storeGoogleTokens = asyncHandler(async (req, res) => {
-  const { accessToken, refreshToken, expiresIn } = req.body;
-  const userId = req.user.id;
-
-  if (!accessToken) {
-    return res.status(400).json({
-      success: false,
-      message: 'Access token is required'
-    });
-  }
-
-  // Calculate expiration time (expiresIn is in seconds)
-  const expiresAt = expiresIn 
-    ? new Date(Date.now() + expiresIn * 1000)
-    : new Date(Date.now() + 3600 * 1000); // Default 1 hour
-
-  try {
-    const { updateGoogleTokens } = require('../services/userRepo');
-    await updateGoogleTokens(userId, {
-      accessToken,
-      refreshToken: refreshToken || null,
-      expiresAt
-    });
-
-    console.log(`✅ Google tokens stored for user: ${userId}`);
-
-    res.json({
-      success: true,
-      message: 'Google tokens stored successfully'
-    });
-  } catch (error) {
-    console.error('Error storing Google tokens:', error);
-    throw error;
-  }
-});
-
 // @desc    Google OAuth callback (server-side flow)
 // @route   GET /auth/google/callback
 // @access  Public
@@ -1026,18 +987,7 @@ const googleCallback = asyncHandler(async (req, res) => {
     }
 
     // Store Google tokens (access/refresh) if provided (used by Google Sheets integration)
-    if (tokens.access_token) {
-      try {
-        const { updateGoogleTokens } = require('../services/userRepo');
-        await updateGoogleTokens(user.id, {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token || null,
-          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined
-        });
-      } catch (tokenErr) {
-        console.warn('Failed to store Google tokens from callback:', tokenErr);
-      }
-    }
+    // Google Sheets integration has been removed - tokens are no longer stored
 
     // Redirect to dedicated frontend callback page with JWT token (frontend will read token and complete login)
     const frontend = (config.FRONTEND_URL || 'https://nbaurum.com').replace(/\/+$/, '');
@@ -1069,7 +1019,6 @@ module.exports = {
   completeGoogleProfile,
   uploadAvatar,
   updatePreferences,
-  storeGoogleTokens,
   uploadAvatarMiddleware: upload.single('avatar')
 };
 

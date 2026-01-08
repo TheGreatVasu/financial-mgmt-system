@@ -22,7 +22,6 @@
   - ID token verification via `google-auth-library`
   - Automatic redirect from `GET /auth/google/callback` to frontend with JWT token
   - Profile completion flow for Google users (first name, last name, phone, role)
-  - Google token storage for potential future Google Sheets/Drive integration
 
 - **Session Management**
   - Per-user session tracking with session tokens
@@ -34,7 +33,6 @@
 - ✅ **Strength**: Good separation of auth logic
 - 🔴 **Issue**: OAuth callback bypasses `authMiddleware` - potential security exposure
 - ⚠️ **Refactor Suggestion**: Create `verify-token` endpoint instead of query params
-- 🔴 **Issue**: Google tokens stored in plain text - encrypt before storage
 - ⚠️ **Optimization**: Cache user lookups to reduce DB queries in every request
 
 **Database Schema**:
@@ -378,38 +376,6 @@ po_entries: id, customer_id, invoice_id, boq_enabled,
   5. Add data mapping UI for flexible column matching
   6. Implement duplicate detection
   7. Add import preview before commit
-  ```
-
----
-
-### 3.4 Google Sheets Integration
-**Location**: `backend/src/routes/googleSheetsRoutes.js`, `backend/src/controllers/googleSheetsController.js`
-
-**Features**:
-- **Read/Write Google Sheets**
-  - GET values from specified sheets
-  - PUT values to update sheets
-  - Requires Google OAuth tokens stored from auth
-
-- **Use Cases**
-  - Sync customer data to Sheets
-  - Bi-directional data sync with Sheets
-
-**SDE3 Analysis**:
-- 🔴 **Issue**: Tokens stored in plain text (mentioned earlier)
-- 🔴 **Issue**: No transaction support (partial updates could corrupt data)
-- 🔴 **Issue**: No rate limiting for Sheets API
-- 🔴 **Issue**: Schema/validation missing
-- ⚠️ **Refactor Suggestion**:
-  ```
-  1. Encrypt stored Google tokens (AES-256)
-  2. Implement Sheets sync service:
-     - Schema definition per sheet
-     - Field mapping configuration
-     - Conflict resolution strategy
-  3. Add retry logic with exponential backoff
-  4. Cache Sheets data locally with ETag sync
-  5. Implement row-level change tracking
   ```
 
 ---
@@ -947,7 +913,6 @@ user_storage_usage: user_id, total_bytes, invoice_count, created_at, updated_at
 - `emailService.js` - Email sending (Nodemailer)
 - `excelService.js` - Excel file generation (ExcelJS)
 - `pdfService.js` - PDF generation (PDFKit)
-- `googleSheetsService.js` - Google Sheets API
 - `socketService.js` - Real-time updates
 - `storageUsageService.js` - Storage quota tracking
 

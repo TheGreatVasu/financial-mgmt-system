@@ -302,49 +302,6 @@ async function updateProfileById(id, { firstName, lastName, email, phoneNumber, 
   }
 }
 
-async function updateGoogleTokens(userId, { accessToken, refreshToken, expiresAt }) {
-  const db = getDb();
-  if (!db) return null;
-  
-  const updateData = {
-    updated_at: db.fn.now()
-  };
-  if (accessToken !== undefined) updateData.google_access_token = accessToken;
-  if (refreshToken !== undefined) updateData.google_refresh_token = refreshToken;
-  if (expiresAt !== undefined) updateData.google_token_expires_at = expiresAt;
-  
-  try {
-    await db('users').where({ id: userId }).update(updateData);
-    return true;
-  } catch (error) {
-    console.error('Error updating Google tokens:', error);
-    throw error;
-  }
-}
-
-async function getGoogleTokens(userId) {
-  const db = getDb();
-  if (!db) return null;
-  
-  try {
-    const user = await db('users')
-      .select('google_access_token', 'google_refresh_token', 'google_token_expires_at')
-      .where({ id: userId })
-      .first();
-    
-    if (!user) return null;
-    
-    return {
-      accessToken: user.google_access_token,
-      refreshToken: user.google_refresh_token,
-      expiresAt: user.google_token_expires_at
-    };
-  } catch (error) {
-    console.error('Error getting Google tokens:', error);
-    return null;
-  }
-}
-
 async function updateUserPreferences(id, preferences) {
   const db = getDb();
   if (!db) return null;

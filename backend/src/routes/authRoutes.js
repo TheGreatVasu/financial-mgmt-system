@@ -11,8 +11,7 @@ const {
   completeGoogleProfile,
   uploadAvatar,
   updatePreferences,
-  uploadAvatarMiddleware,
-  storeGoogleTokens
+  uploadAvatarMiddleware
 } = require('../controllers/authController');
 const {
   getSessions,
@@ -139,7 +138,6 @@ router.put('/profile', authMiddleware, updateProfileValidation, updateProfile);
 router.put('/change-password', authMiddleware, changePasswordValidation, changePassword);
 router.post('/avatar', authMiddleware, uploadAvatarMiddleware, uploadAvatar);
 router.put('/preferences', authMiddleware, updatePreferences);
-router.post('/store-google-tokens', authMiddleware, storeGoogleTokens);
 router.post('/logout', authMiddleware, logout);
 
 // Session management routes

@@ -645,45 +645,83 @@ export default function CustomerNew() {
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError('')
+    
     try {
+      // STEP 1: Build complete payload with all form data
       const payload = {
         companyProfile: state.companyProfile,
         customerProfile: state.customerProfile,
-        consigneeProfiles: state.consigneeProfiles,
-        payerProfiles: state.payerProfiles,
-        paymentTerms: state.paymentTerms,
-        teamProfiles: state.teamProfiles,
+        consigneeProfiles: state.consigneeProfiles || [],
+        payerProfiles: state.payerProfiles || [],
+        paymentTerms: state.paymentTerms || [],
+        teamProfiles: state.teamProfiles || [],
         additionalStep: { defaultCurrency: 'INR', defaultTax: '18', invoicePrefix: 'INV' }
       }
 
-      await masterDataService.submitMasterData(payload)
-      setSuccessData(payload) // For confirmation modal preview
+      // STEP 2: Validate critical fields before submission
+      if (!payload.companyProfile?.companyName?.trim()) {
+        throw new Error('Company Name is required')
+      }
+      if (!payload.customerProfile?.customerName?.trim() && !payload.customerProfile?.legalEntityName?.trim()) {
+        throw new Error('Customer Name or Legal Entity Name is required')
+      }
 
-      if (currentStep === 6) {
-        // Final Submit Logic
-        const customerRequest = {
+      // STEP 3: Show loading toast
+      const loadingToastId = toast.loading('Saving master data...')
+      
+      try {
+        // STEP 4: Submit master data to backend
+        const savedData = await masterDataService.submitMasterData(payload)
+        
+        // STEP 5: Handle successful save
+        toast.success('Master data saved successfully!', { id: loadingToastId })
+        setSuccessData(savedData || payload)
+
+        // STEP 6: If on final step, create customer record
+        if (currentStep === 5) { // 0-indexed, so step 5 = step 6
+          const customerRequest = {
             companyName: payload.companyProfile.companyName || payload.customerProfile.customerName,
             legalEntityName: payload.companyProfile.legalEntityName || payload.customerProfile.legalEntityName,
-            name: payload.customerProfile.contactPersonName || payload.companyProfile.primaryContact?.name,
-            email: payload.customerProfile.emailId || payload.companyProfile.primaryContact?.email,
-            phone: payload.customerProfile.contactNumber || payload.companyProfile.primaryContact?.contactNumber,
-            segment: payload.customerProfile.segment,
-            gstNumber: payload.customerProfile.gstNumber,
-            metadata: payload
+            name: payload.customerProfile.contactPersonName || payload.companyProfile.primaryContact?.name || 'N/A',
+            email: payload.customerProfile.emailId || payload.companyProfile.primaryContact?.email || '',
+            phone: payload.customerProfile.contactNumber || payload.companyProfile.primaryContact?.contactNumber || '',
+            segment: payload.customerProfile.segment || '',
+            gstNumber: payload.customerProfile.gstNumber || '',
+            metadata: savedData || payload
+          }
+          
+          try {
+            let res
+            if (editId) {
+              res = await svc.update(editId, customerRequest)
+            } else {
+              res = await svc.create(customerRequest)
+            }
+            
+            setCreatedRecordId(res?.data?.id || res?.data?._id || 'NEW')
+            setShowSuccessPopup(true)
+            toast.success('Customer record created successfully!')
+          } catch (customerErr) {
+            console.error('Error creating customer record:', customerErr)
+            toast.error('Master data saved but customer record creation failed')
+          }
+        } else {
+          // Not final step, just show save confirmation
+          toast.success(`Step ${currentStep + 1} saved successfully!`)
         }
-        let res
-        if (editId) res = await svc.update(editId, customerRequest)
-        else res = await svc.create(customerRequest)
-        
-        setCreatedRecordId(res?.data?.id || res?.data?._id || 'NEW')
-        setShowSuccessPopup(true)
-      } else {
-        toast.success('Draft Saved Successfully')
+      } catch (apiErr) {
+        toast.dismiss(loadingToastId)
+        throw apiErr
       }
     } catch (err) {
-      console.error(err)
-      setError(err.message || 'Failed to save')
-      toast.error('Failed to save')
+      console.error('Error in handleSaveToDatabase:', err)
+      
+      // Set user-friendly error message
+      const errorMsg = err?.response?.data?.message || err.message || 'Failed to save form data'
+      setError(errorMsg)
+      toast.error(errorMsg)
+      
+      // Don't close modal on error so user can retry
     } finally {
       setSaving(false)
       setConfirmOpen(false)
